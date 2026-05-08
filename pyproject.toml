@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gitshuttle"
+version = "0.1.0"
+description = "Air-gapped Git history synchronizer"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "typer[all]>=0.9",
+    "textual>=0.47",
+    "InquirerPy>=0.3.4",
+]
+
+[project.scripts]
+gitshuttle = "gitshuttle.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["gitshuttle*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]

@@ -2,6 +2,21 @@
 
 ---
 
+## Sprint 진척 현황
+
+| Sprint | 브랜치 | 내용 | 상태 | SA1 | SA2 | SA3 | SA4 |
+|--------|--------|------|------|-----|-----|-----|-----|
+| 0 | `sprint/0-scaffold` | 프로젝트 기반 구조 | ✅ DONE | PASS | PASS | PASS (6/6) | PASS |
+| 1 | `sprint/1-git-core` | Git 핵심 레이어 | ⬜ TODO | — | — | — | — |
+| 2 | `sprint/2-export-tui` | Export + TUI | ⬜ TODO | — | — | — | — |
+| 3 | `sprint/3-ui-config` | UI 모드 + Config | ⬜ TODO | — | — | — | — |
+| 4 | `sprint/4-import` | Import | ⬜ TODO | — | — | — | — |
+| 5 | `sprint/5-e2e` | 대용량 + E2E | ⬜ TODO | — | — | — | — |
+| 6 | `sprint/6-build` | PyInstaller 빌드 | ⬜ TODO | — | — | — | — |
+| 7 | `sprint/7-direct-sync` | Direct Sync (Phase 2) | ⬜ TODO | — | — | — | — |
+
+---
+
 ## 2026-05-08
 
 ### 1. PRD 작성
@@ -121,10 +136,46 @@ GitHub: https://github.com/ltw070/gitshuttle (private)
 
 ---
 
+---
+
+## Sprint 0 — 프로젝트 기반 구조 (2026-05-08)
+
+**브랜치:** `sprint/0-scaffold` → `main` merge
+
+### 생성 파일
+| 파일 | 내용 |
+|------|------|
+| `pyproject.toml` | Python 3.10+, typer/textual/InquirerPy 의존성, 빌드 설정 |
+| `requirements.txt` | 런타임 의존성 |
+| `requirements-dev.txt` | pytest, pytest-cov |
+| `gitshuttle/__init__.py` | 버전 `0.1.0` 정의 |
+| `gitshuttle/__main__.py` | 엔트리포인트, stdout/stderr UTF-8 강제 래핑 |
+| `gitshuttle/cli.py` | Typer app, export/import/config/sync 커맨드 스텁 |
+| `gitshuttle/config.py` | `load_config()`, `get_ui_mode()`, 기본값 `tui` |
+| `tests/__init__.py` | 테스트 패키지 초기화 |
+| `tests/conftest.py` | `tmp_git_repo` 픽스처 |
+| `tests/test_cli.py` | CLI 테스트 6개 |
+| `gitshuttle.toml` | 기본 설정 템플릿 (`[export] ui = "tui"`) |
+
+### 설계 결정
+- `import` 예약어 충돌 방지: CLI 커맨드 함수명을 `import_()` 로 정의, `name="import"` 로 등록
+- `tomllib` (Python 3.11+ 표준) / `tomli` (3.10 fallback) 분기 처리
+- `config.py`에 `DEFAULT_UI = "tui"` 상수 정의 — `gitshuttle.toml` 없을 때 기본값 보장
+
+### TDD Harness 결과
+- SA1 (문서 정합성): **PASS** — PRD/README/CLAUDE.md 6개 항목 전부 일치
+- SA2 (구현): **PASS** — 6/6 테스트 GREEN
+- SA3 (테스트 검증): **PASS** — 6 passed, 커버리지 56% (스캐폴딩 단계 허용 범위)
+- SA4 (규약 준수): **PASS** — 인코딩·네트워크·Phase 범위·예약어 전 항목 통과
+
+### 수락 기준 달성
+- [x] `python -m gitshuttle --help` → export/import/config/sync 커맨드 목록 출력
+- [x] `pytest tests/` → 6 passed, 0 errors
+- [x] `gitshuttle.toml` 없을 때 기본값 `tui` 동작
+
+---
+
 ## 다음 작업 (Next)
 
-- [ ] Claude Code 재시작 → SubAgent 등록 확인 (`/agents`)
-- [ ] `sprint/0-scaffold` 브랜치 생성
-- [ ] SA1 실행 → 문서 정합성 검증
-- [ ] SA2 실행 → Sprint 0 구현 (`pyproject.toml`, 패키지 스캐폴딩, `conftest.py`)
-- [ ] SA3+SA4 병렬 실행 → 검증 후 `main` merge
+- [ ] Sprint 1: Git 핵심 레이어 (`git_ops.py`, `bundle.py`, `checksum.py`)
+- [ ] GitHub 평가용 repo 3개 생성 및 연결
