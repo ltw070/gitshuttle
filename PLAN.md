@@ -237,34 +237,40 @@ import_.py(SHA-256 검증 → 커밋 매칭 → Fast-forward → 충돌 처리).
 
 ---
 
-## Sprint 5 — 대용량 처리 + E2E 통합
+## Sprint 5 — 분할 압축 + E2E 통합
 
-**목표:** 분할 압축 지원 및 전체 워크플로우 E2E 검증
+**목표:** 분할 압축 지원 및 E2E 검증 (토큰 사용량 다른 Sprint 수준으로 제한)
+
+### 범위 제약 (변경)
+- 대용량 실제 데이터 생성 금지 — 실제 100MB+ 파일 생성·처리 테스트 제외
+- 분할 로직은 **소형 더미 데이터**(1MB 이하)로 검증
+- E2E는 tmp_path 기반 두 임시 repo로 시뮬레이션 (GitHub repo 테스트 없음)
 
 ### 구현 대상
-- 분할 압축 (Split archive) — 대형 bundle 자동 분할/재조립
-- E2E 테스트: 외부망 export → 내부망 import 전체 시뮬레이션
-- 한글 커밋 메시지 E2E 검증
+- 분할 압축 (Split archive) — bundle을 지정 크기(bytes)로 분할/재조립하는 로직
+- E2E 테스트: 두 개의 임시 git repo(외부/내부)로 export→import 전체 흐름
+- 한글 커밋 메시지 E2E 왕복 보존 검증
 
 ### TDD 사이클
 
 | 단계 | SubAgent | 내용 |
 |------|----------|------|
-| 문서 검증 | SA1 | PRD 7(대용량 처리) 스펙, E2E 시나리오 확인 |
-| 구현 | SA2 | E2E 픽스처: 두 개의 임시 git repo(외부/내부)로 전체 흐름 테스트 |
-| 검증 | SA3+SA4 | E2E 포함 전체 pytest + 최종 compliance |
+| 문서 검증 | SA1 | PRD 7(대용량 처리) 스펙 확인 |
+| 구현 | SA2 | 분할 로직은 소형 더미 파일로, E2E는 tmp 픽스처 2개로 검증 |
+| 검증 | SA3+SA4 | 전체 pytest + compliance (대용량 실 데이터 없이) |
 
 ### 수락 기준
-- [ ] 100MB 이상 bundle 자동 분할, import 시 자동 재조립
-- [ ] E2E: 한글 커밋 메시지가 외부망 → 내부망 이전 후 동일하게 유지
+- [ ] `split_bundle(path, chunk_bytes)` → 분할 파일 목록 반환
+- [ ] `merge_bundles(parts, output)` → 원본과 동일한 bundle 재조립
+- [ ] E2E: 한글 커밋 메시지가 export→import 후 동일하게 유지
 - [ ] 전체 pytest 통과
 
 ### SA2 호출 프롬프트
 ```
-Sprint 5: 대용량 처리 + E2E 통합 테스트.
-분할 압축(split archive) 자동 분할/재조립,
-E2E 테스트(두 임시 git repo로 export→import 전체 시뮬레이션),
-한글 커밋 메시지 왕복 보존 검증.
+Sprint 5: 분할 압축 + E2E 통합 테스트 (토큰 절약 모드).
+split_bundle/merge_bundles는 소형 더미 파일(수KB)로만 테스트.
+E2E는 두 tmp_path git repo로 export→import 전체 흐름 검증.
+실제 대용량 파일 생성 절대 금지.
 ```
 
 ---
