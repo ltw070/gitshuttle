@@ -46,6 +46,8 @@ gitshuttle/
 ├── manifest.py       # 커밋 목록 요약 파일 생성
 ├── export_.py        # export 오케스트레이션
 ├── import_.py        # import 오케스트레이션
+├── sync_.py          # direct sync 오케스트레이션 (Phase 2)
+├── github_auth.py    # HTTPS+Token / SSH 인증 (Phase 2)
 ├── config.py         # config 마법사, gitshuttle.toml 읽기/쓰기
 └── ui/
     ├── __init__.py
@@ -91,9 +93,10 @@ main
 ## 명령어 구조
 
 ```
-gitshuttle export   [--branch] [--ui tui|csv|html|prompt] [--output]
-gitshuttle import   --file <path> [--on-conflict skip|force|abort]
-gitshuttle config   (대화형 마법사 — gitshuttle.toml 수정)
+gitshuttle export   [--branch] [--ui tui|csv|html|prompt] [--output]   # Phase 1
+gitshuttle import   --file <path> [--on-conflict skip|force|abort]      # Phase 1
+gitshuttle config   (대화형 마법사 — gitshuttle.toml 수정)              # Phase 1
+gitshuttle sync     [--on-conflict skip|force|abort]                    # Phase 2
 ```
 
 ---

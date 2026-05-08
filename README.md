@@ -134,6 +134,45 @@ ui = "tui"   # tui | csv | html | prompt
 
 ---
 
+## `sync` — GitHub 간 직접 동기화 (Phase 2)
+
+네트워크가 연결된 환경에서 파일 없이 두 GitHub repo를 직접 동기화합니다.
+
+```
+gitshuttle sync [OPTIONS]
+
+Options:
+  --on-conflict [skip|force|abort]   충돌 처리 방식 (기본값: skip)
+```
+
+**연결 설정 (`gitshuttle.toml`):**
+```toml
+[sync.source]
+url  = "https://github.com/org1/repo"
+auth = "token"   # token | ssh
+
+[sync.target]
+url  = "https://github.com/org2/repo"
+auth = "token"
+```
+
+**토큰은 환경변수로 전달 (파일에 직접 저장 금지):**
+```
+set GS_SOURCE_TOKEN=ghp_...
+set GS_TARGET_TOKEN=ghp_...
+gitshuttle sync
+```
+
+**SSH 방식 사용 시:**
+```toml
+[sync.source]
+url     = "git@github.com:org1/repo.git"
+auth    = "ssh"
+ssh_key = "C:\\Users\\user\\.ssh\\id_rsa_source"
+```
+
+---
+
 ## 개발 워크플로우 (기여자용)
 
 모든 구현은 TDD Harness를 통해 진행합니다. 자세한 내용은 [`HARNESS.md`](HARNESS.md) 참고.
