@@ -63,10 +63,45 @@
 - `CLAUDE.md` 업데이트: 패키지 구조 목표, 브랜치 전략 추가
 - 브랜치 전략: `sprint/0-scaffold` ~ `sprint/6-build` → `main` merge
 
+### 9. GitHub MCP 스킬 및 보안 설정
+- `.claude/commands/github-mcp-setup.md` 생성: `/github-mcp-setup` 스킬 — 토큰 입력 → `.mcp.json` 자동 생성
+- `.mcp.json.example` 생성: 토큰 없는 참고용 템플릿
+- `.mcp.json` 초기 양식(플레이스홀더) 커밋 후 `.gitignore` 등록 및 추적 해제
+- `.gitignore` 생성: `.mcp.json`, Python, PyInstaller, IDE 패턴 포함
+
+---
+
+## 최종 저장소 현황 (2026-05-08 기준)
+
+```
+gitshuttle/
+├── .claude/
+│   ├── agents/
+│   │   ├── subagent1-doc-verify.md
+│   │   ├── subagent2-ai-action.md
+│   │   ├── subagent3-test-verify.md
+│   │   └── subagent4-compliance-verify.md
+│   └── commands/
+│       └── github-mcp-setup.md
+├── .gitattributes
+├── .gitignore
+├── .mcp.json             ← 로컬 전용 (gitignore)
+├── .mcp.json.example
+├── CLAUDE.md
+├── HARNESS.md
+├── PLAN.md
+├── PRD.md
+├── README.md
+└── REPORT.md
+```
+
+GitHub: https://github.com/ltw070/gitshuttle (private)
+
 ---
 
 ## 다음 작업 (Next)
 
+- [ ] Claude Code 재시작 → SubAgent 등록 확인 (`/agents`)
 - [ ] `sprint/0-scaffold` 브랜치 생성
 - [ ] SA1 실행 → 문서 정합성 검증
 - [ ] SA2 실행 → Sprint 0 구현 (`pyproject.toml`, 패키지 스캐폴딩, `conftest.py`)
