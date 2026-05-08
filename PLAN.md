@@ -221,11 +221,11 @@ config.py(toml 읽기/쓰기, 마법사).
 | 검증 | SA3+SA4 | 모든 충돌 케이스 커버리지 확인 |
 
 ### 수락 기준
-- [ ] `gitshuttle import --file shuttle.bundle` → SHA-256 검증 → 히스토리 반영
-- [ ] `--on-conflict skip`: 중복 커밋 건너뛰고 계속
-- [ ] `--on-conflict force`: 강제 덮어쓰기
-- [ ] `--on-conflict abort`: 충돌 즉시 전체 중단
-- [ ] 체크섬 불일치: 명확한 오류 + `gitshuttle export ...` 재실행 안내 출력
+- [x] `gitshuttle import --file shuttle.bundle` → SHA-256 검증 → 히스토리 반영
+- [x] `--on-conflict skip`: 중복 커밋 건너뛰고 계속
+- [x] `--on-conflict force`: 강제 덮어쓰기
+- [x] `--on-conflict abort`: 충돌 즉시 전체 중단
+- [x] 체크섬 불일치: 명확한 오류 + `gitshuttle export ...` 재실행 안내 출력
 
 ### SA2 호출 프롬프트
 ```

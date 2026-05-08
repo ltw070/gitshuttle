@@ -76,6 +76,60 @@ def tmp_git_repo(tmp_path):
 
 
 @pytest.fixture
+def two_git_repos(tmp_path):
+    """source_repo, target_repo 두 개의 임시 git repo 반환."""
+    env = _git_env()
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+
+    for repo in (source, target):
+        subprocess.run(
+            ["git", "init", str(repo)],
+            check=True,
+            encoding='utf-8',
+            env=env,
+        )
+        subprocess.run(
+            ["git", "config", "user.email", "test@test.com"],
+            cwd=repo,
+            check=True,
+            encoding='utf-8',
+            env=env,
+        )
+        subprocess.run(
+            ["git", "config", "user.name", "Test User"],
+            cwd=repo,
+            check=True,
+            encoding='utf-8',
+            env=env,
+        )
+
+    # source에만 초기 커밋
+    (source / "README.md").write_text("# Source", encoding="utf-8")
+    subprocess.run(["git", "add", "."], cwd=source, check=True, encoding='utf-8', env=env)
+    subprocess.run(
+        ["git", "commit", "-m", "init source"],
+        cwd=source,
+        check=True,
+        encoding='utf-8',
+        env=env,
+    )
+
+    # target도 독립 초기 커밋
+    (target / "README.md").write_text("# Target", encoding="utf-8")
+    subprocess.run(["git", "add", "."], cwd=target, check=True, encoding='utf-8', env=env)
+    subprocess.run(
+        ["git", "commit", "-m", "init target"],
+        cwd=target,
+        check=True,
+        encoding='utf-8',
+        env=env,
+    )
+
+    return source, target
+
+
+@pytest.fixture
 def tmp_git_repo_with_korean(tmp_git_repo):
     """tmp_git_repo에 한글 커밋 메시지 커밋을 추가한다."""
     env = _git_env()

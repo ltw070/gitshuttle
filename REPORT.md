@@ -10,9 +10,9 @@
 | 1 | `sprint/1-git-core` | Git 핵심 레이어 | ✅ DONE | PASS | PASS | PASS (27/27) | PASS |
 | 2 | `sprint/2-export-tui` | Export + TUI | ✅ DONE | PASS | PASS | PASS (39/39) | PASS |
 | 3 | `sprint/3-ui-config` | UI 모드 + Config | ✅ DONE | PASS | PASS | PASS (64/64) | PASS |
-| 4 | `sprint/4-import` | Import | ⬜ TODO | — | — | — | — |
-| 5 | `sprint/5-e2e` | 대용량 + E2E | ⬜ TODO | — | — | — | — |
-| 6 | `sprint/6-build` | PyInstaller 빌드 | ⬜ TODO | — | — | — | — |
+| 4 | `sprint/4-import` | Import | ✅ DONE | PASS | PASS | PASS (71/71) | PASS |
+| 5 | `sprint/5-e2e` | 분할 압축 + E2E | ✅ DONE | PASS | PASS | PASS (79/79) | — |
+| 6 | `sprint/6-build` | PyInstaller 빌드 | ✅ DONE | PASS | PASS | PASS (85/85) | — |
 | 7 | `sprint/7-direct-sync` | Direct Sync (Phase 2) | ⬜ TODO | — | — | — | — |
 
 ---
@@ -292,7 +292,169 @@ GitHub: https://github.com/ltw070/gitshuttle (private)
 
 ---
 
+---
+
+## Sprint 4 — Import (2026-05-08)
+
+**브랜치:** `sprint/4-import` → `main` merge 대기 중
+
+### 생성/수정 파일
+
+| 파일 | 내용 |
+|------|------|
+| `gitshuttle/import_.py` | `run_import()`, `ImportResult`, `ChecksumError`, `ImportConflictError`, `_unbundle()`, `_merge_tip()` |
+| `tests/test_import.py` | import 테스트 7개 |
+| `tests/conftest.py` | `two_git_repos` 픽스처 추가 |
+
+### 설계 결정
+
+**`git bundle unbundle` 채택 (핵심 변경)**
+
+초기 구현은 `git remote add` + `git fetch` + FETCH_HEAD 파싱 방식을 사용했으나 근본적인 문제 발견:
+
+- `create_bundle`이 번들을 `refs/gitshuttle/tmp_xxx` 커스텀 ref로 생성
+- `git fetch <remote>`의 기본 refspec은 `refs/heads/*` 만 매핑 → 커스텀 ref는 가져오지 않음
+- FETCH_HEAD가 빈 상태로 작성 → `_merge_fetch_head`가 조용히 return → merge 미실행
+- 결과: `ImportResult(imported=2)` 를 반환하면서도 실제 커밋 수는 증가하지 않는 잘못된 동작
+
+해결책: `git bundle unbundle`로 교체
+- 커스텀 ref 포함 모든 ref 처리 가능
+- stdout으로 tip 해시 직접 출력 → FETCH_HEAD 의존 불필요
+- `_unbundle()` + `_merge_tip()` 두 함수로 분리, 책임 명확화
+
+**`--allow-unrelated-histories -Xours` 적용**
+- 독립 히스토리(루트 커밋이 다른) 리포 간 병합 지원
+- 충돌 발생 시 target 파일 우선 유지 (`-Xours`)
+
+**`uuid` import 제거**
+- `remote_name` 생성에 사용하던 `uuid`가 `_unbundle` 방식 도입 후 불필요
+
+### TDD Harness 결과
+
+- SA3 (테스트 검증): **PASS** — 71 passed (신규 7개 포함), 0 failed
+- SA4 (규약 준수): **PASS**
+
+### 수락 기준 달성
+
+- [x] SHA-256 체크섬 불일치 → `ChecksumError` + 재export 안내 출력
+- [x] `--on-conflict skip`: 중복 커밋 건너뛰고 계속
+- [x] `--on-conflict force`: 이미 존재해도 오류 없이 계속
+- [x] `--on-conflict abort`: 중복 커밋 감지 즉시 `ImportConflictError` 발생
+- [x] 존재하지 않는 bundle 경로 → `FileNotFoundError`
+- [x] bundle verify 실패 → `ValueError`
+
+### 기타
+
+- `typer` 패키지 미설치로 `test_cli.py` 컬렉션 오류 발생 → `pip install typer`로 해결
+
+---
+
+---
+
+## Sprint 5 — 분할 압축 + E2E 통합 테스트 (2026-05-08)
+
+**브랜치:** `sprint/5-e2e` → `main` merge 대기 중
+
+### 생성/수정 파일
+
+| 파일 | 내용 |
+|------|------|
+| `gitshuttle/bundle.py` | `split_bundle()`, `merge_bundles()` 함수 추가 |
+| `tests/test_e2e.py` | E2E + split/merge 테스트 8개 (신규) |
+
+### 설계 결정
+
+**`split_bundle` 구현**
+- 분할 파일명: `<original_filename>.part000`, `.part001`, ... (3자리 zero-pad)
+- `bundle_path.name` 전체(확장자 포함)를 base로 사용 → `shuttle_260508.bundle.part000`
+- 바이너리 전체 읽기 후 `chunk_bytes` 단위로 슬라이싱 → 각 파트 write
+- 빈 파일 edge case: `.part000` 하나 생성
+- `chunk_bytes <= 0` → `ValueError` 즉시 발생
+
+**`merge_bundles` 구현**
+- 선행 검증: 모든 파트 존재 여부 확인 → 하나라도 없으면 `FileNotFoundError`
+- `output.open('wb')` 후 parts 순서대로 `read_bytes()` + write
+- round-trip 무결성: `split_bundle` → `merge_bundles` 후 원본 바이트 완전 동일
+
+**E2E 테스트 설계**
+- `two_git_repos` 픽스처(source + target 두 임시 repo) 활용
+- 실제 100MB+ 파일 생성 없이 수 KB 더미 데이터로 분할 검증
+- 한글 커밋 메시지 round-trip: export → import 후 `get_commits(target)` 메시지 목록에서 확인
+- `test_merged_bundle_is_valid`: 실제 git bundle → split → merge → `verify_bundle` True
+
+### TDD Harness 결과
+
+- SA1: **PASS** (SubAgent1 검증 선행)
+- SA2 (TDD): **PASS**
+  - RED: 6개 테스트 실패 (ImportError: cannot import name 'split_bundle')
+  - GREEN: 8/8 테스트 통과 (신규 8개)
+  - 전체 suite: **79 passed** (기존 71 + 신규 8), 0 failed
+
+### 수락 기준 달성
+
+- [x] `split_bundle(path, chunk_bytes)` → `list[Path]` (part 파일 순서 보장)
+- [x] `merge_bundles(parts, output)` → `Path` (원본 바이트 동일)
+- [x] `chunk_bytes <= 0` → `ValueError`
+- [x] 존재하지 않는 파트 → `FileNotFoundError`
+- [x] split → merge → `verify_bundle` True (실제 git bundle round-trip)
+- [x] E2E: source export → target import → 커밋 수 증가
+- [x] E2E: 한글 커밋 메시지 보존
+- [x] 기존 71개 테스트 회귀 없음
+
+---
+
+---
+
+## Sprint 6 — PyInstaller 빌드 구성 (2026-05-08)
+
+**브랜치:** `sprint/6-build` → `main` merge 대기 중
+
+### 생성 파일
+
+| 파일 | 내용 |
+|------|------|
+| `gitshuttle.spec` | PyInstaller 스펙 파일 — onefile, console=True, PYTHONUTF8=1 |
+| `build.ps1` | Windows PowerShell 빌드 자동화 스크립트 |
+| `tests/test_build.py` | 빌드 설정 파일 내용 검증 테스트 6개 |
+
+### 설계 결정
+
+**`gitshuttle.spec` 핵심 설정**
+- 엔트리포인트: `gitshuttle/__main__.py`
+- `onefile` 방식: `EXE()`에 `a.binaries`, `a.zipfiles`, `a.datas` 직접 포함
+- `env={'PYTHONUTF8': '1'}`: 런타임 한글 깨짐 방지
+- `hiddenimports`: `gitshuttle`, `typer`, `click`, `rich` — PyInstaller 자동 탐지 누락 방지
+- `console=True`: 터미널 CLI 앱 (windowed 모드 금지)
+- `upx=True`: UPX 사용 가능 시 압축 (exe 크기 축소)
+
+**`build.ps1` 설계**
+- `$OutputEncoding = [System.Text.Encoding]::UTF8` 로 PowerShell 한글 출력 보장
+- PyInstaller 설치 여부를 `pip show pyinstaller` 로 확인, 미설치 시 자동 설치
+- `pyinstaller gitshuttle.spec --clean` 실행
+- `dist\gitshuttle.exe` 존재 여부로 빌드 성공/실패 판정, 종료 코드 반환
+
+**테스트 전략**
+- 실제 PyInstaller 빌드(수 분 소요)는 테스트하지 않음
+- spec 파일과 build.ps1의 내용을 정적 파싱으로 검증 (빠른 피드백)
+- `PROJECT_ROOT = Path(__file__).parent.parent` — 절대 경로 의존 없이 어디서든 실행 가능
+
+### TDD Harness 결과
+
+- SA1: **PASS**
+- SA2 (TDD): **PASS**
+  - RED: 6개 테스트 실패 (파일 없음 — `gitshuttle.spec`, `build.ps1` 미존재)
+  - GREEN: `gitshuttle.spec`, `build.ps1` 생성 후 6/6 통과
+  - 전체 suite: **85 passed** (기존 79 + 신규 6), 0 failed, 회귀 없음
+
+### 수락 기준 달성
+
+- [x] `gitshuttle.spec` 생성 — 엔트리포인트, PYTHONUTF8, onefile EXE 포함
+- [x] `build.ps1` 생성 — pyinstaller 명령, UTF-8 인코딩 설정 포함
+- [x] `tests/test_build.py` 6개 테스트 모두 PASS
+- [x] 기존 79개 테스트 회귀 없음 (85 passed)
+
+---
+
 ## 다음 작업 (Next)
 
-- [ ] Sprint 4: Import 구현 (`import_.py`, `test_import.py`)
 - [ ] GitHub 평가용 repo — Sprint 7 Direct Sync 검증 시에만 최소 사용
