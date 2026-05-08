@@ -313,10 +313,21 @@ def _unbundle(bundle_path: Path, repo_path: Path) -> list[str]:
 def _merge_tip(repo_path: Path, tip_hash: str) -> None:
     """tip_hash를 현재 브랜치에 merge한다.
 
-    Fast-forward를 먼저 시도하고, 불가 시 --no-ff merge를 시도한다.
-    무관한 히스토리(unrelated histories)도 허용한다.
-    충돌 발생 시 -Xours 옵션으로 자동 해결한다(target 파일 우선).
+    빈 repo(커밋 없음): checkout -b main <hash> → merge commit 없음.
+    공통 히스토리: fast-forward → merge commit 없음.
+    무관한 히스토리: --no-ff --allow-unrelated-histories -Xours.
     """
+    # 빈 repo 감지 — HEAD가 없으면 브랜치만 생성하고 종료 (merge commit 없음)
+    try:
+        run_git(["rev-parse", "--verify", "HEAD"], cwd=repo_path)
+    except RuntimeError:
+        # 빈 repo: checkout -b로 브랜치 생성
+        try:
+            run_git(["checkout", "-b", "main", tip_hash], cwd=repo_path)
+        except RuntimeError:
+            run_git(["checkout", tip_hash], cwd=repo_path)
+        return
+
     # 이미 ancestor이면 merge 불필요
     try:
         run_git(["merge-base", "--is-ancestor", tip_hash, "HEAD"], cwd=repo_path)
@@ -324,7 +335,7 @@ def _merge_tip(repo_path: Path, tip_hash: str) -> None:
     except RuntimeError:
         pass
 
-    # Fast-forward 시도
+    # Fast-forward 시도 (공통 히스토리 → merge commit 없음)
     try:
         run_git(["merge", "--ff-only", tip_hash], cwd=repo_path)
         return
