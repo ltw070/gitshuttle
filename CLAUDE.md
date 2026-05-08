@@ -83,10 +83,15 @@ tests/
 ├── test_export.py
 ├── test_import.py
 ├── test_config.py
+├── test_build.py     # gitshuttle.spec, build.ps1 내용 검증
 └── ui/
     ├── test_csv_ui.py
     ├── test_html_ui.py
     └── test_prompt_ui.py
+
+# 빌드 파일 (프로젝트 루트)
+gitshuttle.spec       # PyInstaller 스펙 (onefile, PYTHONUTF8=1)
+build.ps1             # Windows PowerShell 빌드 자동화
 ```
 
 ---

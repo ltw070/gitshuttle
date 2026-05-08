@@ -16,6 +16,7 @@ htmlcov/
 
 # PyInstaller
 *.spec
+!gitshuttle.spec
 *.exe
 
 # 설정
