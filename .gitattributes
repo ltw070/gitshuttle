@@ -1,0 +1,16 @@
+# 모든 텍스트 파일 UTF-8, Windows CRLF 자동 변환
+* text=auto eol=lf
+
+# 명시적 텍스트 파일
+*.py    text eol=lf encoding=utf-8
+*.md    text eol=lf encoding=utf-8
+*.toml  text eol=lf encoding=utf-8
+*.txt   text eol=lf encoding=utf-8
+*.json  text eol=lf encoding=utf-8
+*.csv   text eol=lf encoding=utf-8
+*.html  text eol=lf encoding=utf-8
+
+# 바이너리 파일 — diff/merge 금지
+*.bundle  binary
+*.exe     binary
+*.zip     binary

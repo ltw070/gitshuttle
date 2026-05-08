@@ -83,6 +83,37 @@ Phase 1 완료 전까지 GUI 관련 코드는 작성하지 않는다.
 
 ---
 
+## 인코딩 (한글 깨짐 방지)
+
+Windows에서 한글 깨짐이 발생하는 지점과 대응:
+
+**Python 코드 전반**
+- 모든 파일 I/O에 `encoding='utf-8'` 명시. `open()` 기본값 믿지 않기.
+- 엔트리포인트(`__main__.py`) 최상단에 UTF-8 모드 강제:
+  ```python
+  import sys, io
+  sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+  sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+  ```
+- 또는 환경변수 `PYTHONUTF8=1` / 실행 플래그 `python -X utf8` 사용.
+- PyInstaller 빌드 시 `PYTHONUTF8=1`을 `.spec` 파일의 `env`에 포함.
+
+**git 서브프로세스 호출**
+- `subprocess.run([...], encoding='utf-8', env={**os.environ, 'PYTHONIOENCODING': 'utf-8'})` 사용.
+- `git log`, `git bundle` 출력 파싱 시 항상 `encoding='utf-8'` 지정.
+
+**매니페스트·CSV·HTML 파일 출력**
+- 생성 파일 모두 UTF-8 with BOM 없이(`utf-8`, not `utf-8-sig`) 저장.
+- CSV는 Excel 호환을 위해 예외적으로 `utf-8-sig` 사용 가능 (Excel이 BOM으로 인코딩 감지).
+
+**git 설정 (이 저장소에 적용 완료)**
+- `core.quotepath false` — 한글 파일명 이스케이프 방지
+- `i18n.commitEncoding utf-8` — 커밋 메시지 UTF-8
+- `i18n.logOutputEncoding utf-8` — `git log` 출력 UTF-8
+- `.gitattributes` — 텍스트 파일 `eol=lf encoding=utf-8` 지정
+
+---
+
 ## 주요 제약
 
 - Windows 우선. 터미널 호환성(Windows Terminal, CMD, PowerShell) 모두 검증 필요.
