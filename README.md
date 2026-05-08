@@ -131,3 +131,17 @@ ui = "tui"   # tui | csv | html | prompt
 | `shuttle_YYMMDD.bundle` | Git bundle 패키지 (압축 포함) |
 | `shuttle_YYMMDD.sha256` | SHA-256 체크섬 |
 | `shuttle_YYMMDD_manifest.txt` | 포함된 커밋 목록 요약 (심사용) |
+
+---
+
+## 개발 워크플로우 (기여자용)
+
+모든 구현은 TDD Harness를 통해 진행합니다. 자세한 내용은 [`HARNESS.md`](HARNESS.md) 참고.
+
+```
+SubAgent1 (문서 정합성 검증)
+  → SubAgent2 (TDD 구현)
+    → SubAgent3 (테스트 검증) + SubAgent4 (규약 검증)  ← 병렬
+```
+
+SubAgent 정의 파일: `.claude/agents/`

@@ -114,6 +114,25 @@ Windows에서 한글 깨짐이 발생하는 지점과 대응:
 
 ---
 
+## TDD Harness
+
+**모든 구현은 아래 순서를 반드시 따른다.** 자세한 내용은 `HARNESS.md` 참고.
+
+```
+1. SubAgent1 (doc-verify)      — 문서 정합성 검증. FAIL 시 구현 진행 금지.
+2. SubAgent2 (ai-action)       — TDD 구현 (RED → GREEN → REFACTOR)
+3. SubAgent3 (test-verify)     — pytest 실행          ┐ 병렬 실행
+   SubAgent4 (compliance-verify) — 규약 준수 검사     ┘
+```
+
+SubAgent 정의 파일 위치: `.claude/agents/`
+
+SubAgent 호출 방법 (Claude Code Agent 툴):
+- SA1, SA2: 순차 호출
+- SA3 + SA4: **단일 메시지에 두 Agent 동시 호출** (병렬)
+
+---
+
 ## 주요 제약
 
 - Windows 우선. 터미널 호환성(Windows Terminal, CMD, PowerShell) 모두 검증 필요.
