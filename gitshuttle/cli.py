@@ -146,7 +146,7 @@ def import_(
         typer.echo(f"\n[오류] {e}", err=True)
         raise typer.Exit(1)
 
-    typer.echo(f"\nimport 완료.")
+    typer.echo("\nimport 완료.")
     typer.echo(f"  imported : {result.imported}개")
     typer.echo(f"  skipped  : {result.skipped}개")
     typer.echo(f"  total    : {result.total}개")
@@ -164,4 +164,11 @@ def sync(
     on_conflict: str = typer.Option("skip", "--on-conflict", help="충돌 처리 방식 (skip|force|abort)"),
 ) -> None:
     """두 GitHub 리포지토리 간 직접 동기화합니다 (Phase 2)."""
-    typer.echo("not implemented")
+    typer.echo(
+        "[Phase 2] sync 커맨드는 아직 CLI에서 지원되지 않습니다.\n"
+        "Python API로 직접 사용하려면:\n\n"
+        "  from gitshuttle.sync_ import run_sync\n"
+        "  run_sync(source_url=..., target_url=...,\n"
+        "           source_token=..., target_token=...)\n\n"
+        "gitshuttle.toml 설정 방법은 README.md의 sync 섹션을 참고하세요."
+    )

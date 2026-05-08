@@ -552,11 +552,20 @@ set GS_TARGET_TOKEN=ghp_yyyyyyyyyyyyyyyyyyyy
 
 ### 실행
 
-```
-gitshuttle sync
-```
+> **현재 `gitshuttle sync` CLI는 Phase 2 준비 중입니다.**  
+> 지금은 Python API로 직접 사용할 수 있습니다.
 
-커밋 선택 UI가 나타납니다. 전송할 커밋을 선택하면 자동으로 동기화가 진행됩니다.
+```python
+from gitshuttle.sync_ import run_sync
+
+result = run_sync(
+    source_url="https://github.com/org1/repo",
+    target_url="https://github.com/org2/repo",
+    source_token="ghp_xxxx",   # 또는 환경변수 GS_SOURCE_TOKEN
+    target_token="ghp_yyyy",   # 또는 환경변수 GS_TARGET_TOKEN
+)
+print(f"동기화 완료: {result.synced}개 커밋")
+```
 
 ### SSH 방식
 
@@ -735,6 +744,10 @@ gitshuttle export
 | `선택된 커밋이 없습니다.` | export 시 아무 커밋도 선택하지 않음 | UI에서 커밋을 하나 이상 선택 후 재시도 |
 | `현재 디렉터리에 Git 리포지토리가 없습니다.` | Git 리포지토리가 아닌 폴더에서 실행 | `cd` 로 올바른 폴더로 이동 후 재시도 |
 | `bundle unbundle 실패` | bundle 사전 조건(prerequisite)을 만족 못 함 | 전체 히스토리 포함한 bundle로 재export |
+
+---
+
+단계별 실습 예제: **[EXAMPLE.md](EXAMPLE.md)**
 
 ---
 
