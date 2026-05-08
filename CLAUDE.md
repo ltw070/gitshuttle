@@ -84,6 +84,7 @@ tests/
 ├── test_import.py
 ├── test_config.py
 ├── test_build.py     # gitshuttle.spec, build.ps1 내용 검증
+├── test_sync.py      # Direct Sync + github_auth 테스트 (Phase 2)
 └── ui/
     ├── test_csv_ui.py
     ├── test_html_ui.py
@@ -106,7 +107,8 @@ main
 ├── sprint/3-ui-config
 ├── sprint/4-import
 ├── sprint/5-e2e
-└── sprint/6-build
+├── sprint/6-build
+└── sprint/7-direct-sync
 ```
 
 각 Sprint 브랜치에서 개발 → SA3+SA4 PASS → main merge.

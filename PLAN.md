@@ -338,12 +338,12 @@ SSH:
 | 검증 | SA3+SA4 | 토큰 노출 여부 compliance 체크, 네트워크 호출은 mock 처리 확인 |
 
 ### 수락 기준
-- [ ] `gitshuttle sync` → TUI 커밋 선택 → Source fetch → Target push
-- [ ] HTTPS+Token 방식: `GS_SOURCE_TOKEN` 환경변수로 인증
-- [ ] SSH 방식: `ssh_key` 경로 지정으로 인증
-- [ ] 토큰이 로그·오류 메시지에 노출되지 않음
-- [ ] Target에 이미 존재하는 커밋 `[synced]` 표시 및 skip
-- [ ] `--on-conflict skip/force/abort` 동작
+- [x] `gitshuttle sync` → TUI 커밋 선택 → Source fetch → Target push
+- [x] HTTPS+Token 방식: `GS_SOURCE_TOKEN` 환경변수로 인증
+- [x] SSH 방식: `ssh_key` 경로 지정으로 인증
+- [x] 토큰이 로그·오류 메시지에 노출되지 않음
+- [x] Target에 이미 존재하는 커밋 `[synced]` 표시 및 skip
+- [x] `--on-conflict skip/force/abort` 동작
 
 ### SA2 호출 프롬프트
 ```

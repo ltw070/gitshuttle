@@ -143,6 +143,33 @@ def run_config_wizard(config_path: Optional[Path] = None) -> None:
     print(f"설정 저장 완료: ui = {selected_mode}")
 
 
+def get_sync_config(config_path: Path | str | None = None) -> dict:
+    """gitshuttle.toml의 [sync] 섹션을 읽어 반환한다.
+
+    예시 반환값:
+    {
+        'source': {'url': '...', 'auth': 'token'},
+        'target': {'url': '...', 'auth': 'token'},
+    }
+    파일 없거나 [sync] 섹션 없으면 빈 dict 반환.
+
+    Args:
+        config_path: toml 파일 경로. None 이면 기본 경로(gitshuttle.toml).
+
+    Returns:
+        [sync] 섹션 하위 구조 dict. 없으면 {}.
+    """
+    if config_path is None:
+        config_path = Path(CONFIG_FILENAME)
+
+    config_path = Path(config_path)
+    if not config_path.exists():
+        return {}
+
+    cfg = _parse_sync_toml(config_path)
+    return cfg.get("sync", {})
+
+
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
@@ -175,4 +202,58 @@ def _parse_simple_toml(config_path: Path) -> dict:
 
     if not result:
         return {"export": {"ui": DEFAULT_UI}}
+    return result
+
+
+def _parse_sync_toml(config_path: Path) -> dict:
+    """tomllib 없는 환경용 단순 toml 파서 (sync 섹션 포함).
+
+    [sync], [sync.source], [sync.target] 같은 중첩 섹션을 지원한다.
+    tomllib이 있으면 그것을 사용하고, 없으면 수동 파싱한다.
+    """
+    if tomllib is not None:
+        try:
+            with open(config_path, "rb") as f:
+                raw = tomllib.load(f)
+            return raw
+        except Exception:
+            pass
+
+    # 수동 파싱 (중첩 섹션 지원)
+    result: dict = {}
+
+    with open(config_path, encoding="utf-8") as f:
+        lines = f.readlines()
+
+    current_keys: list[str] = []  # 현재 섹션 키 경로 (예: ["sync", "source"])
+
+    for line in lines:
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+
+        if line.startswith("[") and line.endswith("]"):
+            section = line[1:-1].strip()
+            current_keys = [k.strip() for k in section.split(".")]
+            # 섹션 경로에 dict 생성
+            node = result
+            for key in current_keys:
+                if key not in node:
+                    node[key] = {}
+                node = node[key]
+
+        elif "=" in line and current_keys:
+            key, _, raw_val = line.partition("=")
+            key = key.strip()
+            raw_val = raw_val.strip()
+            # 문자열 값 (따옴표 제거)
+            if (raw_val.startswith('"') and raw_val.endswith('"')) or \
+               (raw_val.startswith("'") and raw_val.endswith("'")):
+                raw_val = raw_val[1:-1]
+            # 현재 섹션 노드에 값 설정
+            node = result
+            for k in current_keys:
+                node = node[k]
+            node[key] = raw_val
+
     return result

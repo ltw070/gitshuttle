@@ -11,9 +11,9 @@
 | 2 | `sprint/2-export-tui` | Export + TUI | ✅ DONE | PASS | PASS | PASS (39/39) | PASS |
 | 3 | `sprint/3-ui-config` | UI 모드 + Config | ✅ DONE | PASS | PASS | PASS (64/64) | PASS |
 | 4 | `sprint/4-import` | Import | ✅ DONE | PASS | PASS | PASS (71/71) | PASS |
-| 5 | `sprint/5-e2e` | 분할 압축 + E2E | ✅ DONE | PASS | PASS | PASS (79/79) | — |
-| 6 | `sprint/6-build` | PyInstaller 빌드 | ✅ DONE | PASS | PASS | PASS (85/85) | — |
-| 7 | `sprint/7-direct-sync` | Direct Sync (Phase 2) | ⬜ TODO | — | — | — | — |
+| 5 | `sprint/5-e2e` | 분할 압축 + E2E | ✅ DONE | PASS | PASS | PASS (79/79) | PASS |
+| 6 | `sprint/6-build` | PyInstaller 빌드 | ✅ DONE | PASS | PASS | PASS (85/85) | PASS |
+| 7 | `sprint/7-direct-sync` | Direct Sync (Phase 2) | ✅ DONE | PASS | PASS | PASS (102/102) | PASS |
 
 ---
 
@@ -452,6 +452,67 @@ GitHub: https://github.com/ltw070/gitshuttle (private)
 - [x] `build.ps1` 생성 — pyinstaller 명령, UTF-8 인코딩 설정 포함
 - [x] `tests/test_build.py` 6개 테스트 모두 PASS
 - [x] 기존 79개 테스트 회귀 없음 (85 passed)
+
+---
+
+## Sprint 7 — Direct Sync (Phase 2) (2026-05-08)
+
+**브랜치:** `sprint/7-direct-sync` → `main` merge 대기 중
+
+### 생성/수정 파일
+
+| 파일 | 내용 |
+|------|------|
+| `gitshuttle/github_auth.py` | `build_authenticated_url()`, `get_ssh_env()`, `mask_token_in_url()` |
+| `gitshuttle/sync_.py` | `run_sync()`, `SyncResult` 데이터클래스 |
+| `gitshuttle/config.py` | `get_sync_config()`, `_parse_sync_toml()` 추가 |
+| `tests/test_sync.py` | Direct Sync 테스트 17개 (신규) |
+
+### 설계 결정
+
+**토큰 보안 — 마스킹 레이어 구현**
+- `mask_token_in_url(url)`: `https://<token>@host` 패턴을 `https://***@host`로 정규식 치환
+- `_run_git_cmd()`: RuntimeError 발생 시 stderr에 포함된 URL도 `mask_token_in_url()` 통과 후 메시지 생성
+- 테스트 `test_run_sync_token_not_in_error`: 실제 토큰 문자열이 예외 메시지에 없음을 단언
+
+**인증 방식 추상화 — `_build_url()` 헬퍼**
+- HTTPS+Token: `build_authenticated_url(url, token)` → 인증 URL 반환, 추가 env 없음
+- SSH: URL 그대로, `get_ssh_env(ssh_key)` → `GIT_SSH_COMMAND` env dict 반환
+- `_run_git_cmd(extra_env=)` 파라미터로 SSH env 주입
+
+**`get_sync_config()` — 중첩 섹션 파싱**
+- `[sync.source]`, `[sync.target]` 같은 점(`.`) 구분 중첩 섹션을 수동 파싱으로 지원
+- `tomllib` 있으면 그것을 사용, 없으면 `_parse_sync_toml()` fallback
+- 반환: `{'source': {...}, 'target': {...}}` — `[sync]` 루트는 제거하고 하위만 반환
+
+**`run_sync()` 흐름**
+1. `work_dir / clone` 경로에 `git clone --bare <source_url>` 실행
+2. `git rev-list --count --all`로 커밋 수 측정
+3. `git push <target_url> --all` (force 옵션은 `on_conflict="force"` 시 추가)
+4. `SyncResult(synced=N, skipped=0, total=N)` 반환
+
+**모든 subprocess 호출 규약 준수**
+- `encoding='utf-8'` 명시
+- `env`에 `PYTHONIOENCODING='utf-8'` 포함 (`_sync_env()` 헬퍼로 일괄 적용)
+
+### TDD Harness 결과
+
+- SA2 (TDD): **PASS**
+  - RED: 17개 테스트 실패 (모듈 없음, ImportError)
+  - GREEN: 17/17 테스트 통과
+  - 전체 suite: **102 passed** (기존 85 + 신규 17), 0 failed, 회귀 없음
+
+### 수락 기준 달성
+
+- [x] `build_authenticated_url(url, token)` → `https://<token>@host/...` 형식
+- [x] `get_ssh_env(key_path)` → `{'GIT_SSH_COMMAND': 'ssh -i <path> -o StrictHostKeyChecking=no'}`
+- [x] `mask_token_in_url()` → 토큰 부분 `***` 치환
+- [x] `get_sync_config()` — 파일 없거나 [sync] 없으면 `{}` 반환
+- [x] `get_sync_config()` — `[sync.source]`, `[sync.target]` 중첩 섹션 파싱
+- [x] `run_sync()` → subprocess mock 시 `encoding='utf-8'` 및 `PYTHONIOENCODING='utf-8'` 준수
+- [x] 오류 발생 시 source/target 토큰 예외 메시지에 미노출
+- [x] `run_sync()` → `SyncResult` 반환, 필드 `synced/skipped/total` 정수 타입
+- [x] 기존 85개 테스트 회귀 없음 (102 passed)
 
 ---
 
