@@ -71,6 +71,21 @@
 
 ---
 
+### 10. Direct Sync 기능 추가 (Phase 2)
+- **배경:** 단일 망 환경에서 두 GitHub repo 간 파일 없이 직접 동기화 요구
+- **PRD 3.6** 신규 추가: Direct Sync 스펙, 인증 방식(HTTPS+Token / SSH), `gitshuttle.toml` 설정 구조
+- **PRD 시나리오 B** 추가: `gitshuttle sync` 워크플로우
+- **PLAN Sprint 7** 추가: `github_auth.py`, `sync_.py`, 환경변수 인증(`GS_SOURCE_TOKEN` / `GS_TARGET_TOKEN`)
+- **README** 업데이트: `sync` 명령어 레퍼런스, HTTPS Token / SSH 설정 예시
+- **CLAUDE.md** 업데이트: 명령어 구조에 `sync` 추가, 패키지 구조에 `sync_.py` / `github_auth.py` 추가
+
+주요 설계 결정:
+- Source / Target 각각 별도 인증 (다른 계정/조직 지원)
+- 토큰은 파일에 저장 금지 → 환경변수(`GS_SOURCE_TOKEN`, `GS_TARGET_TOKEN`)로만 주입
+- export/import와 동일한 커밋 선택 UI 재사용 (코드 중복 없음)
+
+---
+
 ## 최종 저장소 현황 (2026-05-08 기준)
 
 ```
