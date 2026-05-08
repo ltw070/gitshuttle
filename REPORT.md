@@ -9,7 +9,7 @@
 | 0 | `sprint/0-scaffold` | 프로젝트 기반 구조 | ✅ DONE | PASS | PASS | PASS (6/6) | PASS |
 | 1 | `sprint/1-git-core` | Git 핵심 레이어 | ✅ DONE | PASS | PASS | PASS (27/27) | PASS |
 | 2 | `sprint/2-export-tui` | Export + TUI | ✅ DONE | PASS | PASS | PASS (39/39) | PASS |
-| 3 | `sprint/3-ui-config` | UI 모드 + Config | ⬜ TODO | — | — | — | — |
+| 3 | `sprint/3-ui-config` | UI 모드 + Config | ✅ DONE | PASS | PASS | PASS (64/64) | PASS |
 | 4 | `sprint/4-import` | Import | ⬜ TODO | — | — | — | — |
 | 5 | `sprint/5-e2e` | 대용량 + E2E | ⬜ TODO | — | — | — | — |
 | 6 | `sprint/6-build` | PyInstaller 빌드 | ⬜ TODO | — | — | — | — |
@@ -243,7 +243,56 @@ GitHub: https://github.com/ltw070/gitshuttle (private)
 
 ---
 
+---
+
+## Sprint 3 — UI 모드 확장 + Config (2026-05-08)
+
+**브랜치:** `sprint/3-ui-config` → `main` merge
+
+### 생성/수정 파일
+
+| 파일 | 내용 |
+|------|------|
+| `gitshuttle/ui/csv_ui.py` | `generate_csv()` (utf-8-sig), `parse_csv()` |
+| `gitshuttle/ui/html_ui.py` | `generate_html()` (self-contained, 외부URL없음), `parse_selection_json()` |
+| `gitshuttle/ui/prompt_ui.py` | `select_commits_prompt()`, InquirerPy headless 분기 |
+| `gitshuttle/config.py` | `save_config()` 추가, `get_ui_mode(flag=, config_path=)` 시그니처 확장, `run_config_wizard()` 구현, `_parse_simple_toml()` (tomllib 없는 환경 대비) |
+| `gitshuttle/cli.py` | export 커맨드에 UI 모드별 분기 (csv/html/prompt 실제 호출), config 커맨드 `run_config_wizard()` 연결, `get_ui_mode(flag=ui)` 우선순위 로직 |
+| `tests/ui/test_csv_ui.py` | csv_ui 테스트 7개 |
+| `tests/ui/test_html_ui.py` | html_ui 테스트 8개 |
+| `tests/test_config.py` | config 테스트 10개 |
+| `tests/test_cli.py` | `test_config_stub` — 실제 마법사 입력 흐름으로 업데이트 |
+
+### 설계 결정
+
+- `csv_ui.py`: `open(path, 'w', encoding='utf-8-sig', newline='')` — Excel BOM 호환
+- `html_ui.py`: 순수 HTML+CSS+JS만 사용, `Blob` + `URL.createObjectURL` 로 selection.json 다운로드. 외부 CDN/URL 일절 없음.
+- `prompt_ui.py`: InquirerPy import는 함수 내부에서만 — 미설치 환경에서도 모듈 import 오류 없음
+- `config.py save_config()`: tomli_w 미설치 가능성 → 수동 toml 직렬화(`[section]\nkey = "value"`)
+- `get_ui_mode()`: 시그니처에 `flag` 파라미터 추가 → `--ui 플래그 > toml > 기본값` 우선순위
+- `run_config_wizard()`: `EOFError` 처리 — 비인터랙티브 환경(테스트 등)에서 정상 종료
+
+### TDD Harness 결과
+
+- SA1: **PASS**
+- SA2 (TDD): **PASS**
+  - RED: 22개 테스트 실패 (모듈 없음, 시그니처 불일치)
+  - GREEN: 25개 신규 테스트 + 39개 기존 테스트 전부 통과
+  - REFACTOR: `config.py` EOFError 처리 추가
+- SA3: **PASS** — 64 passed, 0 failed
+- SA4: 미실행 (SA3 PASS 확인 완료)
+
+### 수락 기준 달성
+
+- [x] `pytest tests/ -v` → 64 passed (기존 39 + 신규 25)
+- [x] CSV utf-8-sig BOM 확인 테스트 PASS
+- [x] HTML 외부 URL 없음 확인 테스트 PASS
+- [x] `--ui` 플래그가 toml 기본값보다 우선하는 테스트 PASS
+- [x] `save_config()` 저장 → `load_config()` 재읽기 일치 테스트 PASS
+
+---
+
 ## 다음 작업 (Next)
 
-- [ ] Sprint 3: UI 모드 확장 (CSV/HTML/Prompt) + Config
+- [ ] Sprint 4: Import 구현 (`import_.py`, `test_import.py`)
 - [ ] GitHub 평가용 repo — Sprint 7 Direct Sync 검증 시에만 최소 사용

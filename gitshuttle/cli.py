@@ -45,6 +45,7 @@ def export(
     from gitshuttle.git_ops import get_commits
     from gitshuttle.export_ import run_export
     from gitshuttle.ui.tui import select_commits_tui
+    from gitshuttle.config import get_ui_mode
 
     repo_path = Path.cwd()
     output_dir = Path(output) if output else repo_path
@@ -59,14 +60,32 @@ def export(
 
     typer.echo(f"총 {len(commits)}개 커밋을 찾았습니다.")
 
-    # UI 모드 결정 (--ui 플래그 > 기본값 tui)
-    ui_mode = ui or "tui"
+    # UI 모드 결정: --ui 플래그 > gitshuttle.toml > 기본값(tui)
+    ui_mode = get_ui_mode(flag=ui)
 
     if ui_mode == "tui":
         selected = select_commits_tui(commits)
+    elif ui_mode == "csv":
+        from gitshuttle.ui.csv_ui import generate_csv, parse_csv
+        csv_path = output_dir / "commits.csv"
+        generate_csv(commits, csv_path)
+        typer.echo(f"commits.csv 생성: {csv_path}")
+        typer.echo("include 컬럼을 Y/N 으로 편집 후 Enter 를 누르세요.")
+        input()
+        selected = parse_csv(csv_path, commits)
+    elif ui_mode == "html":
+        from gitshuttle.ui.html_ui import generate_html, parse_selection_json
+        html_path = output_dir / "commits.html"
+        generate_html(commits, html_path)
+        typer.echo(f"HTML 생성: {html_path}")
+        typer.echo("브라우저에서 열어 커밋을 선택하고 selection.json 을 다운로드하세요.")
+        json_path_str = input("selection.json 경로 입력: ").strip()
+        selected = parse_selection_json(json_path_str, commits)
+    elif ui_mode == "prompt":
+        from gitshuttle.ui.prompt_ui import select_commits_prompt
+        selected = select_commits_prompt(commits)
     else:
-        # 다른 UI 모드는 추후 구현 — 현재는 tui 폴백
-        typer.echo(f"UI 모드 '{ui_mode}'는 아직 구현되지 않았습니다. tui 로 대체합니다.")
+        typer.echo(f"알 수 없는 UI 모드 '{ui_mode}'. tui 로 대체합니다.")
         selected = select_commits_tui(commits)
 
     if not selected:
@@ -100,7 +119,8 @@ def import_(
 @app.command()
 def config() -> None:
     """대화형 마법사로 gitshuttle.toml 설정을 변경합니다."""
-    typer.echo("not implemented")
+    from gitshuttle.config import run_config_wizard
+    run_config_wizard()
 
 
 @app.command()
