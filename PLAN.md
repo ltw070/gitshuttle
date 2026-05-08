@@ -1,0 +1,331 @@
+# PLAN.md — GitShuttle Phase 1 TDD 개발 계획
+
+## 개요
+
+Phase 1(CLI + TUI) 구현을 6개 Sprint로 나누어 진행한다.
+모든 Sprint는 **TDD Harness** 를 통해 실행된다 → `HARNESS.md` 참고.
+
+### Sprint당 표준 사이클
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  매 Sprint 시작 전                                        │
+│  SubAgent1 (doc-verify) — 문서 정합성 검증               │
+│    └─ PASS → SubAgent2 진행 / FAIL → 문서 수정 후 재실행 │
+├─────────────────────────────────────────────────────────┤
+│  구현                                                     │
+│  SubAgent2 (ai-action) — TDD: RED → GREEN → REFACTOR    │
+├─────────────────────────────────────────────────────────┤
+│  검증 (병렬)                                              │
+│  SubAgent3 (test-verify)  ──┐                            │
+│  SubAgent4 (compliance)   ──┘ 동시 실행                  │
+│    └─ 둘 다 PASS → 커밋 / FAIL → SA2 재실행              │
+└─────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 패키지 구조 목표
+
+```
+gitshuttle/
+├── __init__.py
+├── __main__.py       # 엔트리포인트 + UTF-8 강제
+├── cli.py            # Typer app 정의, 커맨드 등록
+├── git_ops.py        # git 서브프로세스 래퍼 (log, bundle, verify)
+├── bundle.py         # bundle 생성 / 검증
+├── checksum.py       # SHA-256 생성 / 검증
+├── manifest.py       # 커밋 목록 요약 파일 생성
+├── export_.py        # export 커맨드 오케스트레이션
+├── import_.py        # import 커맨드 오케스트레이션
+├── config.py         # config 마법사, gitshuttle.toml 읽기/쓰기
+└── ui/
+    ├── __init__.py
+    ├── tui.py        # Textual 체크박스 + 테이블 (기본값)
+    ├── csv_ui.py     # commits.csv 생성/파싱
+    ├── html_ui.py    # self-contained HTML 생성, selection.json 파싱
+    └── prompt_ui.py  # InquirerPy 멀티셀렉트
+
+tests/
+├── conftest.py       # 공통 픽스처 (임시 git repo, sample commits)
+├── test_git_ops.py
+├── test_bundle.py
+├── test_checksum.py
+├── test_manifest.py
+├── test_export.py
+├── test_import.py
+├── test_config.py
+└── ui/
+    ├── test_csv_ui.py
+    ├── test_html_ui.py
+    └── test_prompt_ui.py
+```
+
+---
+
+## Sprint 0 — 프로젝트 기반 구조
+
+**목표:** 빌드·테스트·실행 가능한 최소 골격 구성
+
+### 구현 대상
+- `pyproject.toml` (의존성, 빌드 설정)
+- `requirements.txt` / `requirements-dev.txt`
+- `gitshuttle/__init__.py`, `__main__.py`, `cli.py` 스캐폴딩
+- `tests/conftest.py` — 임시 git repo 픽스처
+- `gitshuttle.toml` 기본 템플릿
+
+### TDD 사이클
+
+| 단계 | SubAgent | 내용 |
+|------|----------|------|
+| 문서 검증 | SA1 | PRD↔README↔CLAUDE.md 정합성 확인 |
+| 구현 | SA2 | `python -m gitshuttle` 실행 → `Usage: gitshuttle [OPTIONS] COMMAND` 출력 확인 테스트 먼저 |
+| 검증 | SA3+SA4 | pytest 통과 + 인코딩·네트워크 규약 확인 |
+
+### 수락 기준 (Acceptance Criteria)
+- [ ] `python -m gitshuttle --help` 실행 시 export/import/config 커맨드 목록 출력
+- [ ] `pytest tests/` 실행 시 0 errors
+- [ ] `gitshuttle.toml` 없을 때 기본값(tui)으로 동작
+
+### SA2 호출 프롬프트
+```
+Sprint 0: 프로젝트 기반 구조 생성.
+pyproject.toml(Python 3.10+, Typer, Textual, InquirerPy 의존성),
+gitshuttle 패키지 스캐폴딩(__main__.py UTF-8 강제, cli.py Typer app),
+tests/conftest.py(임시 git repo 픽스처) 작성.
+수락 기준: python -m gitshuttle --help 시 커맨드 목록 출력.
+```
+
+---
+
+## Sprint 1 — Git 핵심 레이어
+
+**목표:** git 명령어 래핑 및 커밋 데이터 파싱
+
+### 구현 대상
+- `git_ops.py`: `get_commits()`, `check_git_version()`, `run_git()`
+- `bundle.py`: `create_bundle()`, `verify_bundle()`
+- `checksum.py`: `generate()`, `verify()`
+
+### TDD 사이클
+
+| 단계 | SubAgent | 내용 |
+|------|----------|------|
+| 문서 검증 | SA1 | Git 2.37+ 스펙, SHA-256 명세 확인 |
+| 구현 | SA2 | `test_git_ops.py` 먼저 작성 (임시 repo 픽스처 활용) |
+| 검증 | SA3+SA4 | subprocess encoding='utf-8' 준수 여부 포함 |
+
+### 수락 기준
+- [ ] `get_commits(repo_path, branch)` → 커밋 목록 (hash, date, author, message, files_changed) 반환
+- [ ] 한글 커밋 메시지 포함 커밋 정상 파싱
+- [ ] `create_bundle()` → `.bundle` 파일 생성, `verify_bundle()` → True/False
+- [ ] `generate(file_path)` → `.sha256` 파일 생성, `verify()` → True/False
+
+### SA2 호출 프롬프트
+```
+Sprint 1: Git 핵심 레이어 구현.
+git_ops.py(get_commits, check_git_version, run_git — 모두 encoding='utf-8'),
+bundle.py(create_bundle, verify_bundle),
+checksum.py(generate, verify — SHA-256).
+한글 커밋 메시지 파싱 테스트 포함 필수.
+```
+
+---
+
+## Sprint 2 — Export 핵심 (TUI 기본값)
+
+**목표:** TUI 커밋 선택 → bundle + checksum + manifest 생성까지 E2E
+
+### 구현 대상
+- `ui/tui.py`: Textual 체크박스 테이블, Shift 범위선택, 필터(작성자/파일/날짜), `[imported]` 표시
+- `manifest.py`: `create_manifest(commits, output_path)`
+- `export_.py`: UI → 선택 커밋 → bundle + sha256 + manifest 파이프라인
+
+### TDD 사이클
+
+| 단계 | SubAgent | 내용 |
+|------|----------|------|
+| 문서 검증 | SA1 | PRD 3.1(추출), 3.2(UI), 3.3(패키지) 스펙 확인 |
+| 구현 | SA2 | TUI는 headless 테스트 픽스처로, 선택 결과를 직접 주입하여 파이프라인 테스트 |
+| 검증 | SA3+SA4 | manifest 파일 UTF-8 저장 확인 포함 |
+
+### 수락 기준
+- [ ] TUI에서 커밋 선택 후 `shuttle_YYMMDD.bundle` + `.sha256` + `_manifest.txt` 3파일 생성
+- [ ] manifest에 한글 커밋 메시지 정상 포함
+- [ ] 이미 타겟에 반영된 커밋은 `[imported]` 표시
+- [ ] `gitshuttle export --branch main` 실행 가능
+
+### SA2 호출 프롬프트
+```
+Sprint 2: Export 핵심 구현.
+ui/tui.py(Textual — 체크박스 테이블, Shift 범위선택, 작성자/파일/날짜 필터),
+manifest.py(UTF-8, 커밋 요약),
+export_.py(UI→bundle+sha256+manifest 파이프라인).
+TUI headless 테스트 픽스처 필수.
+```
+
+---
+
+## Sprint 3 — UI 모드 확장 + Config
+
+**목표:** CSV / HTML / Prompt 모드 구현 및 설정 마법사
+
+### 구현 대상
+- `ui/csv_ui.py`: `commits.csv` 생성(`utf-8-sig`), `include` 컬럼 파싱
+- `ui/html_ui.py`: 단일 `.html` 생성(인터넷 불필요), `selection.json` 파싱
+- `ui/prompt_ui.py`: InquirerPy 멀티셀렉트
+- `config.py`: `gitshuttle.toml` 읽기/쓰기, `gitshuttle config` 마법사
+- `--ui` 플래그 우선순위 로직 (`--ui` > `toml` > 기본값 tui)
+
+### TDD 사이클
+
+| 단계 | SubAgent | 내용 |
+|------|----------|------|
+| 문서 검증 | SA1 | PRD 3.2 UI 옵션표, 설정 파일 스펙 확인 |
+| 구현 | SA2 | 각 UI 모드별 입력→커밋목록 변환 단위 테스트 |
+| 검증 | SA3+SA4 | CSV utf-8-sig, HTML 네트워크 호출 없음 확인 |
+
+### 수락 기준
+- [ ] `gitshuttle export --ui csv` → `commits.csv` 생성, 수정 후 재입력 시 선택 반영
+- [ ] `gitshuttle export --ui html` → `.html` 생성, `selection.json` 파싱 후 export
+- [ ] `gitshuttle config` → 마법사 실행 후 `gitshuttle.toml` 저장
+- [ ] `--ui` 플래그가 toml 기본값보다 우선
+
+### SA2 호출 프롬프트
+```
+Sprint 3: UI 모드 확장 + Config 구현.
+ui/csv_ui.py(utf-8-sig, include 컬럼),
+ui/html_ui.py(self-contained, 외부 CDN 없음, selection.json),
+ui/prompt_ui.py(InquirerPy),
+config.py(toml 읽기/쓰기, 마법사).
+--ui 플래그 우선순위 로직 테스트 필수.
+```
+
+---
+
+## Sprint 4 — Import
+
+**목표:** bundle 수신 → 검증 → 병합까지 E2E
+
+### 구현 대상
+- `import_.py`: SHA-256 검증 → 커밋 매칭 → Fast-forward → 충돌 처리
+- 충돌 처리: `--on-conflict skip / force / abort`
+- 손상 파일: 체크섬 불일치 → 오류 메시지 + 재export 명령어 안내
+
+### TDD 사이클
+
+| 단계 | SubAgent | 내용 |
+|------|----------|------|
+| 문서 검증 | SA1 | PRD 3.4(Import), 3.5(복구) 스펙 확인 |
+| 구현 | SA2 | 3가지 충돌 시나리오 + 체크섬 불일치 시나리오 테스트 먼저 |
+| 검증 | SA3+SA4 | 모든 충돌 케이스 커버리지 확인 |
+
+### 수락 기준
+- [ ] `gitshuttle import --file shuttle.bundle` → SHA-256 검증 → 히스토리 반영
+- [ ] `--on-conflict skip`: 중복 커밋 건너뛰고 계속
+- [ ] `--on-conflict force`: 강제 덮어쓰기
+- [ ] `--on-conflict abort`: 충돌 즉시 전체 중단
+- [ ] 체크섬 불일치: 명확한 오류 + `gitshuttle export ...` 재실행 안내 출력
+
+### SA2 호출 프롬프트
+```
+Sprint 4: Import 구현.
+import_.py(SHA-256 검증 → 커밋 매칭 → Fast-forward → 충돌 처리).
+테스트: skip/force/abort 3케이스 + 체크섬 불일치 케이스 모두 포함.
+손상 파일 오류 메시지에 재export 명령어 자동 출력 필수.
+```
+
+---
+
+## Sprint 5 — 대용량 처리 + E2E 통합
+
+**목표:** 분할 압축 지원 및 전체 워크플로우 E2E 검증
+
+### 구현 대상
+- 분할 압축 (Split archive) — 대형 bundle 자동 분할/재조립
+- E2E 테스트: 외부망 export → 내부망 import 전체 시뮬레이션
+- 한글 커밋 메시지 E2E 검증
+
+### TDD 사이클
+
+| 단계 | SubAgent | 내용 |
+|------|----------|------|
+| 문서 검증 | SA1 | PRD 7(대용량 처리) 스펙, E2E 시나리오 확인 |
+| 구현 | SA2 | E2E 픽스처: 두 개의 임시 git repo(외부/내부)로 전체 흐름 테스트 |
+| 검증 | SA3+SA4 | E2E 포함 전체 pytest + 최종 compliance |
+
+### 수락 기준
+- [ ] 100MB 이상 bundle 자동 분할, import 시 자동 재조립
+- [ ] E2E: 한글 커밋 메시지가 외부망 → 내부망 이전 후 동일하게 유지
+- [ ] 전체 pytest 통과
+
+### SA2 호출 프롬프트
+```
+Sprint 5: 대용량 처리 + E2E 통합 테스트.
+분할 압축(split archive) 자동 분할/재조립,
+E2E 테스트(두 임시 git repo로 export→import 전체 시뮬레이션),
+한글 커밋 메시지 왕복 보존 검증.
+```
+
+---
+
+## Sprint 6 — 빌드 & 배포
+
+**목표:** `gitshuttle.exe` 단일 파일 빌드
+
+### 구현 대상
+- `gitshuttle.spec` (PyInstaller 설정, `PYTHONUTF8=1` 환경변수 포함)
+- Windows Terminal / CMD / PowerShell 호환성 검증
+- 빌드 스크립트 (`build.ps1`)
+
+### TDD 사이클
+
+| 단계 | SubAgent | 내용 |
+|------|----------|------|
+| 문서 검증 | SA1 | PRD 6(배포), CLAUDE.md 엔트리포인트 스펙 확인 |
+| 구현 | SA2 | .spec 파일 작성, 빌드 후 `gitshuttle.exe --help` 동작 확인 |
+| 검증 | SA3+SA4 | exe 실행 후 한글 출력 깨짐 없는지 compliance 체크 |
+
+### 수락 기준
+- [ ] `.\gitshuttle.exe --help` → 커맨드 목록 정상 출력
+- [ ] `.\gitshuttle.exe export` → TUI 정상 실행
+- [ ] 한글 메시지 출력 깨짐 없음 (Windows Terminal / CMD / PowerShell)
+
+### SA2 호출 프롬프트
+```
+Sprint 6: PyInstaller 빌드.
+gitshuttle.spec(PYTHONUTF8=1, 단일 exe),
+build.ps1(빌드 자동화),
+exe 실행 + 한글 출력 검증 테스트.
+```
+
+---
+
+## 전체 일정 요약
+
+| Sprint | 내용 | 핵심 산출물 |
+|--------|------|-------------|
+| 0 | 기반 구조 | pyproject.toml, 패키지 스캐폴딩, conftest.py |
+| 1 | Git 핵심 레이어 | git_ops.py, bundle.py, checksum.py |
+| 2 | Export + TUI | ui/tui.py, manifest.py, export_.py |
+| 3 | UI 모드 + Config | csv/html/prompt ui, config.py |
+| 4 | Import | import_.py, 충돌 처리 3케이스 |
+| 5 | 대용량 + E2E | split archive, E2E 테스트 |
+| 6 | 빌드 | gitshuttle.exe, build.ps1 |
+
+---
+
+## 브랜치 전략
+
+```
+main          ← 릴리즈 브랜치 (각 Sprint 완료 후 merge)
+  └── sprint/0-scaffold
+  └── sprint/1-git-core
+  └── sprint/2-export-tui
+  └── sprint/3-ui-config
+  └── sprint/4-import
+  └── sprint/5-e2e
+  └── sprint/6-build
+```
+
+각 Sprint 브랜치에서 개발 → SA3+SA4 PASS → `main` merge → 커밋 & push.

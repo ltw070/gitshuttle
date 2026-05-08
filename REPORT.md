@@ -58,9 +58,16 @@
 
 ---
 
+### 8. TDD 개발 계획 수립
+- `PLAN.md` 생성: Phase 1을 Sprint 0~6으로 분리, 각 Sprint에 SA 호출 프롬프트 포함
+- `CLAUDE.md` 업데이트: 패키지 구조 목표, 브랜치 전략 추가
+- 브랜치 전략: `sprint/0-scaffold` ~ `sprint/6-build` → `main` merge
+
+---
+
 ## 다음 작업 (Next)
 
-- [ ] `gitshuttle/` 패키지 구조 생성 (`__main__.py`, `export.py`, `import_.py`, `config.py`)
-- [ ] `tests/` 디렉터리 및 기본 테스트 픽스처 구성
-- [ ] `requirements.txt` / `pyproject.toml` 작성
-- [ ] SubAgent1 실행으로 문서 정합성 검증 후 Phase 1 구현 시작
+- [ ] `sprint/0-scaffold` 브랜치 생성
+- [ ] SA1 실행 → 문서 정합성 검증
+- [ ] SA2 실행 → Sprint 0 구현 (`pyproject.toml`, 패키지 스캐폴딩, `conftest.py`)
+- [ ] SA3+SA4 병렬 실행 → 검증 후 `main` merge

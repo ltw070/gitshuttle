@@ -33,6 +33,61 @@ PyInstaller 빌드도 동일 엔트리포인트를 사용한다.
 
 ---
 
+## 패키지 구조
+
+```
+gitshuttle/
+├── __init__.py
+├── __main__.py       # 엔트리포인트 + UTF-8 강제
+├── cli.py            # Typer app, 커맨드 등록
+├── git_ops.py        # git 서브프로세스 래퍼 (log, bundle, verify)
+├── bundle.py         # bundle 생성/검증
+├── checksum.py       # SHA-256 생성/검증
+├── manifest.py       # 커밋 목록 요약 파일 생성
+├── export_.py        # export 오케스트레이션
+├── import_.py        # import 오케스트레이션
+├── config.py         # config 마법사, gitshuttle.toml 읽기/쓰기
+└── ui/
+    ├── __init__.py
+    ├── tui.py        # Textual 체크박스+테이블 (기본값)
+    ├── csv_ui.py     # commits.csv 생성/파싱 (utf-8-sig)
+    ├── html_ui.py    # self-contained HTML, selection.json 파싱
+    └── prompt_ui.py  # InquirerPy 멀티셀렉트
+
+tests/
+├── conftest.py       # 임시 git repo 픽스처
+├── test_git_ops.py
+├── test_bundle.py
+├── test_checksum.py
+├── test_manifest.py
+├── test_export.py
+├── test_import.py
+├── test_config.py
+└── ui/
+    ├── test_csv_ui.py
+    ├── test_html_ui.py
+    └── test_prompt_ui.py
+```
+
+---
+
+## 브랜치 전략
+
+```
+main
+├── sprint/0-scaffold
+├── sprint/1-git-core
+├── sprint/2-export-tui
+├── sprint/3-ui-config
+├── sprint/4-import
+├── sprint/5-e2e
+└── sprint/6-build
+```
+
+각 Sprint 브랜치에서 개발 → SA3+SA4 PASS → main merge.
+
+---
+
 ## 명령어 구조
 
 ```
