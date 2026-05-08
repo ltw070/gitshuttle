@@ -37,15 +37,31 @@ def test_default_config_tui():
     assert DEFAULT_UI == "tui"
 
 
-def test_export_stub():
-    """export 커맨드가 에러 없이 실행되어야 한다 (스텁)."""
+def test_export_stub(tmp_git_repo):
+    """export 커맨드가 에러 없이 실행되어야 한다.
+
+    GITSHUTTLE_HEADLESS=1 로 TUI 를 우회하고 tmp_git_repo 에서 실행한다.
+    """
+    import os
     from gitshuttle.cli import app
 
     runner = CliRunner()
-    result = runner.invoke(app, ["export"])
+    # Typer CliRunner 는 env 파라미터를 지원하지 않으므로 환경변수를 직접 패치한다.
+    old_val = os.environ.get("GITSHUTTLE_HEADLESS")
+    old_cwd = os.getcwd()
+    try:
+        os.environ["GITSHUTTLE_HEADLESS"] = "1"
+        os.chdir(str(tmp_git_repo))
+        result = runner.invoke(app, ["export", "--branch", "HEAD"])
+    finally:
+        if old_val is None:
+            os.environ.pop("GITSHUTTLE_HEADLESS", None)
+        else:
+            os.environ["GITSHUTTLE_HEADLESS"] = old_val
+        os.chdir(old_cwd)
 
-    # 스텁이므로 "not implemented" 또는 임의 메시지만 출력되면 됨
     assert result.exit_code == 0, f"exit code {result.exit_code}: {result.output}"
+    assert "export 완료" in result.output
 
 
 def test_import_stub():
@@ -59,10 +75,11 @@ def test_import_stub():
 
 
 def test_config_stub():
-    """config 커맨드가 에러 없이 실행되어야 한다 (스텁)."""
+    """config 커맨드가 에러 없이 실행되어야 한다 (1 입력 → tui 선택)."""
     from gitshuttle.cli import app
 
     runner = CliRunner()
-    result = runner.invoke(app, ["config"])
+    # "1\n" 을 stdin 으로 제공 → TUI 선택
+    result = runner.invoke(app, ["config"], input="1\n")
 
     assert result.exit_code == 0, f"exit code {result.exit_code}: {result.output}"
