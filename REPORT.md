@@ -8,7 +8,7 @@
 |--------|--------|------|------|-----|-----|-----|-----|
 | 0 | `sprint/0-scaffold` | 프로젝트 기반 구조 | ✅ DONE | PASS | PASS | PASS (6/6) | PASS |
 | 1 | `sprint/1-git-core` | Git 핵심 레이어 | ✅ DONE | PASS | PASS | PASS (27/27) | PASS |
-| 2 | `sprint/2-export-tui` | Export + TUI | ⬜ TODO | — | — | — | — |
+| 2 | `sprint/2-export-tui` | Export + TUI | ✅ DONE | PASS | PASS | PASS (39/39) | PASS |
 | 3 | `sprint/3-ui-config` | UI 모드 + Config | ⬜ TODO | — | — | — | — |
 | 4 | `sprint/4-import` | Import | ⬜ TODO | — | — | — | — |
 | 5 | `sprint/5-e2e` | 대용량 + E2E | ⬜ TODO | — | — | — | — |
@@ -209,7 +209,41 @@ GitHub: https://github.com/ltw070/gitshuttle (private)
 
 ---
 
+## Sprint 2 — Export 핵심 + TUI (2026-05-08)
+
+**브랜치:** `sprint/2-export-tui` → `main` merge
+
+### 생성 파일
+| 파일 | 내용 |
+|------|------|
+| `gitshuttle/manifest.py` | `create_manifest()` — UTF-8, BOM 없음 |
+| `gitshuttle/export_.py` | `run_export()`, `ExportResult` 데이터클래스 |
+| `gitshuttle/ui/__init__.py` | 빈 패키지 |
+| `gitshuttle/ui/tui.py` | `select_commits_tui()`, `GITSHUTTLE_HEADLESS=1` headless 분기 |
+| `gitshuttle/ui/_textual_app.py` | `CommitSelectorApp` (Textual, Shift 범위선택, 필터, [imported] 표시) |
+| `tests/test_manifest.py` | 6개 테스트 |
+| `tests/test_export.py` | 6개 테스트 |
+
+### 설계 결정
+- TUI headless 테스트: `GITSHUTTLE_HEADLESS=1` 환경변수로 Textual 우회 → 전체 커밋 반환
+- `_textual_app.py` 분리: Textual 미설치 환경에서도 `tui.py` import 오류 없도록
+- `already_imported` set을 `[imported]` 표시에 활용 (Sprint 4 import_.py 연동 예정)
+
+### TDD Harness 결과
+- SA1: **PASS**
+- SA2: **PASS** — 39/39 GREEN (신규 12개)
+- SA3: **PASS** — 39 passed, 커버리지 69% (manifest 100%, export 97%)
+- SA4: **PASS** — WARNING 2건(미사용 import) 즉시 수정 완료
+
+### 수락 기준 달성
+- [x] TUI 선택 후 `.bundle` + `.sha256` + `_manifest.txt` 3파일 생성
+- [x] manifest에 한글 커밋 메시지 정상 포함
+- [x] 기존 커밋 `[imported]` 표시 로직 구현 (already_imported set)
+- [x] `gitshuttle export --branch main` 실행 가능
+
+---
+
 ## 다음 작업 (Next)
 
-- [ ] Sprint 2: Export 핵심 (TUI + manifest + export 오케스트레이션)
+- [ ] Sprint 3: UI 모드 확장 (CSV/HTML/Prompt) + Config
 - [ ] GitHub 평가용 repo — Sprint 7 Direct Sync 검증 시에만 최소 사용

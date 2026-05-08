@@ -3,6 +3,31 @@ import os
 import pytest
 from pathlib import Path
 
+from gitshuttle.git_ops import Commit
+
+
+@pytest.fixture
+def sample_commits():
+    """manifest/export 테스트용 Commit 샘플 목록."""
+    return [
+        Commit(
+            hash="abc1234def5678901234567890123456789012345",
+            short_hash="abc1234",
+            date="2026-05-01 10:00:00 +0900",
+            author="Alice",
+            message="feat: 로그인 구현",
+            files_changed=3,
+        ),
+        Commit(
+            hash="bcd2345efg678901234567890123456789012345",
+            short_hash="bcd2345",
+            date="2026-04-28 09:00:00 +0900",
+            author="Bob",
+            message="fix: 인코딩 수정",
+            files_changed=1,
+        ),
+    ]
+
 
 def _git_env() -> dict:
     """테스트용 git 환경 변수 딕셔너리."""

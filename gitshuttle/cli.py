@@ -1,8 +1,10 @@
 """cli 모듈: Typer app 및 커맨드 등록."""
 from __future__ import annotations
 
-import typer
+from pathlib import Path
 from typing import Optional
+
+import typer
 
 from gitshuttle import __version__
 
@@ -40,7 +42,50 @@ def export(
     output: Optional[str] = typer.Option(None, "--output", "-o", help="출력 경로"),
 ) -> None:
     """선택한 커밋을 .bundle 파일로 추출합니다."""
-    typer.echo("not implemented")
+    from gitshuttle.git_ops import get_commits
+    from gitshuttle.export_ import run_export
+    from gitshuttle.ui.tui import select_commits_tui
+
+    repo_path = Path.cwd()
+    output_dir = Path(output) if output else repo_path
+    branch_name = branch or "HEAD"
+
+    typer.echo(f"커밋 목록을 읽는 중... (브랜치: {branch_name})")
+    commits = get_commits(repo_path, branch=branch_name)
+
+    if not commits:
+        typer.echo("커밋이 없습니다.", err=True)
+        raise typer.Exit(1)
+
+    typer.echo(f"총 {len(commits)}개 커밋을 찾았습니다.")
+
+    # UI 모드 결정 (--ui 플래그 > 기본값 tui)
+    ui_mode = ui or "tui"
+
+    if ui_mode == "tui":
+        selected = select_commits_tui(commits)
+    else:
+        # 다른 UI 모드는 추후 구현 — 현재는 tui 폴백
+        typer.echo(f"UI 모드 '{ui_mode}'는 아직 구현되지 않았습니다. tui 로 대체합니다.")
+        selected = select_commits_tui(commits)
+
+    if not selected:
+        typer.echo("선택된 커밋이 없습니다. 종료합니다.")
+        raise typer.Exit(0)
+
+    typer.echo(f"{len(selected)}개 커밋 선택됨. 패키지를 생성합니다...")
+
+    result = run_export(
+        repo_path=repo_path,
+        commits=selected,
+        output_dir=output_dir,
+        branch=branch_name,
+    )
+
+    typer.echo(f"bundle   : {result.bundle}")
+    typer.echo(f"sha256   : {result.sha256}")
+    typer.echo(f"manifest : {result.manifest}")
+    typer.echo("export 완료.")
 
 
 @app.command(name="import")
