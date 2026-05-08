@@ -1,5 +1,5 @@
-# MCP 설정 — 토큰 입력 후에는 커밋하지 않도록 주의
-# git update-index --assume-unchanged .mcp.json  ← 토큰 입력 후 이 명령어 실행 권장
+# MCP 설정 (토큰 포함 — 커밋 제외)
+.mcp.json
 
 # Python
 __pycache__/
