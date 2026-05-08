@@ -1,0 +1,31 @@
+# MCP 설정 (토큰 포함 — 절대 커밋 금지)
+.mcp.json
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+dist/
+build/
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# PyInstaller
+*.spec
+*.exe
+
+# 설정
+gitshuttle.toml
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+Thumbs.db
+desktop.ini
