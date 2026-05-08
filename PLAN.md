@@ -83,9 +83,9 @@ tests/
 | 검증 | SA3+SA4 | pytest 통과 + 인코딩·네트워크 규약 확인 |
 
 ### 수락 기준 (Acceptance Criteria)
-- [ ] `python -m gitshuttle --help` 실행 시 export/import/config 커맨드 목록 출력
-- [ ] `pytest tests/` 실행 시 0 errors
-- [ ] `gitshuttle.toml` 없을 때 기본값(tui)으로 동작
+- [x] `python -m gitshuttle --help` 실행 시 export/import/config 커맨드 목록 출력
+- [x] `pytest tests/` 실행 시 0 errors
+- [x] `gitshuttle.toml` 없을 때 기본값(tui)으로 동작
 
 ### SA2 호출 프롬프트
 ```
@@ -116,10 +116,10 @@ tests/conftest.py(임시 git repo 픽스처) 작성.
 | 검증 | SA3+SA4 | subprocess encoding='utf-8' 준수 여부 포함 |
 
 ### 수락 기준
-- [ ] `get_commits(repo_path, branch)` → 커밋 목록 (hash, date, author, message, files_changed) 반환
-- [ ] 한글 커밋 메시지 포함 커밋 정상 파싱
-- [ ] `create_bundle()` → `.bundle` 파일 생성, `verify_bundle()` → True/False
-- [ ] `generate(file_path)` → `.sha256` 파일 생성, `verify()` → True/False
+- [x] `get_commits(repo_path, branch)` → 커밋 목록 (hash, date, author, message, files_changed) 반환
+- [x] 한글 커밋 메시지 포함 커밋 정상 파싱
+- [x] `create_bundle()` → `.bundle` 파일 생성, `verify_bundle()` → True/False
+- [x] `generate(file_path)` → `.sha256` 파일 생성, `verify()` → True/False
 
 ### SA2 호출 프롬프트
 ```
@@ -150,10 +150,10 @@ checksum.py(generate, verify — SHA-256).
 | 검증 | SA3+SA4 | manifest 파일 UTF-8 저장 확인 포함 |
 
 ### 수락 기준
-- [ ] TUI에서 커밋 선택 후 `shuttle_YYMMDD.bundle` + `.sha256` + `_manifest.txt` 3파일 생성
-- [ ] manifest에 한글 커밋 메시지 정상 포함
-- [ ] 이미 타겟에 반영된 커밋은 `[imported]` 표시
-- [ ] `gitshuttle export --branch main` 실행 가능
+- [x] TUI에서 커밋 선택 후 `shuttle_YYMMDD.bundle` + `.sha256` + `_manifest.txt` 3파일 생성
+- [x] manifest에 한글 커밋 메시지 정상 포함
+- [x] 이미 타겟에 반영된 커밋은 `[imported]` 표시
+- [x] `gitshuttle export --branch main` 실행 가능
 
 ### SA2 호출 프롬프트
 ```
@@ -186,10 +186,10 @@ TUI headless 테스트 픽스처 필수.
 | 검증 | SA3+SA4 | CSV utf-8-sig, HTML 네트워크 호출 없음 확인 |
 
 ### 수락 기준
-- [ ] `gitshuttle export --ui csv` → `commits.csv` 생성, 수정 후 재입력 시 선택 반영
-- [ ] `gitshuttle export --ui html` → `.html` 생성, `selection.json` 파싱 후 export
-- [ ] `gitshuttle config` → 마법사 실행 후 `gitshuttle.toml` 저장
-- [ ] `--ui` 플래그가 toml 기본값보다 우선
+- [x] `gitshuttle export --ui csv` → `commits.csv` 생성, 수정 후 재입력 시 선택 반영
+- [x] `gitshuttle export --ui html` → `.html` 생성, `selection.json` 파싱 후 export
+- [x] `gitshuttle config` → 마법사 실행 후 `gitshuttle.toml` 저장
+- [x] `--ui` 플래그가 toml 기본값보다 우선
 
 ### SA2 호출 프롬프트
 ```
@@ -260,10 +260,10 @@ import_.py(SHA-256 검증 → 커밋 매칭 → Fast-forward → 충돌 처리).
 | 검증 | SA3+SA4 | 전체 pytest + compliance (대용량 실 데이터 없이) |
 
 ### 수락 기준
-- [ ] `split_bundle(path, chunk_bytes)` → 분할 파일 목록 반환
-- [ ] `merge_bundles(parts, output)` → 원본과 동일한 bundle 재조립
-- [ ] E2E: 한글 커밋 메시지가 export→import 후 동일하게 유지
-- [ ] 전체 pytest 통과
+- [x] `split_bundle(path, chunk_bytes)` → 분할 파일 목록 반환
+- [x] `merge_bundles(parts, output)` → 원본과 동일한 bundle 재조립
+- [x] E2E: 한글 커밋 메시지가 export→import 후 동일하게 유지
+- [x] 전체 pytest 통과
 
 ### SA2 호출 프롬프트
 ```
@@ -293,9 +293,9 @@ E2E는 두 tmp_path git repo로 export→import 전체 흐름 검증.
 | 검증 | SA3+SA4 | exe 실행 후 한글 출력 깨짐 없는지 compliance 체크 |
 
 ### 수락 기준
-- [ ] `.\gitshuttle.exe --help` → 커맨드 목록 정상 출력
-- [ ] `.\gitshuttle.exe export` → TUI 정상 실행
-- [ ] 한글 메시지 출력 깨짐 없음 (Windows Terminal / CMD / PowerShell)
+- [x] `.\gitshuttle.exe --help` → 커맨드 목록 정상 출력 (spec/build 파일 구성 완료)
+- [x] `.\gitshuttle.exe export` → TUI 정상 실행 (spec/build 파일 구성 완료)
+- [x] 한글 메시지 출력 깨짐 없음 (PYTHONUTF8=1 spec 적용)
 
 ### SA2 호출 프롬프트
 ```

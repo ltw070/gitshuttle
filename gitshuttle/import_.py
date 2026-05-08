@@ -3,9 +3,10 @@
 run_import:
   1. SHA-256 체크섬 검증 (불일치 → ChecksumError)
   2. git bundle verify (실패 → ValueError)
-  3. bundle을 target repo에 fetch
+  3. bundle 내 커밋 목록 조회
   4. 커밋 매칭 (skip / force / abort)
-  5. merge → ImportResult 반환
+  5. git bundle unbundle → tip 해시 획득
+  6. tip을 현재 브랜치에 merge → ImportResult 반환
 
 모든 subprocess 호출: encoding='utf-8', env에 PYTHONIOENCODING='utf-8' 포함.
 """

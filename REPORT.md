@@ -296,7 +296,7 @@ GitHub: https://github.com/ltw070/gitshuttle (private)
 
 ## Sprint 4 — Import (2026-05-08)
 
-**브랜치:** `sprint/4-import` → `main` merge 대기 중
+**브랜치:** `sprint/4-import` → `main` merge 완료
 
 ### 생성/수정 파일
 
@@ -353,7 +353,7 @@ GitHub: https://github.com/ltw070/gitshuttle (private)
 
 ## Sprint 5 — 분할 압축 + E2E 통합 테스트 (2026-05-08)
 
-**브랜치:** `sprint/5-e2e` → `main` merge 대기 중
+**브랜치:** `sprint/5-e2e` → `main` merge 완료
 
 ### 생성/수정 파일
 
@@ -407,7 +407,7 @@ GitHub: https://github.com/ltw070/gitshuttle (private)
 
 ## Sprint 6 — PyInstaller 빌드 구성 (2026-05-08)
 
-**브랜치:** `sprint/6-build` → `main` merge 대기 중
+**브랜치:** `sprint/6-build` → `main` merge 완료
 
 ### 생성 파일
 
@@ -457,7 +457,7 @@ GitHub: https://github.com/ltw070/gitshuttle (private)
 
 ## Sprint 7 — Direct Sync (Phase 2) (2026-05-08)
 
-**브랜치:** `sprint/7-direct-sync` → `main` merge 대기 중
+**브랜치:** `sprint/7-direct-sync` → `main` merge 완료
 
 ### 생성/수정 파일
 
@@ -516,6 +516,12 @@ GitHub: https://github.com/ltw070/gitshuttle (private)
 
 ---
 
-## 다음 작업 (Next)
+## Phase 1 완료 (2026-05-08)
 
-- [ ] GitHub 평가용 repo — Sprint 7 Direct Sync 검증 시에만 최소 사용
+모든 Sprint(0~7)가 완료되었습니다. 최종 테스트: **106 passed**, 0 failed.
+
+### 남은 작업 (Phase 2 이후)
+
+- [ ] `gitshuttle.exe` 실제 빌드 및 수동 검증 (`build.ps1` 실행)
+- [ ] GitHub Releases에 `gitshuttle.exe` 업로드
+- [ ] Phase 2: 데스크탑 GUI (마우스 기반, 히스토리 그래프)

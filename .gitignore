@@ -22,6 +22,12 @@ htmlcov/
 # 설정
 gitshuttle.toml
 
+# 테스트 임시 디렉터리
+.pytest_tmp/
+
+# 로컬 Claude 설정
+.claude/settings.local.json
+
 # IDE
 .idea/
 .vscode/
