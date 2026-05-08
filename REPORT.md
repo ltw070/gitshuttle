@@ -7,7 +7,7 @@
 | Sprint | 브랜치 | 내용 | 상태 | SA1 | SA2 | SA3 | SA4 |
 |--------|--------|------|------|-----|-----|-----|-----|
 | 0 | `sprint/0-scaffold` | 프로젝트 기반 구조 | ✅ DONE | PASS | PASS | PASS (6/6) | PASS |
-| 1 | `sprint/1-git-core` | Git 핵심 레이어 | ⬜ TODO | — | — | — | — |
+| 1 | `sprint/1-git-core` | Git 핵심 레이어 | ✅ DONE | PASS | PASS | PASS (27/27) | PASS |
 | 2 | `sprint/2-export-tui` | Export + TUI | ⬜ TODO | — | — | — | — |
 | 3 | `sprint/3-ui-config` | UI 모드 + Config | ⬜ TODO | — | — | — | — |
 | 4 | `sprint/4-import` | Import | ⬜ TODO | — | — | — | — |
@@ -175,7 +175,41 @@ GitHub: https://github.com/ltw070/gitshuttle (private)
 
 ---
 
+## Sprint 1 — Git 핵심 레이어 (2026-05-08)
+
+**브랜치:** `sprint/1-git-core` → `main` merge
+
+### 생성 파일
+| 파일 | 내용 |
+|------|------|
+| `gitshuttle/git_ops.py` | `run_git`, `check_git_version`, `get_commits`, `Commit` 데이터클래스 |
+| `gitshuttle/bundle.py` | `create_bundle`, `verify_bundle` |
+| `gitshuttle/checksum.py` | `generate`, `verify` (SHA-256) |
+| `tests/test_git_ops.py` | 6개 테스트 |
+| `tests/test_bundle.py` | 7개 테스트 |
+| `tests/test_checksum.py` | 8개 테스트 |
+
+### 설계 결정
+- `git log` 파싱: `\x1e`(RS) 레코드 구분 + `\x00` 필드 구분 → 한글/특수문자 안전 파싱
+- `create_bundle`: `git bundle create`가 단순 커밋 해시를 직접 받지 않아 임시 ref(`refs/gitshuttle/tmp_<hash>`) 생성 후 bundle, finally 블록에서 삭제
+- `_git_env()` 헬퍼: `PYTHONIOENCODING='utf-8'`, `GIT_TERMINAL_PROMPT='0'` 일괄 적용
+- 루트 커밋 `files_changed` 계산 시 `--root` 플래그 분기 처리
+
+### TDD Harness 결과
+- SA1: **PASS**
+- SA2: **PASS** — 27/27 GREEN
+- SA3: **PASS** — 27 passed, 커버리지 79% (핵심 모듈 평균 88%)
+- SA4: **PASS** — 인코딩·네트워크·Phase범위·예외처리·파일명패턴 전 항목
+
+### 수락 기준 달성
+- [x] `get_commits(repo_path, branch)` → 커밋 목록 반환 (hash, date, author, message, files_changed)
+- [x] 한글 커밋 메시지 포함 커밋 정상 파싱
+- [x] `create_bundle()` → `.bundle` 파일 생성, `verify_bundle()` → True/False
+- [x] `generate(file_path)` → `.sha256` 파일 생성, `verify()` → True/False
+
+---
+
 ## 다음 작업 (Next)
 
-- [ ] Sprint 1: Git 핵심 레이어 (`git_ops.py`, `bundle.py`, `checksum.py`)
-- [ ] GitHub 평가용 repo 3개 생성 및 연결
+- [ ] Sprint 2: Export 핵심 (TUI + manifest + export 오케스트레이션)
+- [ ] GitHub 평가용 repo — Sprint 7 Direct Sync 검증 시에만 최소 사용
