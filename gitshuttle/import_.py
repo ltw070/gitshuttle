@@ -93,47 +93,45 @@ def run_import(
         raise ValueError(f"bundle 검증 실패: {bundle_path}")
 
     # ------------------------------------------------------------------
-    # Step 4. bundle 내 커밋 목록 조회
+    # Step 4. target repo의 기존 커밋 해시 집합 (unbundle 이전 스냅샷)
     # ------------------------------------------------------------------
-    bundle_commits = _get_bundle_commits(bundle_path)
-    total = len(bundle_commits)
+    existing_hashes_before = _get_existing_hashes(repo_path)
 
     # ------------------------------------------------------------------
-    # Step 5. target repo의 기존 커밋 해시 집합
+    # Step 5. bundle tip 해시로 중복 감지 (abort/skip/force 판단)
+    # 사전 조건 있는 bundle은 tip 해시만 반환되므로 tip 기준으로 판단
     # ------------------------------------------------------------------
-    existing_hashes = _get_existing_hashes(repo_path)
-
-    # ------------------------------------------------------------------
-    # Step 6. 충돌(이미 존재하는 커밋) 처리
-    # ------------------------------------------------------------------
-    duplicates = [c for c in bundle_commits if c in existing_hashes]
+    bundle_tips = _get_bundle_commits(bundle_path)
+    duplicates = [c for c in bundle_tips if c in existing_hashes_before]
 
     if duplicates:
         if on_conflict == "abort":
             raise ImportConflictError(
-                f"이미 존재하는 커밋 {len(duplicates)}개가 있습니다. "
-                f"(on_conflict=abort)\n"
-                f"첫 번째 중복 커밋: {duplicates[0]}"
+                f"이미 존재하는 커밋이 있습니다. (on_conflict=abort)\n"
+                f"첫 번째 중복: {duplicates[0]}"
             )
-        # skip / force: fetch는 항상 수행, 이후 merge에서 처리
 
     # ------------------------------------------------------------------
-    # Step 7. bundle unbundle — objects를 target repo에 추가하고 tip 해시 획득
+    # Step 6. bundle unbundle — objects를 target repo에 추가하고 tip 해시 획득
     # git bundle unbundle은 refs/gitshuttle/* 등 커스텀 ref도 정상 처리
     # ------------------------------------------------------------------
     tip_hashes = _unbundle(bundle_path, repo_path)
 
     # ------------------------------------------------------------------
-    # Step 8. tip 해시를 현재 브랜치에 merge
+    # Step 7. tip 해시를 현재 브랜치에 merge
     # ------------------------------------------------------------------
     for tip_hash in tip_hashes:
         _merge_tip(repo_path, tip_hash)
 
     # ------------------------------------------------------------------
-    # Step 9. ImportResult 계산
+    # Step 8. ImportResult 계산 — before/after 비교로 정확한 커밋 수 집계
     # ------------------------------------------------------------------
+    existing_hashes_after = _get_existing_hashes(repo_path)
+    newly_added = existing_hashes_after - existing_hashes_before
+
+    imported = len(newly_added)
     skipped = len(duplicates) if on_conflict == "skip" else 0
-    imported = total - skipped
+    total = imported + skipped
 
     return ImportResult(imported=imported, skipped=skipped, total=total)
 
