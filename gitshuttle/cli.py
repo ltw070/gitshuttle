@@ -113,7 +113,43 @@ def import_(
     on_conflict: str = typer.Option("skip", "--on-conflict", help="충돌 처리 방식 (skip|force|abort)"),
 ) -> None:
     """shuttle 패키지를 현재 리포지토리에 반입합니다."""
-    typer.echo("not implemented")
+    from gitshuttle.import_ import run_import, ChecksumError, ImportConflictError
+
+    if not file:
+        typer.echo("[오류] --file 옵션이 필요합니다.", err=True)
+        raise typer.Exit(1)
+
+    bundle_path = Path(file)
+    if not bundle_path.exists():
+        typer.echo(f"[오류] 파일을 찾을 수 없습니다: {bundle_path}", err=True)
+        raise typer.Exit(1)
+
+    repo_path = Path.cwd()
+    typer.echo(f"bundle   : {bundle_path}")
+    typer.echo(f"target   : {repo_path}")
+    typer.echo(f"conflict : {on_conflict}")
+    typer.echo("반입을 시작합니다...")
+
+    try:
+        result = run_import(
+            bundle_path=bundle_path,
+            repo_path=repo_path,
+            on_conflict=on_conflict,
+        )
+    except ChecksumError as e:
+        typer.echo(f"\n[오류] {e}", err=True)
+        raise typer.Exit(1)
+    except ImportConflictError as e:
+        typer.echo(f"\n[중단] {e}", err=True)
+        raise typer.Exit(1)
+    except (FileNotFoundError, ValueError) as e:
+        typer.echo(f"\n[오류] {e}", err=True)
+        raise typer.Exit(1)
+
+    typer.echo(f"\nimport 완료.")
+    typer.echo(f"  imported : {result.imported}개")
+    typer.echo(f"  skipped  : {result.skipped}개")
+    typer.echo(f"  total    : {result.total}개")
 
 
 @app.command()

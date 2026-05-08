@@ -65,13 +65,14 @@ def test_export_stub(tmp_git_repo):
 
 
 def test_import_stub():
-    """import 커맨드가 에러 없이 실행되어야 한다 (스텁)."""
+    """import 커맨드는 --file 없이 실행하면 오류 안내 후 exit code 1."""
     from gitshuttle.cli import app
 
     runner = CliRunner()
     result = runner.invoke(app, ["import"])
 
-    assert result.exit_code == 0, f"exit code {result.exit_code}: {result.output}"
+    assert result.exit_code == 1
+    assert "--file" in result.output or "--file" in (result.output + str(result.exception))
 
 
 def test_config_stub():
