@@ -115,6 +115,85 @@ def _build_bundle_args(
         return exclude_args + [tmp_ref]
 
 
+def split_bundle(bundle_path: Path | str, chunk_bytes: int) -> list[Path]:
+    """bundle 파일을 chunk_bytes 크기로 분할한다.
+
+    분할 파일명: <basename>.part000, .part001, ... (3자리 zero-pad)
+    같은 디렉터리에 생성한다.
+
+    Args:
+        bundle_path:  분할할 bundle 파일 경로.
+        chunk_bytes:  각 파트의 최대 바이트 크기.
+
+    Returns:
+        분할된 파일 경로 목록 (순서 보장).
+
+    Raises:
+        ValueError: chunk_bytes <= 0 일 때.
+    """
+    if chunk_bytes <= 0:
+        raise ValueError(f"chunk_bytes는 1 이상이어야 합니다. 입력값: {chunk_bytes}")
+
+    bundle_path = Path(bundle_path)
+    parent = bundle_path.parent
+    # 확장자를 포함한 전체 파일명을 base로 사용 (.bundle 포함)
+    base_name = bundle_path.name  # e.g. "shuttle_260508.bundle"
+
+    parts: list[Path] = []
+    data = bundle_path.read_bytes()
+    total_size = len(data)
+
+    if total_size == 0:
+        # 빈 파일이면 빈 part000 하나 생성
+        part_path = parent / f"{base_name}.part000"
+        part_path.write_bytes(b"")
+        return [part_path]
+
+    offset = 0
+    part_index = 0
+
+    while offset < total_size:
+        chunk = data[offset: offset + chunk_bytes]
+        part_path = parent / f"{base_name}.part{part_index:03d}"
+        part_path.write_bytes(chunk)
+        parts.append(part_path)
+        offset += chunk_bytes
+        part_index += 1
+
+    return parts
+
+
+def merge_bundles(parts: list[Path | str], output: Path | str) -> Path:
+    """분할된 bundle 파일들을 하나로 재조립한다.
+
+    parts 순서대로 이어붙인다.
+
+    Args:
+        parts:   분할 파일 경로 목록 (순서 보장).
+        output:  재조립된 bundle 파일을 저장할 경로.
+
+    Returns:
+        재조립된 bundle 파일 경로.
+
+    Raises:
+        FileNotFoundError: parts 중 하나라도 존재하지 않을 때.
+    """
+    output = Path(output)
+
+    # 모든 파트 존재 여부 선행 검증
+    for part in parts:
+        part = Path(part)
+        if not part.exists():
+            raise FileNotFoundError(f"파트 파일을 찾을 수 없습니다: {part}")
+
+    # 순서대로 이어붙이기 (바이너리 모드)
+    with output.open('wb') as out_file:
+        for part in parts:
+            out_file.write(Path(part).read_bytes())
+
+    return output
+
+
 def verify_bundle(bundle_path: Path | str) -> bool:
     """git bundle verify 로 bundle 파일의 무결성을 검증한다.
 

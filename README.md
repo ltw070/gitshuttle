@@ -134,6 +134,27 @@ ui = "tui"   # tui | csv | html | prompt
 
 ---
 
+## 대용량 bundle 분할 압축
+
+USB 등 물리 매체의 용량 제한에 맞춰 bundle을 여러 파트로 분할할 수 있습니다.
+
+**분할:**
+```python
+from gitshuttle.bundle import split_bundle
+parts = split_bundle("shuttle_260508.bundle", chunk_bytes=50 * 1024 * 1024)  # 50MB 단위
+# → shuttle_260508.bundle.part000, .part001, ...
+```
+
+**재조립:**
+```python
+from gitshuttle.bundle import merge_bundles
+merge_bundles(parts, "shuttle_260508_merged.bundle")
+```
+
+분할 파일명 형식: `<원본파일명>.part000`, `.part001`, ... (3자리 zero-pad)
+
+---
+
 ## `sync` — GitHub 간 직접 동기화 (Phase 2)
 
 네트워크가 연결된 환경에서 파일 없이 두 GitHub repo를 직접 동기화합니다.
