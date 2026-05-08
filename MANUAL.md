@@ -1,79 +1,161 @@
-# GitShuttle 사용자 매뉴얼 (A to Z)
+# GitShuttle 사용자 매뉴얼
+
+> 처음 사용하는 분도 따라 할 수 있도록 단계별로 설명합니다.
 
 ---
 
 ## 목차
 
-1. [개요](#1-개요)
-2. [설치](#2-설치)
-3. [첫 실행 확인](#3-첫-실행-확인)
-4. [기본 워크플로우 — 망분리 환경](#4-기본-워크플로우--망분리-환경)
-5. [export — 셔틀 패키지 생성](#5-export--셔틀-패키지-생성)
-6. [import — 셔틀 패키지 반입](#6-import--셔틀-패키지-반입)
-7. [config — 설정 마법사](#7-config--설정-마법사)
-8. [커밋 선택 UI 상세](#8-커밋-선택-ui-상세)
-9. [생성 파일 설명](#9-생성-파일-설명)
-10. [충돌 처리 옵션](#10-충돌-처리-옵션)
+1. [GitShuttle이란?](#1-gitshuttle이란)
+2. [GitHub에서 받기](#2-github에서-받기)
+3. [설치하기](#3-설치하기)
+4. [설치 확인](#4-설치-확인)
+5. [기본 워크플로우 한눈에 보기](#5-기본-워크플로우-한눈에-보기)
+6. [export — 커밋 꾸러미 만들기](#6-export--커밋-꾸러미-만들기)
+7. [import — 커밋 꾸러미 반입하기](#7-import--커밋-꾸러미-반입하기)
+8. [config — 기본 설정 변경하기](#8-config--기본-설정-변경하기)
+9. [커밋 선택 UI 4가지 방식](#9-커밋-선택-ui-4가지-방식)
+10. [대용량 파일 분할 전송](#10-대용량-파일-분할-전송)
 11. [sync — GitHub 직접 동기화 (Phase 2)](#11-sync--github-직접-동기화-phase-2)
-12. [자주 묻는 질문 (FAQ)](#12-자주-묻는-질문-faq)
-13. [오류 메시지 해설](#13-오류-메시지-해설)
+12. [생성 파일 상세 설명](#12-생성-파일-상세-설명)
+13. [충돌 처리 옵션 상세](#13-충돌-처리-옵션-상세)
+14. [자주 묻는 질문 (FAQ)](#14-자주-묻는-질문-faq)
+15. [오류 메시지 해설](#15-오류-메시지-해설)
 
 ---
 
-## 1. 개요
+## 1. GitShuttle이란?
 
-**GitShuttle**은 인터넷이 없는 망분리(Air-Gapped) 환경에서 Git 리포지토리의 커밋 히스토리를 USB 등 물리 매체를 통해 안전하게 이전하는 CLI 도구입니다.
+**GitShuttle**은 인터넷이 없는 망분리(Air-Gapped) 환경에서 Git 리포지토리의 커밋 히스토리를 안전하게 이전하는 도구입니다.
 
-| 항목 | 내용 |
-|------|------|
-| 주 사용 환경 | Windows (CMD / PowerShell / Windows Terminal) |
-| Git 요구 버전 | 2.37 이상 |
-| Python | 3.10 이상 (`.exe` 사용 시 불필요) |
+### 어떤 상황에서 쓰나요?
 
-**핵심 특징**
-- 커밋 메시지, 작성자, 상세 설명, 태그, 브랜치 히스토리 **100% 보존**
-- 한글 커밋 메시지 완전 지원
-- SHA-256 체크섬으로 전송 중 파일 변조/손상 자동 감지
-- 이미 반입된 커밋 자동 감지 → 중복 작업 방지
+```
+[외부망]  개발 PC에서 코드를 작성하고 커밋
+    ↓
+[USB]     GitShuttle로 만든 꾸러미 파일(bundle)을 USB에 담아 이동
+    ↓
+[내부망]  내부 Git 서버에 커밋 히스토리 그대로 반입
+```
+
+인터넷이 차단된 국방·금융·공공기관 등의 환경에서, 외부에서 작성한 코드를 내부망으로 가져올 때 사용합니다.
+
+### 왜 단순 복사가 아닌가요?
+
+소스 파일만 복사하면 커밋 메시지, 작성자, 변경 이력이 모두 사라집니다.  
+GitShuttle은 Git의 모든 히스토리를 **100% 보존**합니다.
+
+| 항목 | 단순 복사 | GitShuttle |
+|------|-----------|------------|
+| 커밋 메시지 | ❌ 사라짐 | ✅ 보존 |
+| 커밋 작성자 | ❌ 사라짐 | ✅ 보존 |
+| 브랜치 히스토리 | ❌ 사라짐 | ✅ 보존 |
+| 파일 변조 감지 | ❌ 없음 | ✅ SHA-256 자동 검증 |
 
 ---
 
-## 2. 설치
+## 2. GitHub에서 받기
 
-### 방법 A — 실행 파일 (권장, Python 불필요)
+### 방법 A — 실행 파일(.exe) 다운로드 (Python 불필요, 권장)
 
-1. `gitshuttle.exe` 파일을 다운로드합니다.
-2. 원하는 경로(예: `C:\tools\`)에 복사합니다.
-3. 해당 경로를 시스템 PATH에 추가하거나 전체 경로로 실행합니다.
+1. 브라우저에서 아래 주소로 이동합니다:
+   ```
+   https://github.com/ltw070/gitshuttle/releases
+   ```
+
+2. 최신 릴리즈의 **Assets** 항목에서 `gitshuttle.exe`를 클릭하여 다운로드합니다.
+
+3. 다운로드한 `gitshuttle.exe`를 원하는 폴더에 복사합니다. (예: `C:\tools\`)
+
+> **주의:** `.exe` 파일 한 개만 있으면 됩니다. Python 설치가 필요 없습니다.
+
+---
+
+### 방법 B — 소스 코드 다운로드 (Python 환경에서 실행)
+
+Python이 이미 설치된 환경에서 직접 소스를 받아 실행하는 방식입니다.
+
+**Git이 있는 경우 — 클론:**
 
 ```
-C:\tools\gitshuttle.exe --help
+git clone https://github.com/ltw070/gitshuttle.git
+cd gitshuttle
 ```
 
-### 방법 B — Python으로 직접 실행
+**Git이 없는 경우 — ZIP 다운로드:**
+
+1. `https://github.com/ltw070/gitshuttle` 접속
+2. 초록색 **Code** 버튼 클릭 → **Download ZIP** 클릭
+3. 다운로드된 ZIP 파일을 압축 해제합니다
+4. 압축 해제된 폴더로 이동합니다
+
+```
+cd gitshuttle-main
+```
+
+---
+
+## 3. 설치하기
+
+### 방법 A — 실행 파일(.exe) 설치
+
+별도 설치 과정이 없습니다. 다운로드한 `gitshuttle.exe`를 그냥 사용하면 됩니다.
+
+**어디서나 실행하려면 PATH에 추가합니다:**
+
+1. `C:\tools\` 폴더를 만들고 `gitshuttle.exe`를 복사합니다
+2. Windows 검색에서 **"시스템 환경 변수 편집"** 검색 후 클릭
+3. **"환경 변수"** 버튼 클릭
+4. 사용자 변수의 **Path** 선택 → **편집** 클릭
+5. **"새로 만들기"** 클릭 → `C:\tools` 입력 → **확인**
+
+이후 터미널을 새로 열면 어디서든 `gitshuttle` 명령어를 사용할 수 있습니다.
+
+---
+
+### 방법 B — Python 환경 설치
+
+소스 코드를 받은 폴더에서 아래 명령어를 실행합니다.
+
+**1. Python 버전 확인 (3.10 이상 필요)**
+
+```
+python --version
+```
+
+출력 예시: `Python 3.11.5`
+
+**2. 의존성 설치**
 
 ```
 pip install -r requirements.txt
+```
+
+설치가 완료되면 아래와 같이 실행합니다:
+
+```
 python -m gitshuttle --help
 ```
 
-### 설치 확인
-
-```
-gitshuttle --version
-```
-
-출력 예시: `gitshuttle version 0.1.0`
-
 ---
 
-## 3. 첫 실행 확인
+## 4. 설치 확인
 
-설치 후 아래 명령어로 정상 작동 여부를 확인합니다.
+터미널(CMD, PowerShell, Windows Terminal)을 열고 아래 명령어를 입력합니다.
+
+### .exe 방식
 
 ```
 gitshuttle --help
 ```
+
+### Python 방식
+
+```
+python -m gitshuttle --help
+```
+
+**정상 출력 예시:**
 
 ```
 Usage: gitshuttle [OPTIONS] COMMAND [ARGS]...
@@ -84,92 +166,104 @@ Commands:
   export  선택한 커밋을 .bundle 파일로 추출합니다.
   import  shuttle 패키지를 현재 리포지토리에 반입합니다.
   config  대화형 마법사로 gitshuttle.toml 설정을 변경합니다.
-  sync    두 GitHub 리포지토리 간 직접 동기화합니다 (Phase 2).
+  sync    두 GitHub 리포지토리 간 직접 동기화합니다.
+```
+
+이 화면이 나오면 설치가 완료된 것입니다.
+
+> **이 매뉴얼의 이후 예시는 모두 `gitshuttle` 명령어로 표기합니다.**  
+> Python 방식 사용자는 `gitshuttle` 대신 `python -m gitshuttle`을 입력하세요.
+
+---
+
+## 5. 기본 워크플로우 한눈에 보기
+
+```
+[외부망 PC]                                              [내부망 PC]
+─────────────────────────────                    ─────────────────────────
+1. 작업 디렉터리로 이동                              3. 작업 디렉터리로 이동
+   cd C:\projects\my-repo                              cd C:\internal\my-repo
+
+2. 커밋 꾸러미 생성                     USB →       4. 꾸러미 반입
+   gitshuttle export                  이동           gitshuttle import
+                                                        --file shuttle_260508.bundle
+   생성된 파일 3개를 USB에 복사:
+   • shuttle_260508.bundle            →→→→
+   • shuttle_260508.sha256            →→→→
+   • shuttle_260508_manifest.txt      →→→→
 ```
 
 ---
 
-## 4. 기본 워크플로우 — 망분리 환경
+## 6. export — 커밋 꾸러미 만들기
 
-```
-[외부망 PC]                        [USB 등 물리 매체]           [내부망 PC]
-     │                                     │                         │
-     │  1. gitshuttle export               │                         │
-     │     커밋 선택 → 패키지 생성          │                         │
-     │                                     │                         │
-     │  2. 생성 파일 3종 복사 ─────────────▶│─────────────────────────▶│
-     │     shuttle_YYMMDD.bundle           │                         │
-     │     shuttle_YYMMDD.sha256           │                         │
-     │     shuttle_YYMMDD_manifest.txt     │                         │
-     │                                     │                         │
-     │                                     │  3. gitshuttle import   │
-     │                                     │     체크섬 검증          │
-     │                                     │     히스토리 반영         │
-```
+export는 **외부망 PC**에서 실행합니다.
 
-### 단계별 설명
-
-**외부망 작업**
+### 기본 실행
 
 ```
 cd C:\projects\my-repo
 gitshuttle export
 ```
 
-TUI 화면에서 전송할 커밋을 선택합니다.
+커밋 목록이 TUI 화면에 나타납니다. 전송할 커밋을 선택한 뒤 Export하면 파일 3개가 생성됩니다.
 
-**파일 이동**
-
-생성된 3개 파일(`*.bundle`, `*.sha256`, `*_manifest.txt`)을 USB에 복사하여 내부망으로 전달합니다.
-
-**내부망 작업**
-
-```
-cd C:\internal-repo
-gitshuttle import --file D:\USB\shuttle_260508.bundle
-```
-
----
-
-## 5. export — 셔틀 패키지 생성
+### 전체 옵션
 
 ```
 gitshuttle export [OPTIONS]
 ```
 
-| 옵션 | 설명 | 기본값 |
-|------|------|--------|
-| `--branch TEXT` | 추출할 브랜치 | 현재 브랜치 |
-| `--ui [tui\|csv\|html\|prompt]` | 커밋 선택 UI 방식 | 설정 파일 또는 `tui` |
-| `--output TEXT` | 출력 파일명 | `shuttle_YYMMDD.bundle` |
+| 옵션 | 설명 | 예시 |
+|------|------|------|
+| `--branch TEXT` | 특정 브랜치의 커밋만 추출 | `--branch feature/login` |
+| `--ui [tui\|csv\|html\|prompt]` | 커밋 선택 방식 | `--ui csv` |
+| `--output TEXT` | 출력 파일명 지정 | `--output patch_v2.bundle` |
 
-**예시**
+### 실행 예시
 
 ```
-# 기본 (TUI)
+# 기본 (현재 브랜치, TUI 방식)
 gitshuttle export
 
-# 특정 브랜치
-gitshuttle export --branch feature/login
+# main 브랜치만
+gitshuttle export --branch main
 
-# CSV 방식으로 선택
+# CSV 방식으로 Excel에서 선택
 gitshuttle export --ui csv
 
-# 출력 파일명 지정
-gitshuttle export --output my_patch.bundle
+# 파일명을 직접 지정
+gitshuttle export --output 기능개선_패치.bundle
 ```
 
-**실행 흐름**
+### 실행 결과
 
-1. 현재 디렉터리의 Git 리포지토리에서 커밋 목록 읽기
-2. 선택한 UI로 전송할 커밋 선택
-3. 선택된 커밋으로 `.bundle` 파일 생성
-4. SHA-256 체크섬(`.sha256`) 생성
-5. 커밋 목록 요약(`_manifest.txt`) 생성
+export가 완료되면 현재 디렉터리에 파일 3개가 생성됩니다:
+
+```
+shuttle_260508.bundle        ← 이것이 핵심 파일
+shuttle_260508.sha256        ← 무결성 검증용
+shuttle_260508_manifest.txt  ← 커밋 목록 요약
+```
+
+**이 3개 파일을 모두 USB에 복사하여 내부망으로 전달하세요.**
 
 ---
 
-## 6. import — 셔틀 패키지 반입
+## 7. import — 커밋 꾸러미 반입하기
+
+import는 **내부망 PC**에서 실행합니다.
+
+### 기본 실행
+
+```
+cd C:\internal\my-repo
+gitshuttle import --file D:\USB\shuttle_260508.bundle
+```
+
+`--file` 뒤에 bundle 파일의 전체 경로를 입력합니다.
+
+### 전체 옵션
 
 ```
 gitshuttle import --file FILE [OPTIONS]
@@ -177,178 +271,337 @@ gitshuttle import --file FILE [OPTIONS]
 
 | 옵션 | 설명 | 기본값 |
 |------|------|--------|
-| `--file TEXT` | `.bundle` 파일 경로 (필수) | — |
+| `--file TEXT` | bundle 파일 경로 **(필수)** | — |
 | `--on-conflict [skip\|force\|abort]` | 충돌 처리 방식 | `skip` |
 
-**예시**
+### 실행 예시
 
 ```
-# 기본 (skip 방식)
-gitshuttle import --file shuttle_260508.bundle
-
-# USB에서 직접 반입
+# USB에서 반입 (기본: 중복 커밋은 건너뜀)
 gitshuttle import --file D:\USB\shuttle_260508.bundle
+
+# 현재 폴더에 있는 bundle 파일
+gitshuttle import --file shuttle_260508.bundle
 
 # 충돌 시 강제 덮어쓰기
 gitshuttle import --file shuttle_260508.bundle --on-conflict force
 
-# 충돌 발견 즉시 전체 중단
+# 중복 커밋 발견 즉시 전체 중단
 gitshuttle import --file shuttle_260508.bundle --on-conflict abort
 ```
 
-**실행 흐름**
+### 실행 흐름
 
-1. `.sha256` 파일을 자동 탐색하여 체크섬 검증
-2. 체크섬 일치 시 bundle 내 커밋을 현재 리포지토리와 비교
-3. 신규 커밋만 선별하여 Fast-forward 방식으로 반영
-4. 충돌 발생 시 `--on-conflict` 옵션에 따라 처리
-
-**체크섬 불일치 시**
+import를 실행하면 자동으로 아래 과정이 진행됩니다:
 
 ```
-[오류] 체크섬 불일치
-  기대값: a3f8c2d1...
-  실제값: b9e4f7a2...
-
-파일이 손상되었거나 변조되었습니다.
-소스 측에서 아래 명령어로 재export 후 다시 전달해 주세요:
-  gitshuttle export --branch main --output shuttle_260508.bundle
+1. SHA-256 체크섬 검증  →  파일이 전송 중 손상/변조되지 않았는지 확인
+2. bundle 무결성 검사   →  Git bundle 형식이 올바른지 확인
+3. 중복 커밋 확인       →  이미 반입된 커밋은 건너뜀 (--on-conflict 옵션 적용)
+4. 히스토리 반영        →  새로운 커밋을 현재 리포지토리에 병합
+5. 결과 출력            →  반입된 커밋 수, 건너뛴 커밋 수 표시
 ```
+
+### 체크섬 불일치 오류
+
+USB 이동 중 파일이 손상된 경우:
+
+```
+[오류] SHA-256 체크섬 불일치!
+  기대값 (expected): a3f8c2d1e9b4...
+  실제값 (actual):   7f2e91c4b8a3...
+
+파일이 손상되었을 수 있습니다.
+재export 방법: 소스 측에서 'gitshuttle export' 를 다시 실행하세요.
+```
+
+이 경우 외부망 PC에서 bundle 파일을 다시 생성하여 재전달해야 합니다.
 
 ---
 
-## 7. config — 설정 마법사
+## 8. config — 기본 설정 변경하기
+
+매번 `--ui csv` 처럼 옵션을 입력하는 것이 번거롭다면, config 마법사로 기본값을 저장할 수 있습니다.
 
 ```
 gitshuttle config
 ```
 
-`gitshuttle.toml` 파일의 기본값을 대화형으로 변경합니다.
-
-**실행 예시**
+**실행 화면:**
 
 ```
-$ gitshuttle config
+GitShuttle 설정 마법사
+======================
 
 커밋 선택 UI 기본값을 선택하세요:
-  [1] TUI      — 터미널 인터랙티브 ← 현재 설정
-  [2] CSV      — Excel 편집
-  [3] HTML     — 브라우저
-  [4] Prompt   — 방향키 멀티셀렉트
+  [1] tui    — 터미널 인터랙티브 (현재: tui)
+  [2] csv    — Excel/메모장 편집
+  [3] html   — 브라우저에서 선택
+  [4] prompt — 방향키 멀티셀렉트
 
-선택 (1~4): 2
+선택 (1~4, 그냥 Enter는 현재값 유지): 2
 
-설정이 저장되었습니다: gitshuttle.toml
+저장 완료: gitshuttle.toml
 ```
 
-**설정 파일 위치 우선순위**
+이후 `gitshuttle export` 실행 시 자동으로 CSV 방식이 사용됩니다.
 
-1. 현재 작업 디렉터리의 `gitshuttle.toml`
-2. 홈 디렉터리(`~`)의 `gitshuttle.toml`
-3. 하드코딩 기본값 (`tui`)
+### 설정 파일 직접 편집
 
-**gitshuttle.toml 직접 편집**
+`gitshuttle.toml` 파일을 메모장으로 열어 직접 수정할 수도 있습니다.
 
 ```toml
 [export]
-ui = "tui"   # tui | csv | html | prompt
+ui = "csv"   # tui | csv | html | prompt
+```
+
+### 설정 파일 우선순위
+
+```
+--ui 옵션 (가장 높음)
+    ↓
+현재 디렉터리의 gitshuttle.toml
+    ↓
+홈 디렉터리(C:\Users\사용자명\)의 gitshuttle.toml
+    ↓
+기본값: tui (가장 낮음)
 ```
 
 ---
 
-## 8. 커밋 선택 UI 상세
+## 9. 커밋 선택 UI 4가지 방식
 
-### TUI (기본값) — 터미널 인터랙티브
-
-Textual 기반 체크박스 테이블입니다.
+### 방식 1: TUI (기본값) — 터미널 인터랙티브
 
 ```
-┌────────────────────────────────────────────────────────────────┐
-│ GitShuttle Export                              [Q] 종료  [E] Export │
-├──────┬──────┬──────────────┬───────────┬──────────────────────┤
-│  □   │ Hash │ 날짜          │ 작성자    │ 커밋 메시지          │
-├──────┼──────┼──────────────┼───────────┼──────────────────────┤
-│  □   │ a3f8 │ 2026-05-01   │ Alice     │ feat: 로그인 구현    │
-│  □   │ b9e4 │ 2026-04-28   │ Bob       │ fix: 인코딩 수정     │
-│  ✓   │ c2d1 │ 2026-04-25   │ Alice     │ [imported] init      │
-└──────┴──────┴──────────────┴───────────┴──────────────────────┘
+gitshuttle export
+gitshuttle export --ui tui
 ```
 
-| 키 | 동작 |
-|----|------|
-| `Space` | 현재 행 선택/해제 |
-| `Shift + ↓/↑` | 범위 선택 |
-| `A` | 전체 선택 |
-| `F` | 필터 (작성자/파일/날짜) |
-| `E` | 선택 완료 후 Export |
+터미널에서 키보드로 커밋을 선택하는 방식입니다.
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│ GitShuttle Export                          [Q] 취소  [E] Export │
+├───┬────────┬──────────────┬───────────┬────────────────────── ┤
+│ □ │ Hash   │ 날짜          │ 작성자    │ 커밋 메시지           │
+├───┼────────┼──────────────┼───────────┼───────────────────────┤
+│ □ │ a3f8c2 │ 2026-05-08   │ Alice     │ feat: 결제 모듈 추가  │
+│ □ │ b9e4f7 │ 2026-05-07   │ Bob       │ fix: 로그인 버그 수정 │
+│ ✓ │ c2d1e9 │ 2026-05-01   │ Alice     │ [imported] 초기 설정  │
+└───┴────────┴──────────────┴───────────┴───────────────────────┘
+```
+
+| 키보드 | 동작 |
+|--------|------|
+| `↑` `↓` | 커서 이동 |
+| `Space` | 현재 줄 선택/해제 |
+| `Shift` + `↓/↑` | 범위 선택 |
+| `A` | 전체 선택 / 전체 해제 |
+| `E` | 선택 완료 후 Export 실행 |
 | `Q` | 취소 |
 
-이미 내부망에 반입된 커밋은 `[imported]`로 표시되며 기본 비선택 상태입니다.
+`[imported]` 표시가 있는 커밋은 이미 내부망에 반입된 것입니다.
 
 ---
 
-### CSV 방식
+### 방식 2: CSV — Excel/메모장에서 선택
 
 ```
 gitshuttle export --ui csv
 ```
 
-1. `commits.csv` 파일이 현재 디렉터리에 생성됩니다.
-2. Excel 또는 메모장으로 파일을 열어 `include` 컬럼을 `Y`/`N`으로 편집합니다.
-3. 저장 후 터미널에서 Enter를 누르면 export가 진행됩니다.
+1. 명령어를 실행하면 `commits.csv` 파일이 생성됩니다.
 
-```csv
-include,hash,date,author,message,files_changed
-Y,a3f8c2d1,2026-05-01,Alice,feat: 로그인 구현,3
-N,b9e4f7a2,2026-04-28,Bob,fix: 인코딩 수정,1
-N,c2d1e9f3,2026-04-25,Alice,[imported] init,2
-```
+2. Excel 또는 메모장으로 파일을 열어 `include` 컬럼을 편집합니다:
+   - `Y` = 전송할 커밋
+   - `N` = 건너뛸 커밋
+
+   ```csv
+   include,hash,date,author,message,files_changed
+   Y,a3f8c2,2026-05-08,Alice,feat: 결제 모듈 추가,5
+   Y,b9e4f7,2026-05-07,Bob,fix: 로그인 버그 수정,2
+   N,c2d1e9,2026-05-01,Alice,[imported] 초기 설정,8
+   ```
+
+3. 파일을 저장합니다.
+
+4. 터미널로 돌아와 `Enter`를 누르면 export가 진행됩니다.
+
+> Windows Terminal이 불편한 환경에서 특히 유용합니다.
 
 ---
 
-### HTML 방식
+### 방식 3: HTML — 브라우저에서 선택
 
 ```
 gitshuttle export --ui html
 ```
 
-1. `commits_YYMMDD.html` 파일이 생성됩니다.
-2. 브라우저로 파일을 열어 체크박스로 커밋을 선택합니다.
-3. "Export" 버튼을 클릭하면 `selection.json`이 다운로드됩니다.
-4. `selection.json`을 작업 디렉터리에 놓으면 export가 자동 진행됩니다.
+1. 명령어를 실행하면 `commits_260508.html` 파일이 생성됩니다.
 
-인터넷 연결이 필요 없는 자급자족(self-contained) HTML입니다.
+2. 해당 HTML 파일을 **브라우저(Chrome, Edge 등)로 드래그**하여 열거나 더블클릭합니다.
+
+3. 브라우저 화면에서 체크박스로 전송할 커밋을 선택합니다.
+
+4. **"Export"** 버튼을 클릭하면 `selection.json` 파일이 자동 다운로드됩니다.
+
+5. `selection.json`을 커밋 작업 디렉터리에 놓으면 자동으로 export가 진행됩니다.
+
+> 인터넷 연결이 **전혀 필요 없습니다.** HTML 파일 하나에 모든 기능이 내장되어 있습니다.
 
 ---
 
-### Prompt 방식
+### 방식 4: Prompt — 터미널 방향키 멀티셀렉트
 
 ```
 gitshuttle export --ui prompt
 ```
 
-터미널에서 방향키와 `Space`로 커밋을 선택합니다.
+터미널에서 방향키와 `Space`로 선택하는 간단한 방식입니다.
 
 ```
-? 전송할 커밋을 선택하세요 (Space: 선택, Enter: 확인)
- ❯ ◉ a3f8 | 2026-05-01 | Alice     | feat: 로그인 구현
-   ○ b9e4 | 2026-04-28 | Bob       | fix: 인코딩 수정
-   ○ c2d1 | 2026-04-25 | Alice     | [imported] init
+? 전송할 커밋을 선택하세요 (Space: 선택/해제, Enter: 확인)
+ ❯ ◉ a3f8c2 | 2026-05-08 | Alice  | feat: 결제 모듈 추가
+   ○ b9e4f7 | 2026-05-07 | Bob    | fix: 로그인 버그 수정
+   ○ c2d1e9 | 2026-05-01 | Alice  | [imported] 초기 설정
 ```
+
+| 키보드 | 동작 |
+|--------|------|
+| `↑` `↓` | 커서 이동 |
+| `Space` | 선택/해제 |
+| `Enter` | 선택 완료 |
 
 ---
 
-## 9. 생성 파일 설명
+## 10. 대용량 파일 분할 전송
+
+USB 용량 제한으로 bundle 파일 하나가 너무 클 때 사용합니다.
+
+### 분할하기
+
+```python
+from gitshuttle.bundle import split_bundle
+
+# 50MB 단위로 분할
+parts = split_bundle("shuttle_260508.bundle", chunk_bytes=50 * 1024 * 1024)
+```
+
+분할 파일이 생성됩니다:
+```
+shuttle_260508.bundle.part000
+shuttle_260508.bundle.part001
+shuttle_260508.bundle.part002
+...
+```
+
+### 재조립하기 (내부망에서)
+
+```python
+from gitshuttle.bundle import merge_bundles
+
+merge_bundles(
+    ["shuttle_260508.bundle.part000",
+     "shuttle_260508.bundle.part001",
+     "shuttle_260508.bundle.part002"],
+    output="shuttle_260508_merged.bundle"
+)
+```
+
+재조립이 완료되면 일반 import와 동일하게 진행합니다:
+
+```
+gitshuttle import --file shuttle_260508_merged.bundle
+```
+
+> **주의:** 분할된 파트 파일은 모두 이동해야 합니다. 일부 누락 시 재조립 불가합니다.
+
+---
+
+## 11. sync — GitHub 직접 동기화 (Phase 2)
+
+> **네트워크가 연결된 환경에서만 사용합니다.**  
+> 두 GitHub 리포지토리 사이에서 USB 없이 직접 커밋을 동기화합니다.
+
+### 사전 준비
+
+**1단계: 설정 파일 작성**
+
+작업 디렉터리에 `gitshuttle.toml` 파일을 만들거나 `gitshuttle config`로 생성합니다.
+
+```toml
+[sync.source]
+url  = "https://github.com/회사외부/repo"
+auth = "token"
+
+[sync.target]
+url  = "https://github.com/회사내부/repo"
+auth = "token"
+```
+
+**2단계: 토큰 환경변수 설정**
+
+GitHub Personal Access Token을 환경변수로 전달합니다.  
+(**절대 `gitshuttle.toml` 파일에 직접 토큰을 쓰지 마세요.**)
+
+```
+set GS_SOURCE_TOKEN=ghp_xxxxxxxxxxxxxxxxxxxx
+set GS_TARGET_TOKEN=ghp_yyyyyyyyyyyyyyyyyyyy
+```
+
+### 실행
+
+```
+gitshuttle sync
+```
+
+커밋 선택 UI가 나타납니다. 전송할 커밋을 선택하면 자동으로 동기화가 진행됩니다.
+
+### SSH 방식
+
+토큰 대신 SSH 키를 사용하는 경우:
+
+```toml
+[sync.source]
+url     = "git@github.com:org1/repo.git"
+auth    = "ssh"
+ssh_key = "C:\\Users\\사용자명\\.ssh\\id_rsa_source"
+
+[sync.target]
+url     = "git@github.com:org2/repo.git"
+auth    = "ssh"
+ssh_key = "C:\\Users\\사용자명\\.ssh\\id_rsa_target"
+```
+
+SSH 키 파일 경로의 백슬래시(`\`)는 두 번(`\\`) 씁니다.
+
+---
+
+## 12. 생성 파일 상세 설명
 
 export 실행 시 아래 3개 파일이 생성됩니다.
 
-| 파일 | 설명 | 용도 |
-|------|------|------|
-| `shuttle_YYMMDD.bundle` | Git bundle (압축 포함) | 히스토리 이전 핵심 파일 |
-| `shuttle_YYMMDD.sha256` | SHA-256 체크섬 | 파일 무결성 검증 |
-| `shuttle_YYMMDD_manifest.txt` | 포함된 커밋 목록 요약 | 반출입 심사용 |
+### shuttle_YYMMDD.bundle
 
-**manifest.txt 예시**
+Git bundle 형식의 핵심 파일입니다. 선택한 커밋의 히스토리가 모두 담겨 있습니다.
+
+- `YYMMDD`는 실행 날짜입니다. (예: 260508 = 2026년 5월 8일)
+- `gitshuttle import --file` 명령어에 이 파일을 지정합니다.
+
+### shuttle_YYMMDD.sha256
+
+bundle 파일의 SHA-256 체크섬(해시값)이 저장된 텍스트 파일입니다.
+
+```
+a3f8c2d1e9b4f7a2c5d8e1f4b7c0d3e6f9a2b5c8  shuttle_260508.bundle
+```
+
+import 시 자동으로 체크섬이 검증됩니다. 파일이 손상/변조된 경우 즉시 오류를 알려줍니다.
+
+### shuttle_YYMMDD_manifest.txt
+
+포함된 커밋 목록을 사람이 읽기 쉬운 형식으로 요약한 파일입니다.
 
 ```
 GitShuttle Manifest
@@ -356,134 +609,134 @@ GitShuttle Manifest
 브랜치: main
 커밋 수: 3
 
-a3f8c2d1  2026-05-01  Alice     feat: 로그인 구현          (3 files)
-b9e4f7a2  2026-04-28  Bob       fix: 인코딩 수정           (1 file)
-c2d1e9f3  2026-04-25  Alice     docs: README 작성          (2 files)
+a3f8c2d1  2026-05-08  Alice  feat: 결제 모듈 추가      (5 files)
+b9e4f7a2  2026-05-07  Bob    fix: 로그인 버그 수정      (2 files)
+c2d1e9f3  2026-05-01  Alice  docs: README 갱신          (1 file)
 ```
 
-**3개 파일을 반드시 함께 이동하세요.** `.sha256` 없이 import 시 체크섬 검증이 생략됩니다.
+반출입 심사 시 이 파일로 어떤 커밋이 포함되어 있는지 확인할 수 있습니다.
 
 ---
 
-## 10. 충돌 처리 옵션
-
-| 옵션 | 동작 | 권장 사용 상황 |
-|------|------|----------------|
-| `skip` (기본값) | 이미 존재하는 커밋은 건너뛰고 나머지 계속 | 증분 업데이트 |
-| `force` | 이미 존재해도 강제 덮어쓰기 | 히스토리 재정렬이 필요할 때 |
-| `abort` | 충돌 발견 즉시 전체 작업 중단 | 완전히 새로운 히스토리만 허용할 때 |
+**3개 파일은 항상 함께 이동하세요.**  
+`.sha256` 없이 import하면 체크섬 검증이 생략되어 파일 손상을 감지할 수 없습니다.
 
 ---
 
-## 11. sync — GitHub 직접 동기화 (Phase 2)
+## 13. 충돌 처리 옵션 상세
 
-> **Phase 2 기능입니다.** 네트워크가 연결된 환경에서만 사용 가능합니다.
+"충돌"이란 import하려는 커밋이 대상 리포지토리에 이미 존재하는 상황을 말합니다.
 
-두 GitHub 리포지토리 사이에서 파일 없이 직접 커밋을 동기화합니다.
-
-```
-gitshuttle sync [--on-conflict skip|force|abort]
-```
-
-### 사전 설정
+| 옵션 | 동작 | 권장 상황 |
+|------|------|-----------|
+| `skip` (기본값) | 이미 있는 커밋은 건너뛰고 나머지를 계속 반입 | 증분 업데이트, 재전달 등 일반 상황 |
+| `force` | 이미 존재해도 오류 없이 계속 진행 | 히스토리를 확실히 덮어써야 할 때 |
+| `abort` | 이미 있는 커밋이 하나라도 발견되면 즉시 전체 중단 | 완전히 새 히스토리만 허용할 때 |
 
 ```
-gitshuttle config
+# 기본 (skip)
+gitshuttle import --file shuttle.bundle
+
+# force
+gitshuttle import --file shuttle.bundle --on-conflict force
+
+# abort
+gitshuttle import --file shuttle.bundle --on-conflict abort
 ```
-
-`gitshuttle.toml`에 source/target 정보를 입력합니다.
-
-```toml
-[sync.source]
-url  = "https://github.com/org1/repo"
-auth = "token"   # token | ssh
-
-[sync.target]
-url  = "https://github.com/org2/repo"
-auth = "token"
-```
-
-**토큰은 환경변수로 전달합니다 (파일에 직접 저장 금지).**
-
-```
-set GS_SOURCE_TOKEN=ghp_xxxxxxxxxxxx
-set GS_TARGET_TOKEN=ghp_yyyyyyyyyyyy
-gitshuttle sync
-```
-
-### SSH 방식
-
-```toml
-[sync.source]
-url     = "git@github.com:org1/repo.git"
-auth    = "ssh"
-ssh_key = "C:\\Users\\user\\.ssh\\id_rsa_source"
-```
-
-### 실행 흐름
-
-1. Source repo에서 커밋 목록 fetch
-2. Target repo의 현재 상태와 비교 (`[synced]` 표시)
-3. TUI/CSV/HTML/Prompt로 전송할 커밋 선택
-4. 선택 커밋을 Source에서 fetch → Target으로 push
 
 ---
 
-## 12. 자주 묻는 질문 (FAQ)
+## 14. 자주 묻는 질문 (FAQ)
 
-**Q. 이미 반입한 커밋이 또 표시됩니다.**
+**Q. 실행 시 "Git 2.37 이상이 필요합니다" 오류가 납니다.**
 
-A. `[imported]` 표시가 있는 커밋은 이미 내부망에 반영된 것입니다. 선택 해제 후 export하세요. `--on-conflict skip`(기본값) 옵션을 사용하면 중복 import도 안전하게 처리됩니다.
-
-**Q. TUI 화면이 깨져 보입니다.**
-
-A. Windows Terminal 또는 PowerShell 7+ 사용을 권장합니다. CMD 환경에서는 `--ui csv` 또는 `--ui prompt` 방식을 사용하세요.
-
+Git 버전을 확인합니다:
 ```
+git --version
+```
+2.37 미만이라면 [https://git-scm.com/download/win](https://git-scm.com/download/win) 에서 최신 버전을 설치합니다.
+
+---
+
+**Q. TUI 화면이 깨지거나 표시가 이상합니다.**
+
+Windows Terminal 또는 PowerShell 7+ 사용을 권장합니다.  
+CMD 환경에서는 다른 방식을 사용하세요:
+```
+gitshuttle export --ui csv
 gitshuttle export --ui prompt
 ```
 
-**Q. 한글 커밋 메시지가 깨집니다.**
+---
 
-A. 터미널의 코드 페이지를 UTF-8로 변경합니다.
+**Q. 한글 커밋 메시지나 파일명이 깨집니다.**
 
+터미널 코드 페이지를 UTF-8로 변경합니다:
 ```
 chcp 65001
 gitshuttle export
 ```
 
-또는 환경변수를 설정합니다.
-
+또는 환경변수를 설정합니다:
 ```
 set PYTHONUTF8=1
 gitshuttle export
 ```
 
+---
+
+**Q. `[imported]` 표시된 커밋이 계속 나옵니다.**
+
+`[imported]` 커밋은 이미 내부망에 반입된 것입니다. 선택하지 않고 그냥 넘어가세요.  
+실수로 다시 import해도 `skip` 옵션(기본값)이 자동으로 건너뜁니다.
+
+---
+
 **Q. `gitshuttle.toml`은 어디에 두어야 하나요?**
 
-A. 작업 중인 Git 리포지토리 루트 또는 홈 디렉터리(`C:\Users\사용자명\`)에 두면 됩니다. 리포지토리별 설정은 리포지토리 루트에 두는 것을 권장합니다.
+두 위치 중 하나에 두면 됩니다:
+- 작업 중인 Git 리포지토리 루트 폴더 (리포지토리별 설정, 권장)
+- 홈 디렉터리 (`C:\Users\사용자명\`) (모든 리포지토리에 공통 적용)
 
-**Q. 대용량 리포지토리에서 bundle 파일이 너무 큽니다.**
+같은 설정을 모든 프로젝트에 쓰고 싶으면 홈 디렉터리에, 프로젝트마다 다르게 쓰고 싶으면 각 리포지토리에 두세요.
 
-A. 분할 압축 기능(Sprint 5에서 구현 예정)을 사용하면 자동으로 분할/재조립됩니다. 현재 버전에서는 커밋 수를 줄여서 여러 번 나눠 export하세요.
+---
+
+**Q. bundle 파일이 너무 커서 USB에 안 들어갑니다.**
+
+[분할 전송 기능](#10-대용량-파일-분할-전송)을 사용하세요.  
+또는 커밋 수를 줄여 여러 번 나눠 export하세요.
+
+---
 
 **Q. `.sha256` 파일 없이 import할 수 있나요?**
 
-A. 가능하지만 권장하지 않습니다. 체크섬 검증이 생략되어 파일 손상/변조를 감지할 수 없습니다.
+가능합니다. 체크섬 파일이 없으면 경고를 출력하고 검증 단계를 건너뜁니다.  
+단, 파일 손상이나 변조를 감지하지 못합니다. 중요한 코드는 항상 3개 파일을 함께 이동하세요.
 
 ---
 
-## 13. 오류 메시지 해설
+**Q. import 후 커밋이 안 보입니다.**
+
+`git log --all --oneline` 명령어로 확인합니다.  
+브랜치가 자동 병합되므로 `git log` 만으로는 안 보일 수 있습니다.
+
+---
+
+## 15. 오류 메시지 해설
 
 | 오류 메시지 | 원인 | 해결 방법 |
 |-------------|------|-----------|
-| `Git 2.37 이상이 필요합니다.` | 설치된 Git 버전이 낮음 | Git 업그레이드 |
-| `체크섬 불일치` | 파일 손상/변조 | 소스 측에서 재export 후 재전달 |
-| `bundle 검증 실패` | bundle 파일 손상 | 파일을 다시 전달받아 재시도 |
-| `현재 디렉터리에 Git 리포지토리가 없습니다.` | Git 초기화 안 됨 | `git init` 또는 올바른 디렉터리로 이동 |
-| `선택된 커밋이 없습니다.` | export 시 아무것도 선택 안 함 | UI에서 커밋 선택 후 재시도 |
-| `충돌 감지 — abort` | `--on-conflict abort` 옵션에서 충돌 발생 | `skip` 또는 `force` 옵션으로 재시도 |
+| `Git 2.37 이상이 필요합니다.` | Git 버전이 낮음 | [git-scm.com](https://git-scm.com)에서 최신 버전 설치 |
+| `bundle 파일을 찾을 수 없습니다: ...` | 파일 경로가 잘못됨 | `--file` 뒤에 올바른 경로 입력 |
+| `SHA-256 체크섬 불일치` | 파일 손상 또는 변조 | 외부망에서 재export 후 재전달 |
+| `bundle 검증 실패` | bundle 파일이 손상됨 | 파일 재전달 요청 |
+| `이미 존재하는 커밋 N개 — abort` | `--on-conflict abort` 상태에서 중복 발견 | `--on-conflict skip` 또는 `force` 사용 |
+| `선택된 커밋이 없습니다.` | export 시 아무 커밋도 선택하지 않음 | UI에서 커밋을 하나 이상 선택 후 재시도 |
+| `현재 디렉터리에 Git 리포지토리가 없습니다.` | Git 리포지토리가 아닌 폴더에서 실행 | `cd` 로 올바른 폴더로 이동 후 재시도 |
+| `bundle unbundle 실패` | bundle 사전 조건(prerequisite)을 만족 못 함 | 전체 히스토리 포함한 bundle로 재export |
 
 ---
 
-*GitShuttle v0.1.0 | Phase 1 (CLI + TUI)*
+*GitShuttle v0.1.0 · Phase 1 (CLI + TUI) 완료*  
+*문의: https://github.com/ltw070/gitshuttle/issues*

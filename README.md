@@ -4,6 +4,8 @@
 
 단순 소스 복사와 달리 커밋 메시지, 작성자, 상세 설명, 태그, 브랜치 히스토리를 그대로 유지합니다.
 
+자세한 사용법은 **[MANUAL.md](MANUAL.md)** 를 참고하세요.
+
 ---
 
 ## 요구 사항
@@ -18,23 +20,23 @@
 
 ## 설치 및 실행
 
-### 방법 1 — 실행 파일 (권장)
+### 방법 1 — 실행 파일 (권장, Python 불필요)
 
-`gitshuttle.exe`를 다운로드하여 원하는 경로에 배치합니다. Python 설치 불필요.
+[GitHub Releases](https://github.com/ltw070/gitshuttle/releases)에서 `gitshuttle.exe`를 다운로드하여 원하는 경로에 배치합니다.
 
 ```
-gitshuttle.exe export
-gitshuttle.exe import --file shuttle_240522.bundle
-gitshuttle.exe config
+gitshuttle export
+gitshuttle import --file shuttle_260508.bundle
+gitshuttle config
 ```
 
 ### 방법 2 — Python 직접 실행
 
 ```
+git clone https://github.com/ltw070/gitshuttle.git
+cd gitshuttle
 pip install -r requirements.txt
-python -m gitshuttle export
-python -m gitshuttle import --file shuttle_240522.bundle
-python -m gitshuttle config
+python -m gitshuttle --help
 ```
 
 ---
@@ -44,12 +46,12 @@ python -m gitshuttle config
 ```
 [외부망]  gitshuttle export
             → 커밋 목록에서 전송할 커밋 선택
-            → shuttle_240522.bundle + .sha256 생성
+            → shuttle_YYMMDD.bundle + .sha256 + _manifest.txt 생성
 
 [이동]    USB 또는 망간 전송 시스템으로 내부망 전달
 
-[내부망]  gitshuttle import --file shuttle_240522.bundle
-            → 체크섬 검증
+[내부망]  gitshuttle import --file shuttle_260508.bundle
+            → SHA-256 체크섬 자동 검증
             → 내부 Git 서버에 히스토리 그대로 반영
 ```
 
@@ -63,10 +65,9 @@ python -m gitshuttle config
 gitshuttle export [OPTIONS]
 
 Options:
-  --branch TEXT          대상 브랜치 (기본값: 현재 브랜치)
-  --ui [tui|csv|html|prompt]
-                         커밋 선택 UI 방식 (기본값: 설정 파일 또는 tui)
-  --output TEXT          출력 파일명 (기본값: shuttle_YYMMDD.bundle)
+  --branch TEXT                  대상 브랜치 (기본값: 현재 브랜치)
+  --ui [tui|csv|html|prompt]     커밋 선택 UI 방식 (기본값: 설정 파일 또는 tui)
+  --output TEXT                  출력 파일명 (기본값: shuttle_YYMMDD.bundle)
 ```
 
 **커밋 선택 UI 방식:**
@@ -78,7 +79,7 @@ Options:
 | `html` | Self-contained HTML | 브라우저에서 선택 → `selection.json` 다운로드 |
 | `prompt` | InquirerPy | 방향키 + Space 멀티셀렉트 |
 
-커밋 목록에서 이미 타겟 리포지토리에 반영된 커밋은 `[imported]`로 표시됩니다.
+이미 타겟 리포지토리에 반영된 커밋은 `[imported]`로 표시됩니다.
 
 ### `import` — 셔틀 패키지 반영
 
@@ -86,9 +87,8 @@ Options:
 gitshuttle import --file FILE [OPTIONS]
 
 Options:
-  --file TEXT            .bundle 파일 경로 (필수)
-  --on-conflict [skip|force|abort]
-                         충돌 처리 방식 (기본값: skip)
+  --file TEXT                           .bundle 파일 경로 (필수)
+  --on-conflict [skip|force|abort]      충돌 처리 방식 (기본값: skip)
 ```
 
 **충돌 처리 옵션:**
@@ -96,10 +96,10 @@ Options:
 | 옵션 | 동작 |
 |------|------|
 | `skip` (기본값) | 이미 존재하는 커밋은 건너뛰고 나머지 계속 진행 |
-| `force` | 이미 존재해도 강제 덮어쓰기 |
+| `force` | 이미 존재해도 강제 계속 진행 |
 | `abort` | 충돌 발견 즉시 전체 작업 중단 |
 
-import 시 SHA-256 체크섬이 자동 검증됩니다. 불일치 시 작업이 중단되며 재export 명령어가 안내됩니다.
+import 시 SHA-256 체크섬이 자동 검증됩니다. 불일치 시 작업이 중단되며 재export 방법이 안내됩니다.
 
 ### `config` — 설정 마법사
 
@@ -107,13 +107,13 @@ import 시 SHA-256 체크섬이 자동 검증됩니다. 불일치 시 작업이 
 gitshuttle config
 ```
 
-`gitshuttle.toml`의 기본값을 대화형으로 변경합니다. 언제든 실행 가능.
+`gitshuttle.toml`의 기본값을 대화형으로 변경합니다.
 
 ---
 
 ## 설정 파일
 
-`gitshuttle.toml`을 프로젝트 루트 또는 홈 디렉터리에 생성합니다.
+작업 디렉터리 또는 홈 디렉터리에 `gitshuttle.toml`을 생성합니다.
 
 ```toml
 [export]
@@ -128,30 +128,28 @@ ui = "tui"   # tui | csv | html | prompt
 
 | 파일 | 설명 |
 |------|------|
-| `shuttle_YYMMDD.bundle` | Git bundle 패키지 (압축 포함) |
-| `shuttle_YYMMDD.sha256` | SHA-256 체크섬 |
-| `shuttle_YYMMDD_manifest.txt` | 포함된 커밋 목록 요약 (심사용) |
+| `shuttle_YYMMDD.bundle` | Git bundle 패키지 (히스토리 보존) |
+| `shuttle_YYMMDD.sha256` | SHA-256 체크섬 (무결성 검증용) |
+| `shuttle_YYMMDD_manifest.txt` | 포함된 커밋 목록 요약 (반출입 심사용) |
+
+**3개 파일을 항상 함께 이동하세요.**
 
 ---
 
 ## 대용량 bundle 분할 압축
 
-USB 등 물리 매체의 용량 제한에 맞춰 bundle을 여러 파트로 분할할 수 있습니다.
+USB 용량 제한 시 bundle을 여러 파트로 분할할 수 있습니다.
 
-**분할:**
 ```python
-from gitshuttle.bundle import split_bundle
-parts = split_bundle("shuttle_260508.bundle", chunk_bytes=50 * 1024 * 1024)  # 50MB 단위
+from gitshuttle.bundle import split_bundle, merge_bundles
+
+# 50MB 단위 분할
+parts = split_bundle("shuttle_260508.bundle", chunk_bytes=50 * 1024 * 1024)
 # → shuttle_260508.bundle.part000, .part001, ...
-```
 
-**재조립:**
-```python
-from gitshuttle.bundle import merge_bundles
+# 내부망에서 재조립
 merge_bundles(parts, "shuttle_260508_merged.bundle")
 ```
-
-분할 파일명 형식: `<원본파일명>.part000`, `.part001`, ... (3자리 zero-pad)
 
 ---
 
@@ -160,31 +158,31 @@ merge_bundles(parts, "shuttle_260508_merged.bundle")
 네트워크가 연결된 환경에서 파일 없이 두 GitHub repo를 직접 동기화합니다.
 
 ```
-gitshuttle sync [OPTIONS]
-
-Options:
-  --on-conflict [skip|force|abort]   충돌 처리 방식 (기본값: skip)
+gitshuttle sync [--on-conflict skip|force|abort]
 ```
 
 **연결 설정 (`gitshuttle.toml`):**
+
 ```toml
 [sync.source]
 url  = "https://github.com/org1/repo"
-auth = "token"   # token | ssh
+auth = "token"
 
 [sync.target]
 url  = "https://github.com/org2/repo"
 auth = "token"
 ```
 
-**토큰은 환경변수로 전달 (파일에 직접 저장 금지):**
+**토큰은 환경변수로 전달합니다 (파일에 직접 저장 금지):**
+
 ```
 set GS_SOURCE_TOKEN=ghp_...
 set GS_TARGET_TOKEN=ghp_...
 gitshuttle sync
 ```
 
-**SSH 방식 사용 시:**
+**SSH 방식:**
+
 ```toml
 [sync.source]
 url     = "git@github.com:org1/repo.git"
