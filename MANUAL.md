@@ -59,6 +59,11 @@ GitShuttle은 Git의 모든 히스토리를 **100% 보존**합니다.
 
 ### 방법 A — 실행 파일(.exe) 다운로드 (Python 불필요, 권장)
 
+> **현재 상태:** `gitshuttle.exe`는 아직 공개 릴리즈되지 않았습니다.
+> 소스에서 직접 빌드하려면 아래 **직접 빌드** 방법을 참고하세요.
+
+**릴리즈가 등록된 경우:**
+
 1. 브라우저에서 아래 주소로 이동합니다:
    ```
    https://github.com/ltw070/gitshuttle/releases
@@ -67,6 +72,16 @@ GitShuttle은 Git의 모든 히스토리를 **100% 보존**합니다.
 2. 최신 릴리즈의 **Assets** 항목에서 `gitshuttle.exe`를 클릭하여 다운로드합니다.
 
 3. 다운로드한 `gitshuttle.exe`를 원하는 폴더에 복사합니다. (예: `C:\tools\`)
+
+**직접 빌드 (PyInstaller 설치 환경에서):**
+
+```powershell
+git clone https://github.com/ltw070/gitshuttle.git
+cd gitshuttle
+pip install pyinstaller
+powershell -ExecutionPolicy Bypass -File build.ps1
+# → dist\gitshuttle.exe 생성
+```
 
 > **주의:** `.exe` 파일 한 개만 있으면 됩니다. Python 설치가 필요 없습니다.
 
@@ -826,6 +841,31 @@ gitshuttle export
 
 [분할 전송 기능](#10-대용량-파일-분할-전송)을 사용하세요.  
 또는 커밋 수를 줄여 여러 번 나눠 export하세요.
+
+---
+
+**Q. `gitshuttle.exe`가 없는데 어떻게 실행하나요?**
+
+현재 릴리즈 파일이 없을 경우 Python으로 직접 실행합니다:
+```
+python -m gitshuttle import --file shuttle.bundle
+```
+또는 PyInstaller가 설치된 환경에서 직접 빌드합니다:
+```powershell
+pip install pyinstaller
+powershell -ExecutionPolicy Bypass -File build.ps1
+```
+
+---
+
+**Q. 다른 디렉터리에서 실행하면 `No module named gitshuttle` 오류가 납니다.**
+
+타겟 리포 디렉터리에서 gitshuttle을 실행할 때 Python이 패키지를 찾지 못하는 경우입니다.
+`PYTHONPATH`로 gitshuttle 소스 경로를 지정하세요:
+```bash
+cd /path/to/target-repo
+PYTHONPATH=D:/cla/03_gitshuttle python -m gitshuttle import --file shuttle.bundle
+```
 
 ---
 
