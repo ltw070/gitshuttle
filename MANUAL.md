@@ -13,6 +13,7 @@
 5. [기본 워크플로우 한눈에 보기](#5-기본-워크플로우-한눈에-보기)
 6. [export — 커밋 꾸러미 만들기](#6-export--커밋-꾸러미-만들기)
 7. [import — 커밋 꾸러미 반입하기](#7-import--커밋-꾸러미-반입하기)
+   - [7-1. 다른 리포에서 반입할 때 — Rewrite 기능](#7-1-다른-리포에서-반입할-때--rewrite-기능)
 8. [config — 기본 설정 변경하기](#8-config--기본-설정-변경하기)
 9. [커밋 선택 UI 4가지 방식](#9-커밋-선택-ui-4가지-방식)
 10. [대용량 파일 분할 전송](#10-대용량-파일-분할-전송)
@@ -273,6 +274,9 @@ gitshuttle import --file FILE [OPTIONS]
 |------|------|--------|
 | `--file TEXT` | bundle 파일 경로 **(필수)** | — |
 | `--on-conflict [skip\|force\|abort]` | 충돌 처리 방식 | `skip` |
+| `--author-map FILE` | 작성자 매핑 JSON 파일 경로 | 없음 (원본 유지) |
+| `--target-branch TEXT` | import 커밋을 담을 브랜치명 | `imported/<소스브랜치>` |
+| `--timestamp TEXT` | 커밋 타임스탬프 모드 | `now` |
 
 ### 실행 예시
 
@@ -316,6 +320,113 @@ USB 이동 중 파일이 손상된 경우:
 ```
 
 이 경우 외부망 PC에서 bundle 파일을 다시 생성하여 재전달해야 합니다.
+
+---
+
+## 7-1. 다른 리포에서 반입할 때 — Rewrite 기능
+
+소스와 타겟이 **서로 다른 조직/리포지토리**인 경우, 작성자 정보·브랜치·타임스탬프를 타겟에 맞게 조정할 수 있습니다.
+
+### 브랜치 격리 (Branch Isolation)
+
+> 소스의 `main`/`master`를 타겟의 기존 기본 브랜치에 **직접 병합하지 않습니다.**
+> 타겟에 별도 브랜치를 새로 만들어 커밋을 안전하게 격리합니다.
+
+```
+# 브랜치명 미지정 → 타겟에 'imported/main' 브랜치 자동 생성
+gitshuttle import --file shuttle_260508.bundle
+
+# 브랜치명 직접 지정
+gitshuttle import --file shuttle_260508.bundle --target-branch ext-main
+```
+
+반입 후 타겟에서 직접 검토·머지 여부를 결정합니다:
+
+```
+git log imported/main --oneline    # 반입된 커밋 확인
+git merge imported/main            # 검토 완료 후 병합
+```
+
+---
+
+### 작성자 매핑 (Author Mapping)
+
+소스 repo의 커밋 작성자를 타겟 조직의 내부 계정으로 대체합니다.
+
+**1. 매핑 파일 작성 (`author_map.json`):**
+
+```json
+{
+  "Jane Doe <jane@external.com>": "홍길동 <hong@internal.com>",
+  "Bob Smith <bob@external.com>": "이철수 <lee@internal.com>"
+}
+```
+
+**2. import 실행:**
+
+```
+gitshuttle import --file shuttle_260508.bundle --author-map author_map.json
+```
+
+- 매핑 테이블에 없는 작성자는 원본 그대로 유지되며 경고 메시지가 출력됩니다.
+- `gitshuttle.toml`에 기본값으로 저장할 수 있습니다:
+
+```toml
+[import.author_map]
+"Jane Doe <jane@external.com>" = "홍길동 <hong@internal.com>"
+"Bob Smith <bob@external.com>" = "이철수 <lee@internal.com>"
+```
+
+---
+
+### 커밋 타임스탬프 (Timestamp)
+
+반입 시 커밋에 어떤 시각을 기록할지 선택합니다.
+
+| 모드 | 설명 | 사용 예시 |
+|------|------|-----------|
+| `now` (기본값) | 모든 커밋 date = import 실행 시각 | 반입 이력 추적 |
+| `original` | 소스 원본 날짜·시각 그대로 보존 | 개발 흐름 보존 |
+| `from=<datetime>` | 최초 커밋을 지정 시각으로, 이후 커밋은 원본 상대 간격 유지 | 반입 심사 기준일 지정 |
+
+```
+# 기본 (반영 시각)
+gitshuttle import --file shuttle_260508.bundle
+
+# 소스 원본 시각 보존
+gitshuttle import --file shuttle_260508.bundle --timestamp original
+
+# 2024년 1월 1일 오전 9시부터 타임스탬프 시작
+gitshuttle import --file shuttle_260508.bundle --timestamp from=2024-01-01T09:00:00
+```
+
+`from=` 모드 동작 예시:
+
+```
+소스 커밋 원본:           2024-03-01  →  2024-03-05  →  2024-03-10
+from=2024-01-01T09:00:00 적용:
+  → 2024-01-01T09:00:00  →  2024-01-05T09:00:00  →  2024-01-10T09:00:00
+     (최초 커밋 = 지정 시각)    (+4일 간격 유지)        (+5일 간격 유지)
+```
+
+`gitshuttle.toml`에 기본값으로 저장:
+
+```toml
+[import]
+timestamp = "now"   # now | original | from=2024-01-01T09:00:00
+```
+
+---
+
+### 전체 결합 예시
+
+```
+gitshuttle import \
+  --file shuttle_260508.bundle \
+  --author-map author_map.json \
+  --target-branch ext-main \
+  --timestamp from=2024-05-22T09:00:00
+```
 
 ---
 
@@ -718,6 +829,29 @@ gitshuttle export
 
 ---
 
+**Q. import 후 커밋이 기존 main 브랜치에 바로 들어가지 않습니다.**
+
+정상 동작입니다. GitShuttle은 소스의 `main`을 타겟의 기존 `main`에 직접 병합하지 않고, `imported/main` 같은 별도 브랜치에 격리합니다. 검토 후 직접 병합하세요:
+
+```
+git log imported/main --oneline
+git merge imported/main
+```
+
+브랜치명을 직접 지정하려면 `--target-branch <이름>` 옵션을 사용합니다.
+
+---
+
+**Q. import한 커밋의 날짜가 모두 오늘 날짜입니다.**
+
+기본 동작입니다(`--timestamp now`). 원본 날짜를 유지하려면:
+```
+gitshuttle import --file shuttle.bundle --timestamp original
+```
+또는 `gitshuttle.toml`에 `timestamp = "original"`로 설정합니다.
+
+---
+
 **Q. `.sha256` 파일 없이 import할 수 있나요?**
 
 가능합니다. 체크섬 파일이 없으면 경고를 출력하고 검증 단계를 건너뜁니다.  
@@ -744,6 +878,8 @@ gitshuttle export
 | `선택된 커밋이 없습니다.` | export 시 아무 커밋도 선택하지 않음 | UI에서 커밋을 하나 이상 선택 후 재시도 |
 | `현재 디렉터리에 Git 리포지토리가 없습니다.` | Git 리포지토리가 아닌 폴더에서 실행 | `cd` 로 올바른 폴더로 이동 후 재시도 |
 | `bundle unbundle 실패` | bundle 사전 조건(prerequisite)을 만족 못 함 | 전체 히스토리 포함한 bundle로 재export |
+| `작성자 매핑 파일을 찾을 수 없습니다: ...` | `--author-map` 경로가 잘못됨 | JSON 파일 경로 확인 |
+| `타임스탬프 형식 오류: ...` | `from=` 모드에서 datetime 형식이 틀림 | `YYYY-MM-DDTHH:MM:SS` 형식으로 입력 |
 
 ---
 
