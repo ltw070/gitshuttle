@@ -11,10 +11,44 @@
 | 2 | `sprint/2-export-tui` | Export + TUI | ✅ DONE | PASS | PASS | PASS (39/39) | PASS |
 | 3 | `sprint/3-ui-config` | UI 모드 + Config | ✅ DONE | PASS | PASS | PASS (64/64) | PASS |
 | 4 | `sprint/4-import` | Import | ✅ DONE | PASS | PASS | PASS (71/71) | PASS |
-| 4b | `sprint/4b-import-rewrite` | 작성자 매핑 & 브랜치 리네임 | 🔲 TODO | - | - | - | - |
+| 4b | `sprint/4b-import-rewrite` | 작성자 매핑 & 브랜치 리네임 | 🔄 IN PROGRESS | PASS | PASS | - | - |
 | 5 | `sprint/5-e2e` | 분할 압축 + E2E | ✅ DONE | PASS | PASS | PASS (79/79) | PASS |
 | 6 | `sprint/6-build` | PyInstaller 빌드 | ✅ DONE | PASS | PASS | PASS (85/85) | PASS |
 | 7 | `sprint/7-direct-sync` | Direct Sync (Phase 2) | ✅ DONE | PASS | PASS | PASS (102/102) | PASS |
+
+---
+
+## 2026-05-10 (4)
+
+### Sprint 4b: Import Rewrite TDD 구현 (RED → GREEN)
+
+**구현 대상:** import 시점 작성자 매핑, 브랜치 격리, 타임스탬프 재작성
+
+**생성/수정 파일:**
+- `gitshuttle/rewrite.py` (신규): fast-export 스트림 파싱/치환 모듈
+  - `load_author_map`: JSON 파일 로드, 파일 없으면 `{}` 반환
+  - `rewrite_authors`: author/committer 이름+이메일 치환, 미매핑 경고 수집
+  - `rewrite_branch_ref`: `refs/heads/*` → `refs/heads/<target>` 치환
+  - `rewrite_timestamps`: mode="now"|"original"|"from" 타임스탬프 재작성
+  - `apply_rewrites`: 전체 파이프라인 편의 함수
+- `gitshuttle/import_.py` (확장):
+  - `ImportResult` dataclass에 `warnings: list[str]` 필드 추가
+  - `run_import` 시그니처에 `author_map_path`, `target_branch`, `timestamp_mode` 파라미터 추가
+  - rewrite 파이프라인 통합: `_rewrite_and_import` (fast-export → rewrite → fast-import)
+  - 헬퍼 함수: `_detect_source_branch`, `_parse_from_datetime`, `_checkout_or_create_branch`
+- `gitshuttle/config.py` (확장):
+  - `get_import_config`: `[import]` 섹션 읽기, 기본값 `{"author_map": None, "timestamp": "now"}`
+- `gitshuttle/cli.py` (확장):
+  - import 커맨드에 `--author-map`, `--target-branch`, `--timestamp` 옵션 추가
+  - CLI 옵션 > toml 설정 > 기본값 우선순위 구현
+  - 미매핑 경고 stderr 출력
+- `tests/test_rewrite.py` (신규): 28개 테스트 — 전체 통과 (28/28)
+
+**설계 결정:**
+- fast-export 스트림을 텍스트 라인 단위로 정규식 치환 — blob 바이너리 데이터는 그대로 통과
+- `rewrite_needed` 플래그로 rewrite 불필요 시 기존 unbundle 경로 유지 (호환성)
+- timestamp "from" 모드: 스트림 내 최솟값 기준으로 offset 계산, 모든 타임스탬프에 동일 offset 적용
+- typer 미설치 환경 대응: CLI 옵션 테스트를 소스 코드 파싱 방식으로 구현
 
 ---
 
