@@ -20,26 +20,27 @@
 
 ## 2026-05-10 (2)
 
-### 신규 기능 스펙 추가: Import Rewrite (작성자 매핑 & 브랜치 리네임)
+### 신규 기능 스펙 추가: Import Rewrite (작성자 매핑 · 브랜치 격리 · 타임스탬프)
 
-**배경:** 리포지토리가 다를 경우 소스 커밋의 작성자 정보·브랜치명이 타겟 조직과 맞지 않는 문제 발생.
+**배경:** 리포지토리가 다를 경우 소스 커밋의 작성자·브랜치·타임스탬프가 타겟 조직 규칙과 맞지 않는 문제 발생.
 
-**PRD 변경:**
-- 신규 섹션 3.6 "Import-time Rewrite" 추가 (기존 3.6 Direct Sync → 3.7로 이동)
-  - 3.6.1 작성자 매핑: `--author-map <json>` + `gitshuttle.toml [import.author_map]`
-  - 3.6.2 브랜치 리네임: `--target-branch <name>` + `--branch-map <json>`
-  - 구현 방식: `git fast-export | 치환 | git fast-import` 파이프라인
+**PRD 변경 (3.6):**
+- 3.6.1 작성자 매핑: `--author-map <json>` + toml `[import.author_map]`
+- 3.6.2 브랜치 격리: 소스 `main`/`master`를 타겟의 **별도 브랜치**로 생성 (타겟 기본 브랜치 보호)
+  - `--target-branch <name>` 미지정 시 기본값 `imported/<소스브랜치명>`
+  - `--branch-map` 제거 → 단순화
+- 3.6.3 커밋 타임스탬프: `--timestamp now|original|from=<datetime>`
+  - `now` (기본): import 실행 시각으로 통일
+  - `original`: 소스 원본 date 보존
+  - `from=<dt>`: 최초 커밋을 지정 시각으로, 이후 상대 간격 유지
+- 구현 방식: `git fast-export | 치환 | git fast-import` 파이프라인
 
 **PLAN 변경:**
-- Sprint 4b "Import Rewrite" 신규 삽입 (Sprint 4와 5 사이)
-  - 신규 파일: `rewrite.py`, `tests/test_rewrite.py`
-  - `import_.py`, `config.py` 확장
-  - 브랜치: `sprint/4b-import-rewrite`
-- 전체 일정 요약 테이블 및 브랜치 전략 업데이트
+- Sprint 4b 내용 전면 개정: `rewrite_timestamps()` 3모드 추가, 브랜치 격리 정책 반영
+- 수락 기준에 타임스탬프 3모드 각각 + `imported/<branch>` 기본값 검증 추가
 
 **CLAUDE.md 변경:**
-- 패키지 구조에 `rewrite.py`, `test_rewrite.py` 추가
-- 명령어 구조에 `--author-map`, `--target-branch`, `--branch-map` 옵션 추가
+- 명령어 구조 `--branch-map` 제거, `--timestamp` 옵션 추가
 
 ---
 
