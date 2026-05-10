@@ -18,6 +18,15 @@
 
 ---
 
+## 2026-05-10 (3)
+
+### README · MANUAL Rewrite 기능 문서 반영
+
+- `README.md`: import 옵션 테이블에 `--author-map`, `--target-branch`, `--timestamp` 추가, `gitshuttle.toml` 예시 확장
+- `MANUAL.md`: 섹션 7-1 신규 추가 — 브랜치 격리, 작성자 매핑, 커밋 타임스탬프 3모드 상세 설명, 결합 예시 포함. FAQ에 브랜치 격리·타임스탬프 Q&A 추가, 오류 메시지 테이블 확장
+
+---
+
 ## 2026-05-10 (2)
 
 ### 신규 기능 스펙 추가: Import Rewrite (작성자 매핑 · 브랜치 격리 · 타임스탬프)

@@ -87,8 +87,11 @@ Options:
 gitshuttle import --file FILE [OPTIONS]
 
 Options:
-  --file TEXT                           .bundle 파일 경로 (필수)
-  --on-conflict [skip|force|abort]      충돌 처리 방식 (기본값: skip)
+  --file TEXT                                .bundle 파일 경로 (필수)
+  --on-conflict [skip|force|abort]           충돌 처리 방식 (기본값: skip)
+  --author-map FILE                          작성자 매핑 JSON 파일 경로
+  --target-branch TEXT                       import 커밋을 담을 브랜치명 (기본값: imported/<소스브랜치>)
+  --timestamp [now|original|from=DATETIME]  커밋 타임스탬프 모드 (기본값: now)
 ```
 
 **충돌 처리 옵션:**
@@ -98,6 +101,16 @@ Options:
 | `skip` (기본값) | 이미 존재하는 커밋은 건너뛰고 나머지 계속 진행 |
 | `force` | 이미 존재해도 강제 계속 진행 |
 | `abort` | 충돌 발견 즉시 전체 작업 중단 |
+
+**브랜치 격리:** 소스의 `main`/`master`는 타겟의 기존 기본 브랜치에 직접 병합되지 않고, 별도 브랜치(`imported/main` 등)로 격리됩니다.
+
+**커밋 타임스탬프 옵션:**
+
+| 옵션 | 동작 |
+|------|------|
+| `now` (기본값) | 모든 커밋 date = import 실행 시각 |
+| `original` | 소스 원본 author/committer date 그대로 보존 |
+| `from=YYYY-MM-DDTHH:MM:SS` | 최초 커밋 = 지정 시각, 이후 커밋은 원본 상대 간격 유지 |
 
 import 시 SHA-256 체크섬이 자동 검증됩니다. 불일치 시 작업이 중단되며 재export 방법이 안내됩니다.
 
@@ -118,9 +131,15 @@ gitshuttle config
 ```toml
 [export]
 ui = "tui"   # tui | csv | html | prompt
+
+[import]
+timestamp = "now"   # now | original | from=2024-01-01T09:00:00
+
+[import.author_map]
+"Jane Doe <jane@external.com>" = "홍길동 <hong@internal.com>"
 ```
 
-`--ui` 플래그는 설정 파일보다 항상 우선합니다.
+CLI 옵션은 설정 파일보다 항상 우선합니다.
 
 ---
 
