@@ -122,7 +122,8 @@ main
 ```
 gitshuttle export   [--branch] [--ui tui|csv|html|prompt] [--output]   # Phase 1
 gitshuttle import   --file <path> [--on-conflict skip|force|abort]
-                    [--author-map <json>] [--target-branch <name>] [--branch-map <json>]  # Phase 1
+                    [--author-map <json>] [--target-branch <name>]
+                    [--timestamp now|original|from=<datetime>]     # Phase 1
 gitshuttle config   (대화형 마법사 — gitshuttle.toml 수정)              # Phase 1
 gitshuttle sync     [--on-conflict skip|force|abort]                    # Phase 2
 ```

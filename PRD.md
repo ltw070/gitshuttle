@@ -78,9 +78,9 @@ Phase 1에서 커밋 선택은 아래 방식 중 하나(또는 조합)로 구현
 - import 시 SHA-256 체크섬 불일치가 발생하면 명확한 오류 메시지(기대값 vs 실제값)를 출력하고 작업을 중단.
 - 복구 방법: 소스 측에서 동일 조건으로 재export하도록 안내 메시지와 재실행 명령어를 자동 출력.
 
-### 3.6 Import-time Rewrite — 작성자 매핑 & 브랜치 리네임 (Phase 1 추가)
+### 3.6 Import-time Rewrite — 작성자 매핑 · 브랜치 격리 · 타임스탬프 (Phase 1 추가)
 
-리포지토리가 다를 경우 소스 커밋의 작성자 정보와 브랜치명이 타겟 조직과 맞지 않는 문제를 import 시점에 재작성한다.
+리포지토리가 다를 경우 import 시점에 작성자 정보·브랜치·타임스탬프를 재작성하여 타겟 조직의 규칙에 맞게 반영한다.
 
 #### 3.6.1 작성자 매핑 (Author Mapping)
 
@@ -102,40 +102,75 @@ Phase 1에서 커밋 선택은 아래 방식 중 하나(또는 조합)로 구현
 - **구현:** `git fast-export | (작성자 치환) | git fast-import` 파이프라인 사용.
 - **미매핑 처리:** 매핑 테이블에 없는 작성자는 원본 그대로 유지 (경고 메시지 출력).
 
-#### 3.6.2 브랜치 리네임 (Branch Rename)
+#### 3.6.2 브랜치 격리 (Branch Isolation)
 
-- **문제:** 소스의 브랜치명이 타겟 조직의 네이밍 규칙과 다름 (예: 소스 `main` → 타겟 `external-main`).
-- **기능:** `--target-branch <이름>` 플래그로 import할 브랜치명 지정.
-  - 복수 브랜치 매핑: `--branch-map <파일>` (JSON) 또는 toml `[import.branch_map]` 섹션.
-- **브랜치 매핑 형식 (JSON):**
-  ```json
-  {
-    "main": "ext-main",
-    "develop": "ext-develop"
-  }
+- **정책:** 소스의 `main`/`master`를 타겟의 기존 `main`/`master`에 **직접 병합하지 않는다.**
+  타겟 repo에 **별도 브랜치**를 새로 만들어 커밋을 반영하여, 타겟의 기본 브랜치를 보호한다.
+- **기능:**
+  - `--target-branch <이름>`: import된 커밋을 담을 신규 브랜치명 지정.
+  - 미지정 시 기본값: `imported/<소스브랜치명>` (예: `imported/main`, `imported/master`).
+  - 해당 브랜치가 타겟에 이미 존재하면 `--on-conflict` 옵션 정책을 따름.
+- **CLI 예시:**
   ```
-- **단일 브랜치 CLI 예시:**
-  ```
+  gitshuttle import --file shuttle.bundle
+  # → 타겟에 imported/main 브랜치 생성
+
   gitshuttle import --file shuttle.bundle --target-branch ext-main
+  # → 타겟에 ext-main 브랜치 생성
   ```
-- **구현:** bundle unbundle 후 `git branch -m <old> <new>` 또는 fast-import 시 ref 치환.
+- **구현:** fast-import 시 ref를 `refs/heads/<target-branch>`로 지정.
 
-#### 3.6.3 결합 사용 예시
+#### 3.6.3 커밋 타임스탬프 (Commit Timestamp)
+
+- **문제:** import된 커밋에 어떤 시간을 기록할지 용도에 따라 다름.
+  - 반영시간: 타겟 repo 관리자 입장에서 언제 들어왔는지 추적 가능.
+  - 원본시간: 소스에서의 개발 흐름을 그대로 보존.
+  - 특정 시점 시작: 보안 감사·반입 심사 기준일을 기점으로 기록.
+
+- **`--timestamp` 옵션 (3가지 모드):**
+
+  | 값 | 설명 | 예시 |
+  |----|------|------|
+  | `now` (기본값) | 모든 커밋의 committer date를 import 실행 시각으로 통일 | - |
+  | `original` | 소스의 author date·committer date 원본 그대로 보존 | `--timestamp original` |
+  | `from=<datetime>` | 가장 오래된 커밋을 지정 시각으로 맞추고, 이후 커밋은 원본 상대 간격 유지 | `--timestamp from=2024-01-01T09:00:00` |
+
+- **`from=<datetime>` 동작 상세:**
+  - 선택된 커밋들을 오래된 순으로 정렬.
+  - 가장 오래된 커밋의 committer date = `<datetime>`.
+  - 나머지 커밋 = `<datetime>` + (원본 커밋과 최초 커밋 간의 시간 차이).
+  - author date는 committer date와 동일하게 설정.
+  - datetime 형식: ISO 8601 (`YYYY-MM-DDTHH:MM:SS`, 타임존 생략 시 로컬 시간대 적용).
+
+- **toml 설정:**
+  ```toml
+  [import]
+  timestamp = "now"          # now | original | from=2024-01-01T09:00:00
+  ```
+
+#### 3.6.4 결합 사용 예시
 
 ```
+# 작성자 매핑 + 별도 브랜치 생성 + 반입 기준일부터 타임스탬프
 gitshuttle import \
   --file shuttle_240522.bundle \
   --author-map author_map.json \
-  --target-branch ext-main
+  --target-branch ext-main \
+  --timestamp from=2024-05-22T09:00:00
+
+# 원본 시간 보존
+gitshuttle import \
+  --file shuttle_240522.bundle \
+  --timestamp original
 ```
 
-#### 3.6.4 명령어 옵션 요약
+#### 3.6.5 명령어 옵션 요약
 
 | 옵션 | 설명 | 기본값 |
 |------|------|--------|
 | `--author-map <파일>` | 작성자 매핑 JSON 파일 경로 | 없음 (원본 유지) |
-| `--target-branch <이름>` | import 브랜치를 지정 이름으로 생성 | 소스 브랜치명 그대로 |
-| `--branch-map <파일>` | 브랜치명 매핑 JSON 파일 경로 | 없음 (원본 유지) |
+| `--target-branch <이름>` | import 커밋을 담을 신규 브랜치명 | `imported/<소스브랜치명>` |
+| `--timestamp now\|original\|from=<dt>` | 커밋 타임스탬프 모드 | `now` |
 
 ---
 

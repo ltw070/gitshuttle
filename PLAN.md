@@ -237,44 +237,59 @@ import_.py(SHA-256 검증 → 커밋 매칭 → Fast-forward → 충돌 처리).
 
 ---
 
-## Sprint 4b — Import Rewrite: 작성자 매핑 & 브랜치 리네임
+## Sprint 4b — Import Rewrite: 작성자 매핑 · 브랜치 격리 · 타임스탬프
 
-**목표:** 리포지토리가 다를 경우 import 시점에 작성자 정보와 브랜치명을 재작성
+**목표:** 리포지토리가 다를 경우 import 시점에 작성자·브랜치·타임스탬프를 재작성하여 타겟 조직 규칙에 맞게 반영
 
 ### 구현 대상
-- `rewrite.py`: `git fast-export | 치환 | git fast-import` 파이프라인
-  - `rewrite_authors(stream, author_map)` — 작성자 이름·이메일 치환
-  - `rewrite_branches(stream, branch_map)` — 브랜치 ref 치환
-  - `load_author_map(path)` / `load_branch_map(path)` — JSON 매핑 파일 로드
-- `import_.py` 확장:
-  - `--author-map <파일>` 옵션 추가
-  - `--target-branch <이름>` 옵션 추가
-  - `--branch-map <파일>` 옵션 추가
-  - `gitshuttle.toml` `[import.author_map]` / `[import.branch_map]` 섹션 읽기
-- `tests/test_rewrite.py`: 작성자 치환, 브랜치 리네임, 미매핑 원본 유지 테스트
+
+**`rewrite.py`** — `git fast-export | 치환 | git fast-import` 파이프라인
+- `rewrite_authors(stream, author_map)` — 작성자 이름·이메일 치환
+- `rewrite_branch_ref(stream, target_branch)` — fast-import 시 ref를 `refs/heads/<target-branch>`로 교체
+- `rewrite_timestamps(stream, mode, from_dt=None)` — 타임스탬프 재작성
+  - `mode="now"`: 모든 committer/author date를 실행 시각으로 통일
+  - `mode="original"`: 원본 그대로 통과
+  - `mode="from"`: 최초 커밋 → `from_dt`, 이후 커밋은 원본 상대 간격 유지
+- `load_author_map(path)` — JSON 파일 로드
+
+**`import_.py` 확장**
+- `--author-map <파일>` 옵션 추가
+- `--target-branch <이름>` 옵션 추가 (기본값: `imported/<소스브랜치명>`)
+- `--timestamp now|original|from=<datetime>` 옵션 추가 (기본값: `now`)
+- `gitshuttle.toml` `[import.author_map]`, `[import.timestamp]` 섹션 읽기
+
+**`tests/test_rewrite.py`**
+- 작성자 치환 / 미매핑 원본 유지 케이스
+- 브랜치 ref 치환 확인
+- 타임스탬프 3모드 (now / original / from) 각각 검증
+- `from=` 모드: 최초 커밋 시각, 상대 간격 보존 검증
 
 ### TDD 사이클
 
 | 단계 | SubAgent | 내용 |
 |------|----------|------|
-| 문서 검증 | SA1 | PRD 3.6(Rewrite) 스펙, import 옵션 명세 확인 |
-| 구현 | SA2 | fast-export/import 파이프라인 + 매핑 치환 단위 테스트 먼저 |
-| 검증 | SA3+SA4 | 작성자 치환 커버리지 + 원본 유지 케이스 포함 |
+| 문서 검증 | SA1 | PRD 3.6(Rewrite) 스펙 — 브랜치 격리 정책, 타임스탬프 3모드 확인 |
+| 구현 | SA2 | fast-export/import 파이프라인 단위 테스트 먼저, 3모드 타임스탬프 각각 테스트 |
+| 검증 | SA3+SA4 | 커버리지 + 원본 시간 보존 / 간격 계산 정확도 compliance |
 
 ### 수락 기준
+- [ ] `gitshuttle import --file shuttle.bundle` → 타겟에 `imported/main` 브랜치 신규 생성, 기존 `main` 불변
+- [ ] `gitshuttle import --file shuttle.bundle --target-branch ext-main` → `ext-main` 브랜치 생성
 - [ ] `gitshuttle import --file shuttle.bundle --author-map map.json` → 작성자 치환 후 반영
-- [ ] `gitshuttle import --file shuttle.bundle --target-branch ext-main` → 브랜치명 변경 후 반영
-- [ ] `gitshuttle import --file shuttle.bundle --branch-map map.json` → 복수 브랜치 매핑 적용
 - [ ] 매핑 테이블에 없는 작성자는 원본 유지 + 경고 메시지 출력
-- [ ] `gitshuttle.toml`의 `[import.author_map]` / `[import.branch_map]` 섹션 적용
+- [ ] `--timestamp now` (기본): 모든 커밋의 date = import 실행 시각
+- [ ] `--timestamp original`: 소스 author date·committer date 그대로 보존
+- [ ] `--timestamp from=2024-01-01T09:00:00`: 최초 커밋 = 지정 시각, 이후 상대 간격 유지
+- [ ] `gitshuttle.toml` `[import.author_map]`, `[import.timestamp]` 섹션 적용
 - [ ] CLI 옵션이 toml 설정보다 우선
 
 ### SA2 호출 프롬프트
 ```
 Sprint 4b: Import Rewrite 구현.
-rewrite.py(rewrite_authors, rewrite_branches — git fast-export/fast-import 파이프라인),
-import_.py 확장(--author-map, --target-branch, --branch-map 옵션),
-config.py 확장([import.author_map], [import.branch_map] 섹션).
+rewrite.py(rewrite_authors, rewrite_branch_ref, rewrite_timestamps — git fast-export/fast-import 파이프라인),
+import_.py 확장(--author-map, --target-branch 기본값 imported/<소스브랜치>, --timestamp now|original|from=<dt>),
+config.py 확장([import.author_map], [import.timestamp]).
+타임스탬프 3모드 각각 테스트 필수. from= 모드: 상대 간격 보존 계산 검증.
 미매핑 작성자 원본 유지 + 경고 케이스 테스트 필수.
 ```
 
