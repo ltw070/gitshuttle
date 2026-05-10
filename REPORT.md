@@ -18,6 +18,35 @@
 
 ---
 
+## 2026-05-10 (6) — 세션 마무리
+
+### PR_REVIEW_POINTS.md 전체 프로젝트 범위 재작성 + 최종 정리
+
+**변경 내용:**
+- `PR_REVIEW_POINTS.md` Sprint 4b 한정 → **GitShuttle v0.1.0 전체 프로젝트** 범위로 재작성
+  - PR 제목: `feat: GitShuttle v0.1.0 — 망분리 환경 Git 히스토리 동기화 CLI (Phase 1 완료)`
+  - Sprint 0~7 전체 구현 범위 표 포함
+  - 핵심 아키텍처 결정 5가지 (bundle 포맷, Rewrite 파이프라인, 브랜치 격리, SHA-256, UTF-8)
+  - 🔴 중점 검토 3개 (binary mode CRLF 버그, 정규식 엣지케이스, rewrite_needed 조건)
+  - 🟡 일반 검토 6개 (split archive, checksum 강제화, branch fallback, author_map 키 검증, toml 우선순위, Phase 2 노출)
+  - 🟢 확인 완료 항목, exe 빌드 방법 및 제약 명시
+
+**최종 테스트 확인:** `134/134 PASS` (백그라운드 pytest 전체 실행)
+
+**현재 상태 요약:**
+
+| 항목 | 상태 |
+|------|------|
+| Phase 1 구현 | ✅ 완료 (Sprint 0~6, 4b 포함) |
+| Phase 2 (Direct Sync) | ✅ Python API 구현 완료, CLI 노출 예정 |
+| 전체 테스트 | ✅ 134/134 PASS |
+| gitshuttle.exe | ⚠️ 미빌드 (사내 PyInstaller 설치 불가, spec/build.ps1 준비 완료) |
+| GitHub push | ✅ main 브랜치 최신 |
+| PR #1 | ✅ Sprint 4b feat/PR 병합 완료 |
+| PR_REVIEW_POINTS.md | ✅ 전체 프로젝트 기준 최신화 |
+
+---
+
 ## 2026-05-10 (5)
 
 ### Import Rewrite 실전 적용 + 문서 업데이트

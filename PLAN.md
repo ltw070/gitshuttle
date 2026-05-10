@@ -273,15 +273,15 @@ import_.py(SHA-256 검증 → 커밋 매칭 → Fast-forward → 충돌 처리).
 | 검증 | SA3+SA4 | 커버리지 + 원본 시간 보존 / 간격 계산 정확도 compliance |
 
 ### 수락 기준
-- [ ] `gitshuttle import --file shuttle.bundle` → 타겟에 `imported/main` 브랜치 신규 생성, 기존 `main` 불변
-- [ ] `gitshuttle import --file shuttle.bundle --target-branch ext-main` → `ext-main` 브랜치 생성
-- [ ] `gitshuttle import --file shuttle.bundle --author-map map.json` → 작성자 치환 후 반영
-- [ ] 매핑 테이블에 없는 작성자는 원본 유지 + 경고 메시지 출력
-- [ ] `--timestamp now` (기본): 모든 커밋의 date = import 실행 시각
-- [ ] `--timestamp original`: 소스 author date·committer date 그대로 보존
-- [ ] `--timestamp from=2024-01-01T09:00:00`: 최초 커밋 = 지정 시각, 이후 상대 간격 유지
-- [ ] `gitshuttle.toml` `[import.author_map]`, `[import.timestamp]` 섹션 적용
-- [ ] CLI 옵션이 toml 설정보다 우선
+- [x] `gitshuttle import --file shuttle.bundle` → 타겟에 `imported/main` 브랜치 신규 생성, 기존 `main` 불변
+- [x] `gitshuttle import --file shuttle.bundle --target-branch ext-main` → `ext-main` 브랜치 생성
+- [x] `gitshuttle import --file shuttle.bundle --author-map map.json` → 작성자 치환 후 반영
+- [x] 매핑 테이블에 없는 작성자는 원본 유지 + 경고 메시지 출력
+- [x] `--timestamp now` (기본): 모든 커밋의 date = import 실행 시각
+- [x] `--timestamp original`: 소스 author date·committer date 그대로 보존
+- [x] `--timestamp from=2024-01-01T09:00:00`: 최초 커밋 = 지정 시각, 이후 상대 간격 유지
+- [x] `gitshuttle.toml` `[import.author_map]`, `[import.timestamp]` 섹션 적용
+- [x] CLI 옵션이 toml 설정보다 우선
 
 ### SA2 호출 프롬프트
 ```
