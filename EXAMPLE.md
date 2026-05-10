@@ -396,6 +396,177 @@ git push origin main
 
 ---
 
+## 예제 3 — 다른 리포에서 Import Rewrite 적용 (작성자·브랜치·타임스탬프 재작성)
+
+**시나리오:** `gitshuttle` 리포의 초기 10개 커밋을 `gitshuttle_copyTest`로 이전하면서,
+작성자를 내부 계정으로 교체하고, 별도 브랜치로 격리하고, 반입 기준일을 타임스탬프로 지정합니다.
+
+**조건:**
+- 소스 작성자: `Tim <ltw070@naver.com>`
+- 변경 후 작성자: `tw070-lim <tw070-lim@users.noreply.github.com>`
+- 타겟 브랜치: `feat/gitshuttle_1st` (타겟의 main은 건드리지 않음)
+- 타임스탬프 기준: `2026-05-09 10:23 AM KST` 부터, 이후 커밋은 원본 상대 간격 유지
+
+---
+
+### Step 1 — 타겟 리포 초기화
+
+이미 내용이 있는 `gitshuttle_copyTest`를 빈 상태로 리셋합니다.
+
+```bash
+git clone https://github.com/ltw070/gitshuttle_copyTest /tmp/gs_copytest
+cd /tmp/gs_copytest
+
+# orphan 브랜치로 히스토리 완전 삭제 후 force push
+git checkout --orphan fresh_init
+git rm -rf .
+git commit --allow-empty -m "chore: reset repository"
+git push --force origin HEAD:main
+
+# 원격 상태와 로컬 동기화 + 잔여 파일 제거
+git fetch origin
+git reset --hard origin/main
+git clean -fdx
+```
+
+> `git clean -fdx`를 반드시 실행해야 untracked 파일(이전 클론에서 남은 gitshuttle/ 디렉터리 등)이 제거됩니다.
+
+---
+
+### Step 2 — 소스 리포에서 초기 10개 커밋 bundle 생성
+
+소스 리포(`gitshuttle`)에서 가장 오래된 10번째 커밋을 기준으로 bundle을 만듭니다.
+
+```bash
+cd D:/cla/03_gitshuttle    # 소스 리포 경로
+
+# 10번째 커밋 해시 확인 (오래된 순 10번째)
+TENTH=$(git log --reverse --format="%H" | sed -n '10p')
+echo "10th commit: $TENTH"
+
+# 임시 브랜치 생성 → bundle → 정리
+git checkout -b temp_export_10 $TENTH
+git bundle create /tmp/first10.bundle temp_export_10
+git checkout main
+git branch -d temp_export_10
+```
+
+> 임시 브랜치를 만드는 이유: bundle에 named ref를 포함시켜야 `gitshuttle import`가 소스 브랜치명을 감지할 수 있습니다.
+
+---
+
+### Step 3 — 작성자 매핑 파일 생성
+
+매핑 파일의 **키는 이메일 주소**만 사용합니다 (`"Name <email>"` 형식이 아님).
+값은 `{"name": "...", "email": "..."}` dict 형식입니다.
+
+```bash
+cat > /tmp/author_map.json << 'EOF'
+{
+  "ltw070@naver.com": {"name": "tw070-lim", "email": "tw070-lim@users.noreply.github.com"}
+}
+EOF
+```
+
+> **주의:** `"Tim <ltw070@naver.com>"` 처럼 이름+이메일을 키로 쓰면 매핑이 동작하지 않습니다.
+
+---
+
+### Step 4 — Import (Rewrite 적용)
+
+타겟 리포 디렉터리에서 실행합니다. `PYTHONPATH`로 gitshuttle 소스를 명시합니다.
+
+```bash
+cd /tmp/gs_copytest
+
+PYTHONPATH=D:/cla/03_gitshuttle python -m gitshuttle import \
+  --file /tmp/first10.bundle \
+  --author-map /tmp/author_map.json \
+  --target-branch "feat/gitshuttle_1st" \
+  --timestamp "from=2026-05-09T01:23:00"
+```
+
+> **타임스탬프 시각 계산:** `--timestamp from=` 값은 UTC 기준입니다.
+> 10:23 AM KST(UTC+9) = 01:23 UTC → `from=2026-05-09T01:23:00` 으로 입력합니다.
+
+**출력 예시:**
+```
+bundle        : /tmp/first10.bundle
+target        : /tmp/gs_copytest
+conflict      : skip
+target-branch : feat/gitshuttle_1st
+author-map    : /tmp/author_map.json
+timestamp     : from=2026-05-09T01:23:00
+반입을 시작합니다...
+
+import 완료.
+  imported : 10개
+  skipped  :  0개
+  total    : 10개
+```
+
+> 미매핑 작성자가 있으면 `[경고] 매핑되지 않은 작성자:` 메시지가 stderr에 출력됩니다.
+> 경고가 없으면 모든 작성자가 정상 치환된 것입니다.
+
+---
+
+### Step 5 — 결과 확인
+
+```bash
+cd /tmp/gs_copytest
+git log feat/gitshuttle_1st --format="%H %an <%ae> %ad %s" \
+  --date=format:"%Y-%m-%d %H:%M %Z"
+```
+
+**출력 예시:**
+```
+6b0c157 tw070-lim <tw070-lim@users.noreply.github.com> 2026-05-09 10:51 KST  Add Direct Sync feature (Phase 2)
+c4f595 tw070-lim <tw070-lim@users.noreply.github.com> 2026-05-09 10:46 KST  Final update: REPORT.md session summary
+...
+da9e68 tw070-lim <tw070-lim@users.noreply.github.com> 2026-05-09 10:23 KST  Initial commit: PRD, README, CLAUDE.md
+```
+
+확인 포인트:
+- 작성자: `tw070-lim <tw070-lim@users.noreply.github.com>` ← 치환됨
+- 첫 커밋 시각: `10:23` ← 지정한 시각
+- 타겟 `main` 브랜치: 변경 없음 (`feat/gitshuttle_1st`만 생성됨)
+
+```bash
+# main은 빈 상태 그대로 유지되어야 함
+git log main --oneline
+# → chore: reset repository (1개만)
+```
+
+---
+
+### Step 6 — GitHub에 push
+
+```bash
+git push origin feat/gitshuttle_1st
+```
+
+**출력 예시:**
+```
+remote: Create a pull request for 'feat/gitshuttle_1st' on GitHub by visiting:
+remote:   https://github.com/ltw070/gitshuttle_copyTest/pull/new/feat/gitshuttle_1st
+To https://github.com/ltw070/gitshuttle_copyTest
+ * [new branch]      feat/gitshuttle_1st -> feat/gitshuttle_1st
+```
+
+---
+
+### 이 예제에서 배운 점
+
+| 항목 | 주의사항 |
+|------|----------|
+| 브랜치명 | 콜론(`:`) 사용 불가 — 슬래시(`/`)로 대체: `feat/gitshuttle_1st` |
+| author_map 키 | 이메일 주소만 (`"ltw070@naver.com"`), `"Name <email>"` 형식 아님 |
+| 타임스탬프 | `from=` 값은 UTC 기준. 10:23 AM KST = `01:23 UTC` |
+| git clean | 리셋 후 반드시 `git clean -fdx` 실행 (untracked 파일 제거) |
+| PYTHONPATH | 타겟 리포와 gitshuttle 소스가 다른 경로일 때 `PYTHONPATH` 명시 필요 |
+
+---
+
 ## 두 예제 비교
 
 | 항목 | 예제 1 (최초 이전) | 예제 2 (증분 업데이트) |

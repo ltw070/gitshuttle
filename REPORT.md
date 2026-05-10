@@ -18,6 +18,38 @@
 
 ---
 
+## 2026-05-10 (5)
+
+### Import Rewrite 실전 적용 + 문서 업데이트
+
+**실전 시나리오:** `gitshuttle` 초기 10개 커밋 → `gitshuttle_copyTest` 이전
+
+| 항목 | 값 |
+|------|-----|
+| 소스 리포 | `github.com/ltw070/gitshuttle` (초기 10개 커밋) |
+| 타겟 리포 | `github.com/ltw070/gitshuttle_copyTest` (초기화 후) |
+| 작성자 변경 | `Tim <ltw070@naver.com>` → `tw070-lim <tw070-lim@users.noreply.github.com>` |
+| 브랜치 | `feat/gitshuttle_1st` (타겟 main 보호, 별도 브랜치 격리) |
+| 타임스탬프 | `2026-05-09 10:23 AM KST` 기준, 상대 간격 유지 |
+
+**발견한 주의사항:**
+- `author_map.json` 키는 이메일 주소만 (`"ltw070@naver.com"`), `"Name <email>"` 형식 불가
+- `from=` 타임스탬프는 UTC 기준: 10:23 AM KST = `from=2026-05-09T01:23:00`
+- 리셋 후 `git clean -fdx` 필수 (untracked 파일이 Python 패키지 경로를 덮어씀)
+- `PYTHONPATH` 명시 필요 (타겟 리포와 gitshuttle 소스 디렉터리 다를 때)
+- git 브랜치명에 콜론(`:`) 사용 불가 → 슬래시(`/`)로 대체
+
+**exe 빌드 시도:**
+- PyInstaller 설치 시도 → 회사 프록시 SSL 인증서 문제로 실패
+- `gitshuttle.spec`, `build.ps1` 준비 완료 → 인터넷 연결 환경에서 수동 빌드 필요
+
+**문서 업데이트:**
+- `EXAMPLE.md`: 예제 3 추가 (Import Rewrite 실전 적용 — 6단계 + 주의사항 표)
+- `MANUAL.md`: exe 빌드 안내 수정 (릴리즈 미존재 명시, 직접 빌드 방법 추가), FAQ 2개 추가 (exe 없을 때, PYTHONPATH 오류)
+- `REPORT.md`: 이 항목
+
+---
+
 ## 2026-05-10 (4)
 
 ### Sprint 4b: Import Rewrite TDD 구현 (RED → GREEN)
