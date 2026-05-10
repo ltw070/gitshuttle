@@ -17,6 +17,20 @@
 
 ---
 
+## 2026-05-10
+
+### GitHub MCP 설정 반영
+
+- `.mcp.json` 생성: `github-general` MCP 서버 설정 추가
+  - 실행 파일: `D:\cla\99_github-mcp-server\github-mcp-server.exe`
+  - 인증: GitHub PAT 환경변수 설정
+- `CLAUDE.md` 업데이트: GitHub 접근 규칙 섹션 추가
+  - 로컬 환경 우선 확인 지침
+  - MCP vs Bash+Git 사용 기준 (파일 크기·수량 기반)
+  - 토큰 절약 이유 설명
+
+---
+
 ## 2026-05-08
 
 ### 1. PRD 작성
