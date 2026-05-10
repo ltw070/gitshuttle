@@ -11,7 +11,7 @@
 | 2 | `sprint/2-export-tui` | Export + TUI | ✅ DONE | PASS | PASS | PASS (39/39) | PASS |
 | 3 | `sprint/3-ui-config` | UI 모드 + Config | ✅ DONE | PASS | PASS | PASS (64/64) | PASS |
 | 4 | `sprint/4-import` | Import | ✅ DONE | PASS | PASS | PASS (71/71) | PASS |
-| 4b | `sprint/4b-import-rewrite` | 작성자 매핑 & 브랜치 리네임 | 🔄 IN PROGRESS | PASS | PASS | - | - |
+| 4b | `sprint/4b-import-rewrite` | 작성자 매핑 & 브랜치 리네임 | ✅ DONE | PASS | PASS | PASS (134/134) | PASS |
 | 5 | `sprint/5-e2e` | 분할 압축 + E2E | ✅ DONE | PASS | PASS | PASS (79/79) | PASS |
 | 6 | `sprint/6-build` | PyInstaller 빌드 | ✅ DONE | PASS | PASS | PASS (85/85) | PASS |
 | 7 | `sprint/7-direct-sync` | Direct Sync (Phase 2) | ✅ DONE | PASS | PASS | PASS (102/102) | PASS |
