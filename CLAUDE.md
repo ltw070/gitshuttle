@@ -64,6 +64,7 @@ gitshuttle/
 ├── manifest.py       # 커밋 목록 요약 파일 생성
 ├── export_.py        # export 오케스트레이션
 ├── import_.py        # import 오케스트레이션
+├── rewrite.py        # 작성자 매핑 & 브랜치 리네임 (fast-export/fast-import 파이프라인)
 ├── sync_.py          # direct sync 오케스트레이션 (Phase 2)
 ├── github_auth.py    # HTTPS+Token / SSH 인증 (Phase 2)
 ├── config.py         # config 마법사, gitshuttle.toml 읽기/쓰기
@@ -82,6 +83,7 @@ tests/
 ├── test_manifest.py
 ├── test_export.py
 ├── test_import.py
+├── test_rewrite.py   # 작성자 매핑, 브랜치 리네임, 미매핑 원본 유지 테스트
 ├── test_config.py
 ├── test_build.py     # gitshuttle.spec, build.ps1 내용 검증
 ├── test_sync.py      # Direct Sync + github_auth 테스트 (Phase 2)
@@ -119,7 +121,8 @@ main
 
 ```
 gitshuttle export   [--branch] [--ui tui|csv|html|prompt] [--output]   # Phase 1
-gitshuttle import   --file <path> [--on-conflict skip|force|abort]      # Phase 1
+gitshuttle import   --file <path> [--on-conflict skip|force|abort]
+                    [--author-map <json>] [--target-branch <name>] [--branch-map <json>]  # Phase 1
 gitshuttle config   (대화형 마법사 — gitshuttle.toml 수정)              # Phase 1
 gitshuttle sync     [--on-conflict skip|force|abort]                    # Phase 2
 ```
