@@ -11,9 +11,35 @@
 | 2 | `sprint/2-export-tui` | Export + TUI | ✅ DONE | PASS | PASS | PASS (39/39) | PASS |
 | 3 | `sprint/3-ui-config` | UI 모드 + Config | ✅ DONE | PASS | PASS | PASS (64/64) | PASS |
 | 4 | `sprint/4-import` | Import | ✅ DONE | PASS | PASS | PASS (71/71) | PASS |
+| 4b | `sprint/4b-import-rewrite` | 작성자 매핑 & 브랜치 리네임 | 🔲 TODO | - | - | - | - |
 | 5 | `sprint/5-e2e` | 분할 압축 + E2E | ✅ DONE | PASS | PASS | PASS (79/79) | PASS |
 | 6 | `sprint/6-build` | PyInstaller 빌드 | ✅ DONE | PASS | PASS | PASS (85/85) | PASS |
 | 7 | `sprint/7-direct-sync` | Direct Sync (Phase 2) | ✅ DONE | PASS | PASS | PASS (102/102) | PASS |
+
+---
+
+## 2026-05-10 (2)
+
+### 신규 기능 스펙 추가: Import Rewrite (작성자 매핑 & 브랜치 리네임)
+
+**배경:** 리포지토리가 다를 경우 소스 커밋의 작성자 정보·브랜치명이 타겟 조직과 맞지 않는 문제 발생.
+
+**PRD 변경:**
+- 신규 섹션 3.6 "Import-time Rewrite" 추가 (기존 3.6 Direct Sync → 3.7로 이동)
+  - 3.6.1 작성자 매핑: `--author-map <json>` + `gitshuttle.toml [import.author_map]`
+  - 3.6.2 브랜치 리네임: `--target-branch <name>` + `--branch-map <json>`
+  - 구현 방식: `git fast-export | 치환 | git fast-import` 파이프라인
+
+**PLAN 변경:**
+- Sprint 4b "Import Rewrite" 신규 삽입 (Sprint 4와 5 사이)
+  - 신규 파일: `rewrite.py`, `tests/test_rewrite.py`
+  - `import_.py`, `config.py` 확장
+  - 브랜치: `sprint/4b-import-rewrite`
+- 전체 일정 요약 테이블 및 브랜치 전략 업데이트
+
+**CLAUDE.md 변경:**
+- 패키지 구조에 `rewrite.py`, `test_rewrite.py` 추가
+- 명령어 구조에 `--author-map`, `--target-branch`, `--branch-map` 옵션 추가
 
 ---
 

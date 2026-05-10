@@ -237,6 +237,49 @@ import_.py(SHA-256 검증 → 커밋 매칭 → Fast-forward → 충돌 처리).
 
 ---
 
+## Sprint 4b — Import Rewrite: 작성자 매핑 & 브랜치 리네임
+
+**목표:** 리포지토리가 다를 경우 import 시점에 작성자 정보와 브랜치명을 재작성
+
+### 구현 대상
+- `rewrite.py`: `git fast-export | 치환 | git fast-import` 파이프라인
+  - `rewrite_authors(stream, author_map)` — 작성자 이름·이메일 치환
+  - `rewrite_branches(stream, branch_map)` — 브랜치 ref 치환
+  - `load_author_map(path)` / `load_branch_map(path)` — JSON 매핑 파일 로드
+- `import_.py` 확장:
+  - `--author-map <파일>` 옵션 추가
+  - `--target-branch <이름>` 옵션 추가
+  - `--branch-map <파일>` 옵션 추가
+  - `gitshuttle.toml` `[import.author_map]` / `[import.branch_map]` 섹션 읽기
+- `tests/test_rewrite.py`: 작성자 치환, 브랜치 리네임, 미매핑 원본 유지 테스트
+
+### TDD 사이클
+
+| 단계 | SubAgent | 내용 |
+|------|----------|------|
+| 문서 검증 | SA1 | PRD 3.6(Rewrite) 스펙, import 옵션 명세 확인 |
+| 구현 | SA2 | fast-export/import 파이프라인 + 매핑 치환 단위 테스트 먼저 |
+| 검증 | SA3+SA4 | 작성자 치환 커버리지 + 원본 유지 케이스 포함 |
+
+### 수락 기준
+- [ ] `gitshuttle import --file shuttle.bundle --author-map map.json` → 작성자 치환 후 반영
+- [ ] `gitshuttle import --file shuttle.bundle --target-branch ext-main` → 브랜치명 변경 후 반영
+- [ ] `gitshuttle import --file shuttle.bundle --branch-map map.json` → 복수 브랜치 매핑 적용
+- [ ] 매핑 테이블에 없는 작성자는 원본 유지 + 경고 메시지 출력
+- [ ] `gitshuttle.toml`의 `[import.author_map]` / `[import.branch_map]` 섹션 적용
+- [ ] CLI 옵션이 toml 설정보다 우선
+
+### SA2 호출 프롬프트
+```
+Sprint 4b: Import Rewrite 구현.
+rewrite.py(rewrite_authors, rewrite_branches — git fast-export/fast-import 파이프라인),
+import_.py 확장(--author-map, --target-branch, --branch-map 옵션),
+config.py 확장([import.author_map], [import.branch_map] 섹션).
+미매핑 작성자 원본 유지 + 경고 케이스 테스트 필수.
+```
+
+---
+
 ## Sprint 5 — 분할 압축 + E2E 통합
 
 **목표:** 분할 압축 지원 및 E2E 검증 (토큰 사용량 다른 Sprint 수준으로 제한)
@@ -365,6 +408,7 @@ mock GitHub으로 단위 테스트 필수.
 | 2 | 1 | Export + TUI | ui/tui.py, manifest.py, export_.py |
 | 3 | 1 | UI 모드 + Config | csv/html/prompt ui, config.py |
 | 4 | 1 | Import | import_.py, 충돌 처리 3케이스 |
+| 4b | 1 | Import Rewrite | rewrite.py, 작성자 매핑, 브랜치 리네임 |
 | 5 | 1 | 대용량 + E2E | split archive, E2E 테스트 |
 | 6 | 1 | 빌드 | gitshuttle.exe, build.ps1 |
 | 7 | 2 | Direct Sync | github_auth.py, sync_.py, config 확장 |
@@ -380,6 +424,7 @@ main          ← 릴리즈 브랜치 (각 Sprint 완료 후 merge)
   └── sprint/2-export-tui
   └── sprint/3-ui-config
   └── sprint/4-import
+  └── sprint/4b-import-rewrite
   └── sprint/5-e2e
   └── sprint/6-build
   └── sprint/7-direct-sync

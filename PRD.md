@@ -78,7 +78,68 @@ Phase 1에서 커밋 선택은 아래 방식 중 하나(또는 조합)로 구현
 - import 시 SHA-256 체크섬 불일치가 발생하면 명확한 오류 메시지(기대값 vs 실제값)를 출력하고 작업을 중단.
 - 복구 방법: 소스 측에서 동일 조건으로 재export하도록 안내 메시지와 재실행 명령어를 자동 출력.
 
-### 3.6 Direct Sync — 두 GitHub 간 직접 동기화 (Phase 2 추가)
+### 3.6 Import-time Rewrite — 작성자 매핑 & 브랜치 리네임 (Phase 1 추가)
+
+리포지토리가 다를 경우 소스 커밋의 작성자 정보와 브랜치명이 타겟 조직과 맞지 않는 문제를 import 시점에 재작성한다.
+
+#### 3.6.1 작성자 매핑 (Author Mapping)
+
+- **문제:** 소스 repo의 커밋 작성자(이름·이메일)가 타겟 조직의 내부 계정과 다름.
+- **기능:** import 시 `--author-map <파일>` 플래그 또는 `gitshuttle.toml`의 `[import.author_map]` 섹션으로 작성자 일괄 대체.
+- **매핑 형식 (JSON):**
+  ```json
+  {
+    "Jane Doe <jane@external.com>": "홍길동 <hong@internal.com>",
+    "Bob Smith <bob@external.com>": "이철수 <lee@internal.com>"
+  }
+  ```
+- **toml 형식:**
+  ```toml
+  [import.author_map]
+  "Jane Doe <jane@external.com>" = "홍길동 <hong@internal.com>"
+  "Bob Smith <bob@external.com>" = "이철수 <lee@internal.com>"
+  ```
+- **구현:** `git fast-export | (작성자 치환) | git fast-import` 파이프라인 사용.
+- **미매핑 처리:** 매핑 테이블에 없는 작성자는 원본 그대로 유지 (경고 메시지 출력).
+
+#### 3.6.2 브랜치 리네임 (Branch Rename)
+
+- **문제:** 소스의 브랜치명이 타겟 조직의 네이밍 규칙과 다름 (예: 소스 `main` → 타겟 `external-main`).
+- **기능:** `--target-branch <이름>` 플래그로 import할 브랜치명 지정.
+  - 복수 브랜치 매핑: `--branch-map <파일>` (JSON) 또는 toml `[import.branch_map]` 섹션.
+- **브랜치 매핑 형식 (JSON):**
+  ```json
+  {
+    "main": "ext-main",
+    "develop": "ext-develop"
+  }
+  ```
+- **단일 브랜치 CLI 예시:**
+  ```
+  gitshuttle import --file shuttle.bundle --target-branch ext-main
+  ```
+- **구현:** bundle unbundle 후 `git branch -m <old> <new>` 또는 fast-import 시 ref 치환.
+
+#### 3.6.3 결합 사용 예시
+
+```
+gitshuttle import \
+  --file shuttle_240522.bundle \
+  --author-map author_map.json \
+  --target-branch ext-main
+```
+
+#### 3.6.4 명령어 옵션 요약
+
+| 옵션 | 설명 | 기본값 |
+|------|------|--------|
+| `--author-map <파일>` | 작성자 매핑 JSON 파일 경로 | 없음 (원본 유지) |
+| `--target-branch <이름>` | import 브랜치를 지정 이름으로 생성 | 소스 브랜치명 그대로 |
+| `--branch-map <파일>` | 브랜치명 매핑 JSON 파일 경로 | 없음 (원본 유지) |
+
+---
+
+### 3.7 Direct Sync — 두 GitHub 간 직접 동기화 (Phase 2 추가)
 네트워크가 연결된 단일 망 환경에서 파일 없이 두 GitHub 리포지토리를 직접 동기화한다.
 
 - **`gitshuttle sync` 커맨드:** Source GitHub repo → Target GitHub repo로 선택한 커밋을 직접 전송.
