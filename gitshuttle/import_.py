@@ -6,15 +6,17 @@ run_import:
   3. bundle 내 커밋 목록 조회
   4. 커밋 매칭 (skip / force / abort)
   5. git bundle unbundle → tip 해시 획득
-  6. tip을 현재 브랜치에 merge → ImportResult 반환
+  6. rewrite 파이프라인 (author, branch, timestamp)
+  7. tip을 현재 브랜치에 merge → ImportResult 반환
 
 모든 subprocess 호출: encoding='utf-8', env에 PYTHONIOENCODING='utf-8' 포함.
 """
 from __future__ import annotations
 
 import subprocess
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Optional
 
 from .checksum import _compute_sha256
 from .bundle import verify_bundle
@@ -39,9 +41,10 @@ class ImportConflictError(Exception):
 
 @dataclass
 class ImportResult:
-    imported: int   # 새로 반입된 커밋 수
-    skipped: int    # 이미 존재하여 건너뛴 커밋 수
-    total: int      # bundle 내 전체 커밋 수
+    imported: int          # 새로 반입된 커밋 수
+    skipped: int           # 이미 존재하여 건너뛴 커밋 수
+    total: int             # bundle 내 전체 커밋 수
+    warnings: list[str] = field(default_factory=list)  # 미매핑 작성자 경고 목록
 
 
 # ---------------------------------------------------------------------------
@@ -51,20 +54,28 @@ class ImportResult:
 def run_import(
     bundle_path: Path | str,
     repo_path: Path | str,
-    on_conflict: str = "skip",   # "skip" | "force" | "abort"
+    on_conflict: str = "skip",             # "skip" | "force" | "abort"
     sha256_path: Path | str | None = None,
+    author_map_path: Optional[str] = None, # 작성자 매핑 JSON 경로
+    target_branch: Optional[str] = None,   # 대상 브랜치 (None → "imported/<소스브랜치>")
+    timestamp_mode: str = "now",           # "now" | "original" | "from=DATETIME"
 ) -> ImportResult:
     """bundle 파일을 target repo에 반입한다.
 
     Args:
-        bundle_path:  반입할 .bundle 파일 경로.
-        repo_path:    대상 git 리포지토리 경로.
-        on_conflict:  충돌 처리 방식 — "skip" | "force" | "abort".
-        sha256_path:  SHA-256 체크섬 파일 경로. 미지정 시 bundle_path.sha256 탐색.
-                      체크섬 파일이 없으면 경고 출력 후 검증 생략.
+        bundle_path:      반입할 .bundle 파일 경로.
+        repo_path:        대상 git 리포지토리 경로.
+        on_conflict:      충돌 처리 방식 — "skip" | "force" | "abort".
+        sha256_path:      SHA-256 체크섬 파일 경로. 미지정 시 bundle_path.sha256 탐색.
+                          체크섬 파일이 없으면 경고 출력 후 검증 생략.
+        author_map_path:  작성자 매핑 JSON 파일 경로. None 이면 치환 없음.
+        target_branch:    import 대상 브랜치 이름.
+                          None 이면 "imported/<소스브랜치>" 형식 자동 생성.
+        timestamp_mode:   타임스탬프 재작성 모드.
+                          "now"(기본) | "original" | "from=YYYY-MM-DDTHH:MM:SS"
 
     Returns:
-        ImportResult (imported, skipped, total 포함).
+        ImportResult (imported, skipped, total, warnings 포함).
 
     Raises:
         FileNotFoundError:    bundle 파일이 존재하지 않을 때.
@@ -112,16 +123,60 @@ def run_import(
             )
 
     # ------------------------------------------------------------------
-    # Step 6. bundle unbundle — objects를 target repo에 추가하고 tip 해시 획득
-    # git bundle unbundle은 refs/gitshuttle/* 등 커스텀 ref도 정상 처리
+    # Step 6. rewrite 파이프라인 — author·branch·timestamp 재작성
+    #
+    # rewrite가 필요한 경우: fast-export → apply_rewrites → fast-import
+    # rewrite가 불필요한 경우: 기존 unbundle 방식 사용 (호환성 유지)
     # ------------------------------------------------------------------
-    tip_hashes = _unbundle(bundle_path, repo_path)
+    rewrite_needed = (
+        author_map_path is not None
+        or target_branch is not None
+        or timestamp_mode != "now"
+    )
 
-    # ------------------------------------------------------------------
-    # Step 7. tip 해시를 현재 브랜치에 merge
-    # ------------------------------------------------------------------
-    for tip_hash in tip_hashes:
-        _merge_tip(repo_path, tip_hash)
+    rewrite_warnings: list[str] = []
+
+    if rewrite_needed:
+        # bundle에서 소스 브랜치 이름 감지 (target_branch 기본값 생성용)
+        source_branch = _detect_source_branch(bundle_path)
+        effective_target_branch = (
+            target_branch
+            if target_branch is not None
+            else f"imported/{source_branch}"
+        )
+
+        # from= 타임스탬프 파싱
+        from_dt = None
+        effective_ts_mode = timestamp_mode
+        if timestamp_mode.startswith("from="):
+            from_dt = _parse_from_datetime(timestamp_mode[len("from="):])
+            effective_ts_mode = "from"
+
+        # 작성자 매핑 로드
+        from .rewrite import load_author_map
+        author_map = load_author_map(author_map_path) if author_map_path else {}
+
+        # fast-export → rewrite → fast-import (임시 bare repo 경유)
+        tip_hashes, rewrite_warnings = _rewrite_and_import(
+            bundle_path=bundle_path,
+            repo_path=repo_path,
+            author_map=author_map,
+            target_branch=effective_target_branch,
+            timestamp_mode=effective_ts_mode,
+            from_dt=from_dt,
+        )
+    else:
+        # ------------------------------------------------------------------
+        # Step 6b. bundle unbundle — objects를 target repo에 추가하고 tip 해시 획득
+        # git bundle unbundle은 refs/gitshuttle/* 등 커스텀 ref도 정상 처리
+        # ------------------------------------------------------------------
+        tip_hashes = _unbundle(bundle_path, repo_path)
+
+        # ------------------------------------------------------------------
+        # Step 7. tip 해시를 현재 브랜치에 merge
+        # ------------------------------------------------------------------
+        for tip_hash in tip_hashes:
+            _merge_tip(repo_path, tip_hash)
 
     # ------------------------------------------------------------------
     # Step 8. ImportResult 계산 — before/after 비교로 정확한 커밋 수 집계
@@ -133,7 +188,12 @@ def run_import(
     skipped = len(duplicates) if on_conflict == "skip" else 0
     total = imported + skipped
 
-    return ImportResult(imported=imported, skipped=skipped, total=total)
+    return ImportResult(
+        imported=imported,
+        skipped=skipped,
+        total=total,
+        warnings=rewrite_warnings,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -353,3 +413,167 @@ def _merge_tip(repo_path: Path, tip_hash: str) -> None:
         except RuntimeError:
             pass
         raise
+
+
+def _detect_source_branch(bundle_path: Path) -> str:
+    """bundle 파일에서 소스 브랜치 이름을 감지한다.
+
+    git bundle list-heads 출력의 첫 번째 ref에서 브랜치 이름을 추출.
+    감지 실패 시 "main"을 반환.
+    """
+    result = subprocess.run(
+        ["git", "bundle", "list-heads", str(bundle_path)],
+        capture_output=True,
+        encoding='utf-8',
+        env=_git_env(),
+    )
+    if result.returncode != 0 or not result.stdout.strip():
+        return "main"
+
+    for line in result.stdout.strip().splitlines():
+        parts = line.strip().split(None, 1)
+        if len(parts) == 2:
+            ref = parts[1]
+            if ref.startswith("refs/heads/"):
+                return ref[len("refs/heads/"):]
+
+    return "main"
+
+
+def _parse_from_datetime(dt_str: str):
+    """'from=YYYY-MM-DDTHH:MM:SS' 형식의 문자열을 datetime으로 파싱한다.
+
+    timezone 없으면 UTC로 처리.
+    """
+    from datetime import datetime, timezone
+
+    # 지원 형식 목록
+    formats = [
+        "%Y-%m-%dT%H:%M:%S",
+        "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%d",
+    ]
+    for fmt in formats:
+        try:
+            dt = datetime.strptime(dt_str.strip(), fmt)
+            return dt.replace(tzinfo=timezone.utc)
+        except ValueError:
+            continue
+
+    raise ValueError(
+        f"타임스탬프 형식을 인식할 수 없습니다: {dt_str!r}\n"
+        "허용 형식: YYYY-MM-DDTHH:MM:SS, YYYY-MM-DD HH:MM:SS, YYYY-MM-DD"
+    )
+
+
+def _rewrite_and_import(
+    bundle_path: Path,
+    repo_path: Path,
+    author_map: dict,
+    target_branch: str,
+    timestamp_mode: str,
+    from_dt,
+) -> tuple[list[str], list[str]]:
+    """fast-export → apply_rewrites → fast-import 파이프라인.
+
+    1. 임시 bare repo에 bundle을 fetch
+    2. git fast-export로 스트림 추출
+    3. apply_rewrites로 재작성
+    4. git fast-import로 target repo에 반영
+    5. target repo에서 target_branch를 fetch
+
+    Returns:
+        (tip_hashes, warnings)
+    """
+    import tempfile
+    import shutil
+    from .rewrite import apply_rewrites
+
+    tmp_dir = Path(tempfile.mkdtemp(prefix="gs_rewrite_"))
+    try:
+        # 임시 bare repo 초기화
+        subprocess.run(
+            ["git", "init", "--bare", str(tmp_dir)],
+            capture_output=True,
+            encoding='utf-8',
+            env=_git_env(),
+            check=True,
+        )
+
+        # bundle → 임시 bare repo fetch
+        fetch_result = subprocess.run(
+            ["git", "fetch", str(bundle_path), "+refs/*:refs/*"],
+            cwd=tmp_dir,
+            capture_output=True,
+            encoding='utf-8',
+            env=_git_env(),
+        )
+        if fetch_result.returncode != 0:
+            raise ValueError(f"bundle fetch 실패:\n{fetch_result.stderr}")
+
+        # 임시 bare repo에서 fast-export 스트림 추출
+        export_result = subprocess.run(
+            ["git", "fast-export", "--all"],
+            cwd=tmp_dir,
+            capture_output=True,
+            encoding='utf-8',
+            errors='surrogateescape',
+            env=_git_env(),
+        )
+        if export_result.returncode != 0:
+            raise ValueError(f"fast-export 실패:\n{export_result.stderr}")
+
+        stream = export_result.stdout
+
+        # rewrite 파이프라인 적용
+        rewritten_stream, warnings = apply_rewrites(
+            stream=stream,
+            author_map=author_map,
+            target_branch=target_branch,
+            timestamp_mode=timestamp_mode,
+            from_dt=from_dt,
+        )
+
+        # target repo에 git fast-import로 반영
+        # 바이너리 모드로 전달해야 Windows에서 \r\n 변환을 방지할 수 있음
+        fi_env = {
+            **_git_env(),
+            'GIT_AUTHOR_NAME': 'GitShuttle',
+            'GIT_AUTHOR_EMAIL': 'gitshuttle@local',
+            'GIT_COMMITTER_NAME': 'GitShuttle',
+            'GIT_COMMITTER_EMAIL': 'gitshuttle@local',
+        }
+        import_result = subprocess.run(
+            ["git", "fast-import", "--quiet"],
+            cwd=repo_path,
+            input=rewritten_stream.encode('utf-8'),
+            capture_output=True,
+            env=fi_env,
+        )
+        if import_result.returncode != 0:
+            stderr_text = import_result.stderr.decode('utf-8', errors='replace') if import_result.stderr else ''
+            raise ValueError(f"fast-import 실패:\n{stderr_text}")
+
+        # target_branch에서 HEAD 업데이트 (checkout or reset)
+        tip_hashes = _checkout_or_create_branch(repo_path, target_branch)
+
+        return tip_hashes, warnings
+
+    finally:
+        shutil.rmtree(str(tmp_dir), ignore_errors=True)
+
+
+def _checkout_or_create_branch(repo_path: Path, branch: str) -> list[str]:
+    """target_branch의 tip 해시를 반환한다.
+
+    브랜치가 이미 존재하면 tip 해시만 반환.
+    브랜치가 없으면 빈 리스트 반환.
+    """
+    try:
+        tip = run_git(
+            ["rev-parse", f"refs/heads/{branch}"],
+            cwd=repo_path,
+        ).strip()
+        return [tip] if tip else []
+    except RuntimeError:
+        return []

@@ -111,9 +111,25 @@ def export(
 def import_(
     file: Optional[str] = typer.Option(None, "--file", "-f", help=".bundle 파일 경로"),
     on_conflict: str = typer.Option("skip", "--on-conflict", help="충돌 처리 방식 (skip|force|abort)"),
+    author_map: Optional[str] = typer.Option(
+        None,
+        "--author-map",
+        help="작성자 매핑 JSON 파일 경로. CLI > toml > 기본값(없음).",
+    ),
+    target_branch: Optional[str] = typer.Option(
+        None,
+        "--target-branch",
+        help="import 대상 브랜치 이름. 미지정 시 'imported/<소스브랜치>'.",
+    ),
+    timestamp: Optional[str] = typer.Option(
+        None,
+        "--timestamp",
+        help="타임스탬프 재작성 모드 (now|original|from=DATETIME). CLI > toml > 기본값(now).",
+    ),
 ) -> None:
     """shuttle 패키지를 현재 리포지토리에 반입합니다."""
     from gitshuttle.import_ import run_import, ChecksumError, ImportConflictError
+    from gitshuttle.config import get_import_config
 
     if not file:
         typer.echo("[오류] --file 옵션이 필요합니다.", err=True)
@@ -124,10 +140,22 @@ def import_(
         typer.echo(f"[오류] 파일을 찾을 수 없습니다: {bundle_path}", err=True)
         raise typer.Exit(1)
 
+    # toml 기본값 읽기
+    import_cfg = get_import_config()
+
+    # CLI 옵션 우선 (CLI > toml > 기본값)
+    effective_author_map = author_map if author_map is not None else import_cfg.get("author_map")
+    effective_timestamp = timestamp if timestamp is not None else import_cfg.get("timestamp", "now")
+
     repo_path = Path.cwd()
-    typer.echo(f"bundle   : {bundle_path}")
-    typer.echo(f"target   : {repo_path}")
-    typer.echo(f"conflict : {on_conflict}")
+    typer.echo(f"bundle        : {bundle_path}")
+    typer.echo(f"target        : {repo_path}")
+    typer.echo(f"conflict      : {on_conflict}")
+    if target_branch:
+        typer.echo(f"target-branch : {target_branch}")
+    if effective_author_map:
+        typer.echo(f"author-map    : {effective_author_map}")
+    typer.echo(f"timestamp     : {effective_timestamp}")
     typer.echo("반입을 시작합니다...")
 
     try:
@@ -135,6 +163,9 @@ def import_(
             bundle_path=bundle_path,
             repo_path=repo_path,
             on_conflict=on_conflict,
+            author_map_path=effective_author_map,
+            target_branch=target_branch,
+            timestamp_mode=effective_timestamp,
         )
     except ChecksumError as e:
         typer.echo(f"\n[오류] {e}", err=True)
@@ -145,6 +176,12 @@ def import_(
     except (FileNotFoundError, ValueError) as e:
         typer.echo(f"\n[오류] {e}", err=True)
         raise typer.Exit(1)
+
+    # 미매핑 작성자 경고 출력
+    if result.warnings:
+        typer.echo("\n[경고] 매핑되지 않은 작성자:", err=True)
+        for w in result.warnings:
+            typer.echo(f"  {w}", err=True)
 
     typer.echo("\nimport 완료.")
     typer.echo(f"  imported : {result.imported}개")

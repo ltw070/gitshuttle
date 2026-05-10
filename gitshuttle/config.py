@@ -143,6 +143,48 @@ def run_config_wizard(config_path: Optional[Path] = None) -> None:
     print(f"설정 저장 완료: ui = {selected_mode}")
 
 
+def get_import_config(config_path: Path | str | None = None) -> dict:
+    """gitshuttle.toml의 [import] 섹션을 읽어 반환한다.
+
+    반환값 예시:
+    {
+        'author_map': 'map.json',   # 파일 경로 문자열 또는 None
+        'timestamp':  'now',        # "now" | "original" | "from=..."
+    }
+
+    파일 없거나 [import] 섹션 없으면 기본값 반환:
+    {
+        'author_map': None,
+        'timestamp':  'now',
+    }
+
+    Args:
+        config_path: toml 파일 경로. None 이면 기본 경로(gitshuttle.toml).
+
+    Returns:
+        [import] 섹션 설정 dict.
+    """
+    defaults: dict = {"author_map": None, "timestamp": "now"}
+
+    if config_path is None:
+        config_path = Path(CONFIG_FILENAME)
+
+    config_path = Path(config_path)
+    if not config_path.exists():
+        return defaults
+
+    cfg = _parse_sync_toml(config_path)
+    import_section = cfg.get("import", {})
+
+    result = dict(defaults)
+    if "author_map" in import_section:
+        result["author_map"] = import_section["author_map"] or None
+    if "timestamp" in import_section:
+        result["timestamp"] = import_section["timestamp"]
+
+    return result
+
+
 def get_sync_config(config_path: Path | str | None = None) -> dict:
     """gitshuttle.toml의 [sync] 섹션을 읽어 반환한다.
 
