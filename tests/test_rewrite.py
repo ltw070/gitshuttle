@@ -212,6 +212,21 @@ class TestRewriteBranchRef:
         assert "commit refs/heads/imported/feature" in result
         assert "commit refs/heads/feature/foo" not in result
 
+    def test_gitshuttle_tmp_ref_replaced(self):
+        """GitShuttle bundle의 refs/gitshuttle/tmp_* ref도 타겟 브랜치로 치환된다."""
+        from gitshuttle.rewrite import rewrite_branch_ref
+
+        stream = (
+            "reset refs/gitshuttle/tmp_abc1234\n"
+            "commit refs/gitshuttle/tmp_abc1234\n"
+            "mark :1\n"
+        )
+        result = rewrite_branch_ref(stream, "migration/gitshuttle-20260610")
+
+        assert "reset refs/heads/migration/gitshuttle-20260610" in result
+        assert "commit refs/heads/migration/gitshuttle-20260610" in result
+        assert "refs/gitshuttle/tmp_abc1234" not in result
+
 
 # ---------------------------------------------------------------------------
 # rewrite_timestamps 테스트
@@ -349,6 +364,57 @@ class TestApplyRewrites:
         # Alice와 Bob 모두 경고에 포함되어야 함
         all_warnings = " ".join(warnings)
         assert "alice@example.com" in all_warnings or "Alice" in all_warnings
+
+
+class TestRewritePreservesDataBlocks:
+    """fast-export data payload는 파일 내용이므로 rewrite 대상에서 제외되어야 한다."""
+
+    def test_apply_rewrites_does_not_modify_blob_payload(self):
+        from gitshuttle.rewrite import apply_rewrites
+
+        payload = (
+            "commit refs/gitshuttle/tmp_abc1234\n"
+            f"author Alice <alice@example.com> {SAMPLE_TS_1} +0900\n"
+            "re.findall(pattern, stream, re.MULTILINE)\n"
+        )
+        payload_size = len(payload.encode("utf-8"))
+        stream = (
+            f"blob\n"
+            f"mark :1\n"
+            f"data {payload_size}\n"
+            f"{payload}"
+            f"reset refs/gitshuttle/tmp_abc1234\n"
+            f"commit refs/gitshuttle/tmp_abc1234\n"
+            f"mark :2\n"
+            f"author Alice <alice@example.com> {SAMPLE_TS_1} +0900\n"
+            f"committer Alice <alice@example.com> {SAMPLE_TS_1} +0900\n"
+            f"data 14\n"
+            f"Initial commit\n"
+            f"\n"
+            f"M 100644 :1 tricky.py\n"
+            f"\n"
+        )
+
+        rewritten, warnings = apply_rewrites(
+            stream=stream,
+            author_map={
+                "alice@example.com": {
+                    "name": "Alice Corp",
+                    "email": "alice@corp.com",
+                }
+            },
+            target_branch="migration/gitshuttle-20260610",
+            timestamp_mode="original",
+        )
+
+        assert warnings == []
+        assert f"data {payload_size}\n{payload}" in rewritten
+        assert "commit refs/heads/migration/gitshuttle-20260610" in rewritten
+        assert "Alice Corp <alice@corp.com>" in rewritten
+        # 원본 ref와 author 문자열은 blob payload 안에만 남아야 한다.
+        assert rewritten.count("commit refs/gitshuttle/tmp_abc1234") == 1
+        assert rewritten.count("Alice <alice@example.com>") == 1
+        assert "re.findall(pattern, stream, re.MULTILINE)" in rewritten
 
 
 # ---------------------------------------------------------------------------

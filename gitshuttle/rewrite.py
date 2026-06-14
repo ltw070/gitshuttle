@@ -15,7 +15,7 @@ import json
 import re
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 
 # ---------------------------------------------------------------------------
@@ -32,11 +32,92 @@ _IDENTITY_RE = re.compile(
     re.MULTILINE,
 )
 
-# "commit refs/heads/BRANCH" 또는 "reset refs/heads/BRANCH"
+# "commit refs/heads/BRANCH", "reset refs/heads/BRANCH",
+# 또는 GitShuttle export bundle의 "refs/gitshuttle/tmp_*" ref.
 _REF_LINE_RE = re.compile(
-    r'^(commit|reset)\s+(refs/heads/)(.+)$',
+    r'^(commit|reset)\s+refs/(heads|gitshuttle)/(.+)$',
     re.MULTILINE,
 )
+
+_DATA_LINE_RE = re.compile(r'^data\s+(\d+)$')
+
+
+# ---------------------------------------------------------------------------
+# fast-export stream helpers
+# ---------------------------------------------------------------------------
+
+def _line_body_and_ending(line: str) -> tuple[str, str]:
+    """라인 본문과 개행을 분리한다."""
+    if line.endswith("\n"):
+        return line[:-1], "\n"
+    return line, ""
+
+
+def _data_size(line: str) -> int | None:
+    """fast-export 'data N' 라인의 N을 반환한다."""
+    body, _ = _line_body_and_ending(line)
+    m = _DATA_LINE_RE.match(body)
+    if not m:
+        return None
+    return int(m.group(1))
+
+
+def _iter_control_lines(stream: str):
+    """data payload를 제외한 fast-export control line을 순회한다.
+
+    fast-export의 `data N` 다음 N바이트는 파일 내용이나 커밋 메시지이므로
+    control line처럼 해석하거나 치환하면 안 된다.
+    """
+    raw = stream.encode('utf-8', errors='surrogateescape')
+    pos = 0
+    raw_len = len(raw)
+
+    while pos < raw_len:
+        newline_at = raw.find(b"\n", pos)
+        if newline_at == -1:
+            line_bytes = raw[pos:]
+            pos = raw_len
+        else:
+            line_bytes = raw[pos:newline_at + 1]
+            pos = newline_at + 1
+
+        line = line_bytes.decode('utf-8', errors='surrogateescape')
+        yield line
+
+        size = _data_size(line)
+        if size is not None:
+            pos += size
+
+
+def _rewrite_control_lines(
+    stream: str,
+    rewrite_line: Callable[[str], str],
+) -> str:
+    """data payload를 보존하며 control line만 재작성한다."""
+    raw = stream.encode('utf-8', errors='surrogateescape')
+    out = bytearray()
+    pos = 0
+    raw_len = len(raw)
+
+    while pos < raw_len:
+        newline_at = raw.find(b"\n", pos)
+        if newline_at == -1:
+            line_bytes = raw[pos:]
+            pos = raw_len
+        else:
+            line_bytes = raw[pos:newline_at + 1]
+            pos = newline_at + 1
+
+        line = line_bytes.decode('utf-8', errors='surrogateescape')
+        rewritten = rewrite_line(line)
+        out.extend(rewritten.encode('utf-8', errors='surrogateescape'))
+
+        size = _data_size(line)
+        if size is not None:
+            out.extend(raw[pos:pos + size])
+            pos += size
+
+    return bytes(out).decode('utf-8', errors='surrogateescape')
 
 
 # ---------------------------------------------------------------------------
@@ -87,7 +168,12 @@ def rewrite_authors(
     warnings: list[str] = []
     unmapped_seen: set[str] = set()
 
-    def _replace(m: re.Match) -> str:
+    def _rewrite_line(line: str) -> str:
+        body, ending = _line_body_and_ending(line)
+        m = _IDENTITY_RE.match(body)
+        if not m:
+            return line
+
         role = m.group(1)       # "author" or "committer"
         name = m.group(2)       # 원본 이름
         email = m.group(3)      # 원본 이메일
@@ -102,18 +188,19 @@ def rewrite_authors(
             if email not in unmapped_seen:
                 unmapped_seen.add(email)
                 warnings.append(f"미매핑 작성자: {name} <{email}>")
-            return m.group(0)
+            return line
 
-        return f"{role} {new_name} <{new_email}> {ts} {tz}"
+        return f"{role} {new_name} <{new_email}> {ts} {tz}{ending}"
 
-    rewritten = _IDENTITY_RE.sub(_replace, stream)
+    rewritten = _rewrite_control_lines(stream, _rewrite_line)
     return rewritten, warnings
 
 
 def rewrite_branch_ref(stream: str, target_branch: str) -> str:
-    """fast-export 스트림에서 refs/heads/* 를 refs/heads/<target_branch>로 치환한다.
+    """fast-export 스트림에서 import 대상 ref를 refs/heads/<target_branch>로 치환한다.
 
-    'commit refs/heads/BRANCH' 와 'reset refs/heads/BRANCH' 라인만 대상.
+    'commit refs/heads/BRANCH', 'reset refs/heads/BRANCH' 라인과
+    GitShuttle bundle의 'refs/gitshuttle/tmp_*' 라인을 대상으로 한다.
 
     Args:
         stream:        git fast-export 스트림 텍스트.
@@ -122,12 +209,16 @@ def rewrite_branch_ref(stream: str, target_branch: str) -> str:
     Returns:
         치환된 스트림 텍스트.
     """
-    def _replace(m: re.Match) -> str:
-        verb = m.group(1)   # "commit" or "reset"
-        prefix = m.group(2)  # "refs/heads/"
-        return f"{verb} {prefix}{target_branch}"
+    def _rewrite_line(line: str) -> str:
+        body, ending = _line_body_and_ending(line)
+        m = _REF_LINE_RE.match(body)
+        if not m:
+            return line
 
-    return _REF_LINE_RE.sub(_replace, stream)
+        verb = m.group(1)   # "commit" or "reset"
+        return f"{verb} refs/heads/{target_branch}{ending}"
+
+    return _rewrite_control_lines(stream, _rewrite_line)
 
 
 def rewrite_timestamps(
@@ -163,10 +254,18 @@ def rewrite_timestamps(
 
     if mode == "now":
         now_ts = int(datetime.now(tz=timezone.utc).timestamp())
-        return _IDENTITY_RE.sub(
-            lambda m: f"{m.group(1)} {m.group(2)} <{m.group(3)}> {now_ts} {m.group(5)}",
-            stream,
-        )
+
+        def _rewrite_now(line: str) -> str:
+            body, ending = _line_body_and_ending(line)
+            m = _IDENTITY_RE.match(body)
+            if not m:
+                return line
+            return (
+                f"{m.group(1)} {m.group(2)} <{m.group(3)}> "
+                f"{now_ts} {m.group(5)}{ending}"
+            )
+
+        return _rewrite_control_lines(stream, _rewrite_now)
 
     # mode == "from"
     if from_dt is None:
@@ -179,24 +278,34 @@ def rewrite_timestamps(
     else:
         from_ts = int(from_dt.timestamp())
 
-    # 스트림에서 모든 타임스탬프 추출 → 최솟값(기준점) 파악
-    all_timestamps = [int(m.group(4)) for m in _IDENTITY_RE.finditer(stream)]
+    # 스트림에서 data payload를 제외한 모든 타임스탬프 추출 → 최솟값(기준점) 파악
+    all_timestamps = []
+    for line in _iter_control_lines(stream):
+        body, _ = _line_body_and_ending(line)
+        m = _IDENTITY_RE.match(body)
+        if m:
+            all_timestamps.append(int(m.group(4)))
     if not all_timestamps:
         return stream
 
     original_base = min(all_timestamps)
     offset = from_ts - original_base
 
-    def _shift(m: re.Match) -> str:
+    def _shift(line: str) -> str:
+        body, ending = _line_body_and_ending(line)
+        m = _IDENTITY_RE.match(body)
+        if not m:
+            return line
+
         role = m.group(1)
         name = m.group(2)
         email = m.group(3)
         orig_ts = int(m.group(4))
         tz = m.group(5)
         new_ts = orig_ts + offset
-        return f"{role} {name} <{email}> {new_ts} {tz}"
+        return f"{role} {name} <{email}> {new_ts} {tz}{ending}"
 
-    return _IDENTITY_RE.sub(_shift, stream)
+    return _rewrite_control_lines(stream, _shift)
 
 
 def apply_rewrites(

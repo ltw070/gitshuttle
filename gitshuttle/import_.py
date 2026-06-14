@@ -546,7 +546,7 @@ def _rewrite_and_import(
         import_result = subprocess.run(
             ["git", "fast-import", "--quiet"],
             cwd=repo_path,
-            input=rewritten_stream.encode('utf-8'),
+            input=rewritten_stream.encode('utf-8', errors='surrogateescape'),
             capture_output=True,
             env=fi_env,
         )
