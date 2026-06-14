@@ -12,6 +12,7 @@ git bundle create 동작 방식:
 from __future__ import annotations
 
 import subprocess
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
@@ -20,6 +21,13 @@ from .git_ops import run_git, Commit, _git_env
 
 # 임시 ref 네임스페이스 — 다른 refs 와 충돌하지 않도록
 _TMP_REF_NS = "refs/gitshuttle/tmp"
+
+
+@dataclass
+class BundleVerifyResult:
+    """git bundle verify 실행 결과."""
+    valid: bool
+    message: str = ""
 
 
 def create_bundle(
@@ -209,10 +217,21 @@ def verify_bundle(
         True  — bundle이 유효함.
         False — 파일 없음, 손상, git 오류 등 모든 실패 케이스.
     """
+    return verify_bundle_detailed(bundle_path, repo_path=repo_path).valid
+
+
+def verify_bundle_detailed(
+    bundle_path: Path | str,
+    repo_path: Path | str | None = None,
+) -> BundleVerifyResult:
+    """git bundle verify 결과와 상세 메시지를 반환한다."""
     bundle_path = Path(bundle_path)
 
     if not bundle_path.exists():
-        return False
+        return BundleVerifyResult(
+            valid=False,
+            message=f"bundle 파일을 찾을 수 없습니다: {bundle_path}",
+        )
 
     try:
         result = subprocess.run(
@@ -222,6 +241,14 @@ def verify_bundle(
             encoding='utf-8',
             env=_git_env(),
         )
-        return result.returncode == 0
-    except Exception:
-        return False
+        message = "\n".join(
+            part.strip()
+            for part in (result.stdout, result.stderr)
+            if part and part.strip()
+        )
+        return BundleVerifyResult(
+            valid=result.returncode == 0,
+            message=message,
+        )
+    except Exception as exc:
+        return BundleVerifyResult(valid=False, message=str(exc))

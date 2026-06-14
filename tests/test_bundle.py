@@ -100,6 +100,31 @@ def test_verify_bundle_uses_repo_path(tmp_path, monkeypatch):
     assert captured["cwd"] == repo_path
 
 
+def test_verify_bundle_detailed_includes_git_output(tmp_path, monkeypatch):
+    """verify_bundle_detailed는 git bundle verify 실패 출력을 보존한다."""
+    import gitshuttle.bundle as bundle_module
+    from gitshuttle.bundle import verify_bundle_detailed
+
+    bundle_path = tmp_path / "test.bundle"
+    bundle_path.write_bytes(b"fake bundle content")
+
+    def fake_run(args, cwd=None, capture_output=True, encoding="utf-8", env=None):
+        return subprocess.CompletedProcess(
+            args=args,
+            returncode=1,
+            stdout="",
+            stderr="error: Repository lacks these prerequisite commits:\nabc123\n",
+        )
+
+    monkeypatch.setattr(bundle_module.subprocess, "run", fake_run)
+
+    result = verify_bundle_detailed(bundle_path)
+
+    assert result.valid is False
+    assert "Repository lacks these prerequisite commits" in result.message
+    assert "abc123" in result.message
+
+
 def test_verify_bundle_invalid(tmp_path):
     """존재하지 않는 파일 → verify_bundle → False를 반환해야 한다."""
     from gitshuttle.bundle import verify_bundle

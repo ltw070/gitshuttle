@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Optional
 
 from .checksum import _compute_sha256
-from .bundle import verify_bundle
+from .bundle import verify_bundle_detailed
 from .git_ops import run_git, _git_env
 
 
@@ -100,8 +100,9 @@ def run_import(
     # ------------------------------------------------------------------
     # Step 3. git bundle verify
     # ------------------------------------------------------------------
-    if not verify_bundle(bundle_path, repo_path=repo_path):
-        raise ValueError(f"bundle 검증 실패: {bundle_path}")
+    verify_result = verify_bundle_detailed(bundle_path, repo_path=repo_path)
+    if not verify_result.valid:
+        raise ValueError(_format_bundle_verify_failure(bundle_path, verify_result.message))
 
     # ------------------------------------------------------------------
     # Step 4. target repo의 기존 커밋 해시 집합 (unbundle 이전 스냅샷)
@@ -254,6 +255,26 @@ def _verify_checksum(
             f"\n파일이 손상되었을 수 있습니다.\n"
             f"재export 방법: 소스 측에서 'gitshuttle export' 를 다시 실행하세요."
         )
+
+
+def _format_bundle_verify_failure(bundle_path: Path, detail: str) -> str:
+    """bundle verify 실패 원인과 복구 방법을 사용자에게 안내한다."""
+    lines = [f"bundle 검증 실패: {bundle_path}"]
+    if detail:
+        lines.extend(["", detail])
+
+    lines.extend([
+        "",
+        "가능한 원인:",
+        "- 최근 1~2개처럼 일부 커밋만 export한 bundle은 대상 repo에 그 직전 원본 부모 커밋 SHA가 있어야 합니다.",
+        "- 대상 repo에 이전 이력이 없거나, 작성자/날짜 rewrite로 기존 커밋 SHA가 바뀐 경우 prerequisite 검증에 실패합니다.",
+        "",
+        "해결 방법:",
+        "- 대상 repo에 원본 부모 커밋이 있는지 확인하세요.",
+        "- 작성자/날짜 rewrite를 적용한 이전이라면 증분 bundle 대신 필요한 전체 범위를 다시 export/import하세요.",
+        "- 안전하게는 새 --target-branch 이름으로 전체 이력을 다시 import한 뒤 검토하세요.",
+    ])
+    return "\n".join(lines)
 
 
 def _get_bundle_commits(bundle_path: Path) -> list[str]:

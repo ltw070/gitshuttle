@@ -960,6 +960,37 @@ git -C C:\repos\target-gitshuttle reset --hard migration/gitshuttle-20260610
 
 ---
 
+**Q. 최근 1~2개 커밋만 export했더니 `bundle 검증 실패`가 납니다.**
+
+일부 커밋만 선택한 bundle은 그 직전 부모 커밋을 prerequisite로 가집니다.  
+따라서 대상 repo에 **원본 부모 커밋 SHA**가 이미 있어야 검증을 통과합니다.
+
+작성자 변경(`--author-map`)이나 날짜 변경(`--timestamp now/from=...`)을 사용해 이전한 repo는 커밋 SHA가 원본과 달라집니다. 이 경우 대상 repo에 이전 이력이 있어 보여도 Git 입장에서는 원본 부모 SHA가 없으므로 최근 2개만 담은 증분 bundle이 실패할 수 있습니다.
+
+해결 방법:
+
+```powershell
+# 안전한 방법: 필요한 전체 범위를 다시 export/import
+$env:GITSHUTTLE_HEADLESS = "1"
+python -m gitshuttle export `
+  --repo C:\repos\source-gitshuttle `
+  --branch main `
+  --ui tui `
+  --output C:\transfer
+Remove-Item Env:\GITSHUTTLE_HEADLESS
+
+python -m gitshuttle import `
+  --repo C:\repos\target-gitshuttle `
+  --file C:\transfer\shuttle_YYMMDD.bundle `
+  --author-map C:\transfer\author_map.json `
+  --target-branch migration/gitshuttle-full-v2 `
+  --timestamp original
+```
+
+증분 업데이트를 계속 쓰려면 이전 import에서 rewrite를 하지 않았고, 대상 repo가 원본 부모 SHA를 그대로 가지고 있어야 합니다.
+
+---
+
 ## 15. 오류 메시지 해설
 
 | 오류 메시지 | 원인 | 해결 방법 |
@@ -967,7 +998,7 @@ git -C C:\repos\target-gitshuttle reset --hard migration/gitshuttle-20260610
 | `Git 2.37 이상이 필요합니다.` | Git 버전이 낮음 | [git-scm.com](https://git-scm.com)에서 최신 버전 설치 |
 | `bundle 파일을 찾을 수 없습니다: ...` | 파일 경로가 잘못됨 | `--file` 뒤에 올바른 경로 입력 |
 | `SHA-256 체크섬 불일치` | 파일 손상 또는 변조 | 외부망에서 재export 후 재전달 |
-| `bundle 검증 실패` | bundle 파일이 손상됨 | 파일 재전달 요청 |
+| `bundle 검증 실패` | bundle 손상 또는 부분 bundle의 prerequisite 커밋이 대상 repo에 없음 | 최근 일부 커밋만 export한 경우 대상 repo에 직전 원본 부모 커밋이 필요함. rewrite로 SHA가 바뀐 대상 repo라면 필요한 전체 범위를 다시 export/import |
 | `이미 존재하는 커밋 N개 — abort` | `--on-conflict abort` 상태에서 중복 발견 | `--on-conflict skip` 또는 `force` 사용 |
 | `선택된 커밋이 없습니다.` | export 시 아무 커밋도 선택하지 않음 | UI에서 커밋을 하나 이상 선택 후 재시도 |
 | `현재 디렉터리에 Git 리포지토리가 없습니다.` | Git 리포지토리가 아닌 폴더에서 실행 | `cd` 로 올바른 폴더로 이동 후 재시도 |

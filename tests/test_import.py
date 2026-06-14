@@ -179,6 +179,34 @@ def test_import_missing_bundle_raises(tmp_path):
         run_import(nonexistent, fake_repo)
 
 
+def test_import_bundle_verify_failure_has_prerequisite_hint(tmp_path, monkeypatch):
+    """부분 bundle prerequisite 실패 시 증분/rewrite 안내를 포함한다."""
+    import gitshuttle.import_ as import_module
+
+    bundle_path = tmp_path / "partial.bundle"
+    bundle_path.write_bytes(b"fake bundle")
+    fake_repo = tmp_path / "repo"
+    fake_repo.mkdir()
+
+    monkeypatch.setattr(
+        import_module,
+        "verify_bundle_detailed",
+        lambda bundle_path, repo_path=None: SimpleNamespace(
+            valid=False,
+            message="error: Repository lacks these prerequisite commits:\nabc123",
+        ),
+    )
+
+    with pytest.raises(ValueError) as exc_info:
+        import_module.run_import(bundle_path, fake_repo)
+
+    error_message = str(exc_info.value)
+    assert "Repository lacks these prerequisite commits" in error_message
+    assert "최근 1~2개처럼 일부 커밋만 export" in error_message
+    assert "작성자/날짜 rewrite" in error_message
+    assert "--target-branch" in error_message
+
+
 def test_import_force_overwrites(two_git_repos, tmp_path):
     """force 방식에서 이미 존재하는 커밋이 있어도 오류 없이 계속 진행한다."""
     from gitshuttle.import_ import run_import

@@ -64,7 +64,7 @@ gitshuttle/                   17개 모듈, 2,724 라인
     ├── html_ui.py            단일 HTML (인터넷 불필요), selection.json 파싱
     └── prompt_ui.py          InquirerPy 방향키 멀티셀렉트
 
-tests/                        15개 테스트 파일, 145개 테스트
+tests/                        15개 테스트 파일, 147개 테스트
 ├── conftest.py               임시 git repo 픽스처
 ├── test_git_ops.py
 ├── test_bundle.py
@@ -148,7 +148,7 @@ gitshuttle sync     (Phase 2 — Python API 단계)
 ### 테스트 현황
 
 ```
-현재 수집 테스트: 145개
+현재 수집 테스트: 147개
 커버리지 대상 모듈: git_ops, bundle, checksum, manifest, export_, import_,
                    rewrite, config, sync, ui(csv/html/prompt), build
 ```
@@ -259,6 +259,12 @@ rewrite import 완료 후 `_checkout_or_create_branch()`가 대상 브랜치로 
 `.sha256` 파일이 없으면 `[경고]` 메시지를 출력하고 검증을 건너뜁니다.
 보안 정책에 따라 검증을 강제화해야 하는 환경에서는 `--require-checksum` 옵션 추가가 필요할 수 있습니다.
 
+#### Y2-1. 부분 bundle prerequisite 실패 안내 (`bundle.py`, `import_.py`)
+
+최근 1~2개 커밋만 선택한 bundle은 직전 부모 커밋을 prerequisite로 가집니다.  
+대상 repo가 원본 부모 SHA를 갖고 있지 않거나, author/timestamp rewrite로 SHA가 바뀐 경우 `git bundle verify`가 실패합니다.
+`verify_bundle_detailed()`와 import 오류 메시지가 이 원인을 사용자에게 설명하는지 확인해 주세요.
+
 #### Y3. `_detect_source_branch` fallback (`import_.py:~390`)
 
 bundle에 named ref가 없으면 `"main"` 을 fallback으로 반환합니다.
@@ -290,7 +296,7 @@ Phase 2 승인 전 코드가 임의로 호출되지 않도록 `__all__` 제한�
 
 ### 🟢 확인 완료
 
-- **테스트 145개 수집 확인** — 전체 suite는 환경에 따라 장시간 실행될 수 있음
+- **테스트 147개 수집 확인** — 전체 suite는 환경에 따라 장시간 실행될 수 있음
 - **UTF-8 / 한글 처리** — 모든 파일 I/O, subprocess, TUI에 인코딩 명시
 - **망분리 제약** — 외부 네트워크 호출 코드 없음 (sync_.py는 명시적 Phase 2 API)
 - **Breaking Changes 없음** — 기존 `gitshuttle import --file <bundle>` 호환 유지

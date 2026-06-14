@@ -194,6 +194,10 @@ git push -u origin main
 **시나리오:** 예제 1에서 이전한 레포에 다음 10개 커밋(#11~#20)을 추가로 이전합니다.  
 bundle 파일을 `C:\shuttle_transfer\`에 저장해 두었다가 내부망에서 반입하는 흐름을 시뮬레이션합니다.
 
+> 증분 bundle은 대상 repo에 직전 원본 부모 커밋 SHA가 있어야 검증됩니다.  
+> 작성자/날짜 rewrite를 적용해 커밋 SHA가 바뀐 대상 repo에서는 최근 몇 개 커밋만 담은 증분 bundle이 `bundle 검증 실패`가 될 수 있습니다.
+> 그 경우 필요한 전체 범위를 다시 export/import하세요.
+
 ### 사전 준비
 
 - 예제 1이 완료된 상태 (`gitshuttle_copyTest`에 커밋 10개 존재)

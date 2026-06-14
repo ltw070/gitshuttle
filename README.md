@@ -146,6 +146,10 @@ rewrite import 후에는 대상 브랜치로 checkout/reset 되어 작업 폴더
 
 import 시 SHA-256 체크섬이 자동 검증됩니다. 불일치 시 작업이 중단되며 재export 방법이 안내됩니다.
 
+최근 1~2개처럼 일부 커밋만 export한 bundle은 대상 repo에 그 직전 **원본 부모 커밋 SHA**가 있어야 검증됩니다.
+작성자/날짜 rewrite를 적용한 대상 repo는 커밋 SHA가 바뀌므로, 이런 증분 bundle이 `bundle 검증 실패`가 될 수 있습니다.
+rewrite 이전은 필요한 전체 범위를 한 번에 export/import하는 방식이 가장 안전합니다.
+
 **작성자 매핑 JSON 형식:**
 
 ```json
