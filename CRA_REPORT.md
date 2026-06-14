@@ -169,7 +169,7 @@ Sprint 5  →  79 passed
 Sprint 6  →  85 passed
 Sprint 7  → 102 passed
 최종 정리 → 106 passed  (0 failed)
-기능 보강 → 158 collected  (hidden refs, patchset/replay, TUI 단축키 포함)
+기능 보강 → 160 collected  (hidden refs, patchset/replay, TUI 단축키 포함)
 ```
 
 **최근 TDD 사례 — patchset/replay:**
@@ -376,6 +376,7 @@ bundle은 Git object graph를 다루고, patchset은 diff replay를 다룬다.
 
 **성능 관점:**
 patchset import는 일부 커밋 적용 시 가볍지만, patchset export는 커밋마다 metadata 조회와 `git diff --binary`를 수행하므로 많은 커밋에서는 bundle보다 느릴 수 있다.
+이미 적용된 patch는 skip하고, 같은 경로의 다른 내용 충돌은 복구 안내와 함께 중단하도록 보강했다.
 따라서 현재 권장 기준은 다음과 같다.
 
 | 상황 | 권장 방식 |
@@ -650,4 +651,4 @@ Mock 테스트는 "명령 호출 방식", "오류 처리", "토큰 마스킹", "
 
 ---
 
-*GitShuttle · Sprint 0~7 완료 + 기능 보강 · 158 tests collected · patchset/replay 포함*
+*GitShuttle · Sprint 0~7 완료 + 기능 보강 · 160 tests collected · patchset/replay 포함*

@@ -129,6 +129,85 @@ def test_replay_import_duplicate_head_message_requires_confirmation(tmp_path):
     assert count == "1"
 
 
+def test_replay_import_skips_already_applied_patch(tmp_path):
+    """patch 내용이 이미 대상에 적용되어 있으면 새 커밋 없이 건너뛴다."""
+    from gitshuttle.git_ops import get_commits
+    from gitshuttle.patchset import create_patchset, run_replay_import
+
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    _init_repo(source, "init source")
+    _init_repo(target, "init target")
+    _add_commit(source, "feature.txt", "feature", "feat: replay feature")
+    _add_commit(target, "feature.txt", "feature", "chore: already applied")
+
+    commits = get_commits(source)
+    patchset = create_patchset(
+        repo_path=source,
+        commits=[commits[0]],
+        output_dir=tmp_path,
+        filename="feature.patchset",
+        branch="HEAD",
+    )
+
+    result = run_replay_import(
+        patchset_path=patchset,
+        repo_path=target,
+        timestamp_mode="original",
+    )
+
+    count = subprocess.run(
+        ["git", "rev-list", "--count", "HEAD"],
+        cwd=target,
+        check=True,
+        capture_output=True,
+        encoding="utf-8",
+        env=_git_env(),
+    ).stdout.strip()
+
+    assert result.imported == 0
+    assert result.skipped == 1
+    assert "이미 적용된 replay patch" in result.warnings[0]
+    assert count == "2"
+
+
+def test_replay_import_existing_path_conflict_has_recovery_hint(tmp_path):
+    """같은 경로가 다른 내용으로 이미 있으면 복구 안내와 함께 실패한다."""
+    from gitshuttle.git_ops import get_commits
+    from gitshuttle.patchset import create_patchset, run_replay_import
+
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    _init_repo(source, "init source")
+    _init_repo(target, "init target")
+    _add_commit(source, "feature.txt", "source content", "feat: replay feature")
+    _add_commit(target, "feature.txt", "target content", "chore: divergent file")
+
+    commits = get_commits(source)
+    patchset = create_patchset(
+        repo_path=source,
+        commits=[commits[0]],
+        output_dir=tmp_path,
+        filename="feature.patchset",
+        branch="HEAD",
+    )
+
+    try:
+        run_replay_import(
+            patchset_path=patchset,
+            repo_path=target,
+            timestamp_mode="original",
+        )
+    except ValueError as exc:
+        message = str(exc)
+    else:
+        raise AssertionError("conflicting existing path should fail")
+
+    assert "replay patch 적용 실패" in message
+    assert "같은 경로의 파일이 이미" in message
+    assert "그 이후 커밋만 patchset" in message
+
+
 def _write_empty_patchset(path: Path, subject: str) -> None:
     metadata = {
         "type": "gitshuttle-patchset",

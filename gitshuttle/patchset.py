@@ -119,11 +119,18 @@ def run_replay_import(
     timestamp_plan = _build_timestamp_plan(commits, timestamp_mode)
 
     imported = 0
+    skipped = 0
     for index, commit_meta in enumerate(commits):
         patch_bytes = _read_patch_bytes(patchset_path, commit_meta["patch"])
         patch_applied = bool(patch_bytes.strip())
         if patch_applied:
-            _apply_patch(repo_path, patch_bytes)
+            applied = _apply_patch(repo_path, patch_bytes)
+            if not applied:
+                skipped += 1
+                warnings.append(
+                    f"이미 적용된 replay patch 건너뜀: {commit_meta.get('subject', '')}"
+                )
+                continue
 
         author = _mapped_identity(
             commit_meta["author_name"],
@@ -153,7 +160,7 @@ def run_replay_import(
 
     return ReplayResult(
         imported=imported,
-        skipped=0,
+        skipped=skipped,
         total=len(commits),
         warnings=warnings,
     )
@@ -334,18 +341,75 @@ def _parse_from_datetime(value: str) -> datetime:
     )
 
 
-def _apply_patch(repo_path: Path, patch_bytes: bytes) -> None:
+def _apply_patch(repo_path: Path, patch_bytes: bytes) -> bool:
+    """Apply a patch to the repo index.
+
+    Returns False when the exact patch is already applied.
+    """
     result = subprocess.run(
-        ["git", "apply", "--index", "--binary"],
+        ["git", "apply", "--index", "--binary", "--3way"],
         cwd=repo_path,
         input=patch_bytes,
         capture_output=True,
         env=_git_env(),
     )
-    if result.returncode != 0:
-        subprocess.run(["git", "reset", "--hard", "HEAD"], cwd=repo_path, env=_git_env())
-        stderr = result.stderr.decode("utf-8", errors="replace")
-        raise ValueError(f"replay patch 적용 실패:\n{stderr}")
+    if result.returncode == 0:
+        return _has_staged_changes(repo_path)
+
+    stderr = result.stderr.decode("utf-8", errors="replace")
+    _reset_hard(repo_path)
+
+    reverse_check = subprocess.run(
+        ["git", "apply", "--reverse", "--check", "--index", "--binary"],
+        cwd=repo_path,
+        input=patch_bytes,
+        capture_output=True,
+        env=_git_env(),
+    )
+    if reverse_check.returncode == 0:
+        return False
+
+    raise ValueError(_format_patch_apply_failure(stderr))
+
+
+def _reset_hard(repo_path: Path) -> None:
+    subprocess.run(
+        ["git", "reset", "--hard", "HEAD"],
+        cwd=repo_path,
+        capture_output=True,
+        env=_git_env(),
+    )
+
+
+def _has_staged_changes(repo_path: Path) -> bool:
+    result = subprocess.run(
+        ["git", "diff", "--cached", "--quiet", "--exit-code"],
+        cwd=repo_path,
+        capture_output=True,
+        env=_git_env(),
+    )
+    return result.returncode == 1
+
+
+def _format_patch_apply_failure(stderr: str) -> str:
+    detail = stderr.strip()
+    lines = ["replay patch 적용 실패:"]
+    if detail:
+        lines.extend(["", detail])
+
+    lines.extend([
+        "",
+        "가능한 원인:",
+        "- 대상 브랜치에 같은 경로의 파일이 이미 있지만 내용이 달라 patch를 적용할 수 없습니다.",
+        "- 전체 patchset을 이미 파일이 있는 repo에 적용했거나, 이전 변경분 일부가 이미 반영되어 있습니다.",
+        "- 대상 브랜치가 원본 기준과 달라져 cherry-pick/replay 충돌이 발생했습니다.",
+        "",
+        "해결 방법:",
+        "- 이미 반영된 커밋은 선택하지 말고 그 이후 커밋만 patchset으로 다시 생성하세요.",
+        "- 대상 브랜치에서 충돌 파일을 직접 정리한 뒤 다시 replay 하세요.",
+        "- 전체 이력 보존이 목적이면 patchset/replay 대신 bundle import를 사용하세요.",
+    ])
+    return "\n".join(lines)
 
 
 def _commit_index(

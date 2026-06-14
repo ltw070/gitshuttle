@@ -175,6 +175,9 @@ gitshuttle import --repo C:\repos\target --file C:\transfer\shuttle_YYMMDD.patch
 replay import는 대상 브랜치의 마지막 커밋 메시지와 새로 붙일 첫 커밋 메시지가 같을 때만 경고하고 계속 진행 여부를 확인합니다.
 이 방식은 내부 수정이 이미 들어간 브랜치 위에 작업자 책임으로 변경분만 붙일 때 유용하지만, 원본 SHA와 merge topology는 보존하지 않습니다.
 
+이미 같은 변경분이 대상 브랜치에 적용되어 있으면 해당 replay patch는 건너뜁니다.
+같은 경로의 파일이 이미 있지만 내용이 달라 `patch failed`, `patch does not apply`, `already exists in index`가 나는 경우에는 충돌로 보고 중단하며, 이미 반영된 커밋 이후만 다시 선택해 patchset을 만드는 것이 안전합니다.
+
 **작성자 매핑 JSON 형식:**
 
 ```json

@@ -513,6 +513,10 @@ replay는 원본 커밋 객체를 옮기는 것이 아니라 각 커밋의 diff�
 대상 브랜치의 마지막 커밋 메시지와 새로 붙일 첫 replay 커밋 메시지가 같으면 GitShuttle이 한 번만 경고하고 계속 진행 여부를 묻습니다.
 메시지가 다르면 추가 확인 없이 replay를 진행합니다.
 
+이미 같은 변경분이 대상 브랜치에 적용되어 있으면 해당 patch는 자동으로 건너뜁니다.
+하지만 같은 경로의 파일이 이미 있고 내용이 다르면 `patch failed`, `patch does not apply`, `already exists in index` 계열 오류가 날 수 있습니다.
+이 경우 이미 반영된 커밋은 선택하지 말고 그 이후 커밋만 다시 patchset으로 만들거나, 대상 브랜치에서 충돌 파일을 직접 정리한 뒤 다시 실행하세요.
+
 ---
 
 ## 8. config — 기본 설정 변경하기
@@ -1044,6 +1048,7 @@ python -m gitshuttle import `
 | `bundle unbundle 실패` | bundle 사전 조건(prerequisite)을 만족 못 함 | 전체 히스토리 포함한 bundle로 재export |
 | `Not updating refs/heads/... does not contain ...` | 대상 브랜치가 이미 있고 새 import 이력이 기존 tip을 포함하지 않음 | 다른 `--target-branch` 사용, 기존 로컬 브랜치 삭제, 또는 `--on-conflict force` 사용 |
 | 이력은 있는데 파일이 안 보임 | ref/object는 갱신됐지만 작업 폴더가 target branch tip으로 갱신되지 않음 | 최신 버전 사용. 이미 발생했다면 `git switch <브랜치>` 후 `git reset --hard <브랜치>` |
+| `replay patch 적용 실패`, `patch failed`, `already exists in index` | replay patch가 대상 브랜치의 현재 파일 상태와 충돌함 | 이미 같은 변경분이면 최신 버전에서 자동 skip. 내용이 다르면 이미 반영된 커밋 이후만 다시 선택하거나 충돌 파일을 정리 후 재실행 |
 | `작성자 매핑 파일을 찾을 수 없습니다: ...` | `--author-map` 경로가 잘못됨 | JSON 파일 경로 확인 |
 | `타임스탬프 형식 오류: ...` | `from=` 모드에서 datetime 형식이 틀림 | `YYYY-MM-DDTHH:MM:SS` 형식으로 입력 |
 
