@@ -238,6 +238,8 @@ gitshuttle export [OPTIONS]
 | `--ui [tui\|csv\|html\|prompt]` | 커밋 선택 방식 | `--ui csv` |
 | `--output TEXT` | 출력 경로 지정 | `--output C:\transfer` |
 | `--format [bundle\|patchset]` | 패키지 형식. `patchset`은 replay/cherry-pick용 | `--format patchset` |
+| `--patchset-compression [fast\|stored\|deflated]` | patchset 압축 방식. `stored`는 무압축이라 빠르지만 파일이 큼 | `--patchset-compression stored` |
+| `--recent INTEGER` | UI 없이 최신 N개 커밋만 바로 선택 | `--recent 2` |
 
 ### 실행 예시
 
@@ -259,6 +261,12 @@ gitshuttle export --output C:\transfer
 
 # 기준점 없이 cherry-pick처럼 붙일 patchset 생성
 gitshuttle export --format patchset --output C:\transfer
+
+# 최신 2개 커밋만 TUI 없이 빠르게 patchset 생성
+gitshuttle export --repo C:\projects\my-repo --branch main --format patchset --recent 2 --output C:\transfer
+
+# patchset 생성 속도 우선: zip 무압축 저장
+gitshuttle export --format patchset --patchset-compression stored --output C:\transfer
 ```
 
 ### 모든 커밋을 선택하고 TUI를 건너뛰기
@@ -272,6 +280,8 @@ Remove-Item Env:\GITSHUTTLE_HEADLESS
 ```
 
 `GITSHUTTLE_HEADLESS=1`은 테스트·자동화용 우회 모드입니다. 설정되어 있는 동안 TUI 선택 없이 전체 커밋이 선택됩니다.
+
+일부 커밋만 빠르게 선택하려면 headless보다 `--recent N`이 더 적합합니다. 이 옵션은 커밋 목록 조회 단계부터 최신 N개로 제한하므로, 큰 repo에서 TUI나 전체 로그 스캔 비용을 줄입니다.
 
 ### 실행 결과
 
@@ -496,7 +506,7 @@ gitshuttle import \
 기준점 hidden ref 없이 작업자가 책임지고 변경분만 이어 붙이고 싶다면 `patchset` + `replay` 방식을 사용합니다.
 
 ```
-gitshuttle export --repo C:\projects\source --branch main --format patchset --output C:\transfer
+gitshuttle export --repo C:\projects\source --branch main --format patchset --recent 2 --output C:\transfer
 
 gitshuttle import ^
   --repo C:\projects\target ^
@@ -516,6 +526,8 @@ replay는 원본 커밋 객체를 옮기는 것이 아니라 각 커밋의 diff�
 이미 같은 변경분이 대상 브랜치에 적용되어 있으면 해당 patch는 자동으로 건너뜁니다.
 하지만 같은 경로의 파일이 이미 있고 내용이 다르면 `patch failed`, `patch does not apply`, `already exists in index` 계열 오류가 날 수 있습니다.
 이 경우 이미 반영된 커밋은 선택하지 말고 그 이후 커밋만 다시 patchset으로 만들거나, 대상 브랜치에서 충돌 파일을 직접 정리한 뒤 다시 실행하세요.
+
+patchset export는 metadata를 커밋별로 반복 조회하지 않고 한 번에 읽고, parent 정보도 patch 생성에 재사용합니다. 압축은 기본 `fast`이며, CPU 시간이 더 중요하면 `--patchset-compression stored`로 무압축 저장을 선택할 수 있습니다. 연속 first-parent 범위 여부는 metadata에 기록되지만, replay 호환성을 위해 patch 파일은 커밋별 diff 형태로 유지됩니다.
 
 ---
 

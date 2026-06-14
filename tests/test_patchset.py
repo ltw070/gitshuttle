@@ -49,6 +49,115 @@ def test_create_patchset_writes_metadata_and_patches(tmp_git_repo, tmp_path):
         assert metadata["type"] == "gitshuttle-patchset"
         assert metadata["commits"][0]["subject"] == "feat: replay"
         assert metadata["commits"][0]["patch"] in zf.namelist()
+        assert metadata["selection"]["contiguous_first_parent"] is True
+
+
+def test_create_patchset_reuses_batch_metadata_and_parent_cache(tmp_path, monkeypatch):
+    """patchset 생성은 metadata 일괄 조회 결과의 parent를 patch 생성에 재사용한다."""
+    from gitshuttle.git_ops import Commit
+    import gitshuttle.patchset as patchset_module
+
+    commit = Commit(
+        hash="b" * 40,
+        short_hash="bbbbbbb",
+        date="2026-06-10 09:00:00 +0900",
+        author="ltw070",
+        message="feat: fast patchset",
+        files_changed=1,
+    )
+    calls = {}
+
+    def fake_read_commits_metadata(repo_path, commits):
+        calls["metadata_commits"] = commits
+        return {
+            commit.hash: {
+                "hash": commit.hash,
+                "subject": commit.message,
+                "message": commit.message,
+                "author_name": "ltw070",
+                "author_email": "ltw070@naver.com",
+                "author_date": "2026-06-10T09:00:00+09:00",
+                "committer_name": "ltw070",
+                "committer_email": "ltw070@naver.com",
+                "committer_date": "2026-06-10T09:00:00+09:00",
+                "parents": ["a" * 40],
+                "parent_count": 1,
+            }
+        }
+
+    def fake_read_commit_patch(repo_path, commit_hash, parents):
+        calls["patch_parents"] = parents
+        return b"diff --git a/a.txt b/a.txt\n"
+
+    monkeypatch.setattr(patchset_module, "_read_commits_metadata", fake_read_commits_metadata)
+    monkeypatch.setattr(patchset_module, "_read_commit_patch", fake_read_commit_patch)
+
+    patchset = patchset_module.create_patchset(
+        repo_path=tmp_path,
+        commits=[commit],
+        output_dir=tmp_path,
+        filename="fast.patchset",
+    )
+
+    assert patchset.exists()
+    assert calls["metadata_commits"] == [commit]
+    assert calls["patch_parents"] == ["a" * 40]
+
+
+def test_read_commits_metadata_chunks_large_selection(monkeypatch):
+    """metadata 조회는 Windows 명령행 길이 제한을 피하도록 batch 처리한다."""
+    from gitshuttle.git_ops import Commit
+    import gitshuttle.patchset as patchset_module
+
+    commits = [
+        Commit(
+            hash=str(index) * 40,
+            short_hash=str(index) * 7,
+            date="2026-06-10 09:00:00 +0900",
+            author="ltw070",
+            message=f"commit {index}",
+            files_changed=1,
+        )
+        for index in (1, 2, 3)
+    ]
+    batches = []
+
+    def fake_read_batch(repo_path, batch):
+        batches.append([commit.hash for commit in batch])
+        return {
+            commit.hash: {
+                "hash": commit.hash,
+                "parents": [],
+                "parent_count": 0,
+            }
+            for commit in batch
+        }
+
+    monkeypatch.setattr(patchset_module, "METADATA_BATCH_SIZE", 2)
+    monkeypatch.setattr(patchset_module, "_read_commits_metadata_batch", fake_read_batch)
+
+    metadata = patchset_module._read_commits_metadata("repo", commits)
+
+    assert batches == [[commits[0].hash, commits[1].hash], [commits[2].hash]]
+    assert set(metadata) == {commit.hash for commit in commits}
+
+
+def test_create_patchset_supports_stored_compression(tmp_git_repo, tmp_path):
+    """compression=stored 는 zip 항목을 무압축으로 저장한다."""
+    from gitshuttle.git_ops import get_commits
+    from gitshuttle.patchset import create_patchset
+
+    commits = get_commits(tmp_git_repo)
+    patchset = create_patchset(
+        repo_path=tmp_git_repo,
+        commits=[commits[0]],
+        output_dir=tmp_path,
+        filename="stored.patchset",
+        compression="stored",
+    )
+
+    with zipfile.ZipFile(patchset, "r") as zf:
+        assert all(info.compress_type == zipfile.ZIP_STORED for info in zf.infolist())
 
 
 def test_run_replay_import_applies_patchset_with_author_map(tmp_path):

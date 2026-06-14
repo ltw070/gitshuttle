@@ -79,6 +79,8 @@ Options:
   --ui [tui|csv|html|prompt]     커밋 선택 UI 방식 (기본값: 설정 파일 또는 tui)
   --output TEXT                  출력 경로 (기본값: 원본 리포지토리 경로)
   --format [bundle|patchset]     패키지 형식 (기본값: bundle)
+  --patchset-compression TEXT    patchset 압축 방식 (fast|stored|deflated)
+  --recent INTEGER               UI 없이 최신 N개 커밋 선택
 ```
 
 현재 위치가 원본 리포지토리가 아니어도 `--repo`로 대상 경로를 지정할 수 있습니다.
@@ -91,6 +93,18 @@ gitshuttle export --repo C:\repos\external-repo --branch main --output C:\transf
 
 ```
 gitshuttle export --repo C:\repos\external-repo --branch main --format patchset --output C:\transfer
+```
+
+최근 커밋 몇 개만 빠르게 옮길 때는 `--recent N`을 사용하면 TUI 선택 없이 최신 N개만 읽고 바로 패키지를 만듭니다.
+
+```
+gitshuttle export --repo C:\repos\external-repo --branch main --format patchset --recent 2 --output C:\transfer
+```
+
+patchset 생성 속도를 더 우선하면 압축을 줄일 수 있습니다. `fast`가 기본값이고, `stored`는 무압축이라 가장 빠르지만 파일이 커집니다.
+
+```
+gitshuttle export --repo C:\repos\external-repo --format patchset --patchset-compression stored --output C:\transfer
 ```
 
 모든 커밋을 선택하고 싶고 TUI 선택 화면을 건너뛰려면 headless 모드를 사용할 수 있습니다.
@@ -177,6 +191,8 @@ replay import는 대상 브랜치의 마지막 커밋 메시지와 새로 붙일
 
 이미 같은 변경분이 대상 브랜치에 적용되어 있으면 해당 replay patch는 건너뜁니다.
 같은 경로의 파일이 이미 있지만 내용이 달라 `patch failed`, `patch does not apply`, `already exists in index`가 나는 경우에는 충돌로 보고 중단하며, 이미 반영된 커밋 이후만 다시 선택해 patchset을 만드는 것이 안전합니다.
+
+patchset export는 커밋 metadata를 일괄 조회하고 parent 정보를 재사용하도록 최적화되어 있습니다. 연속 first-parent 범위 여부도 metadata에 기록되며, 현재 replay 호환성을 유지하기 위해 patch는 커밋별 diff로 저장합니다.
 
 **작성자 매핑 JSON 형식:**
 

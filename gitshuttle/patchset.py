@@ -17,6 +17,8 @@ from .rewrite import load_author_map
 PATCHSET_TYPE = "gitshuttle-patchset"
 PATCHSET_VERSION = 1
 EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+METADATA_FORMAT = "%H%x00%P%x00%an%x00%ae%x00%aI%x00%cn%x00%ce%x00%cI%x00%B%x1e"
+METADATA_BATCH_SIZE = 100
 
 
 @dataclass
@@ -35,6 +37,7 @@ def create_patchset(
     output_dir: Path | str,
     filename: str | None = None,
     branch: str = "unknown",
+    compression: str = "fast",
 ) -> Path:
     """Create a replay patchset from selected commits.
 
@@ -54,21 +57,32 @@ def create_patchset(
 
     patchset_path = output_dir / filename
     replay_commits = list(reversed(commits))
+    metadata_by_hash = _read_commits_metadata(repo_path, replay_commits)
 
     metadata: dict = {
         "type": PATCHSET_TYPE,
         "version": PATCHSET_VERSION,
         "branch": branch,
+        "selection": {
+            "contiguous_first_parent": _is_contiguous_first_parent_series(
+                replay_commits,
+                metadata_by_hash,
+            ),
+            "patch_source": "per-commit-diff",
+        },
         "commits": [],
     }
 
-    with zipfile.ZipFile(patchset_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+    with zipfile.ZipFile(patchset_path, "w", **_zip_options(compression)) as zf:
         for index, commit in enumerate(replay_commits, start=1):
             patch_name = f"patches/{index:04d}-{commit.short_hash}.patch"
-            commit_meta = _read_commit_metadata(repo_path, commit.hash)
+            commit_meta = metadata_by_hash[commit.hash]
             commit_meta["patch"] = patch_name
             metadata["commits"].append(commit_meta)
-            zf.writestr(patch_name, _read_commit_patch(repo_path, commit.hash))
+            zf.writestr(
+                patch_name,
+                _read_commit_patch(repo_path, commit.hash, commit_meta["parents"]),
+            )
 
         zf.writestr(
             "metadata.json",
@@ -167,41 +181,82 @@ def run_replay_import(
 
 
 def _read_commit_metadata(repo_path: Path, commit_hash: str) -> dict:
-    fields = run_git(
-        [
-            "show",
-            "-s",
-            "--format=%an%x00%ae%x00%aI%x00%cn%x00%ce%x00%cI",
-            commit_hash,
-        ],
+    return _read_commits_metadata(repo_path, [Commit(
+        hash=commit_hash,
+        short_hash=commit_hash[:7],
+        date="",
+        author="",
+        message="",
+        files_changed=0,
+    )])[commit_hash]
+
+
+def _read_commits_metadata(repo_path: Path, commits: list[Commit]) -> dict[str, dict]:
+    if not commits:
+        return {}
+
+    metadata_by_hash: dict[str, dict] = {}
+    for start in range(0, len(commits), METADATA_BATCH_SIZE):
+        batch = commits[start:start + METADATA_BATCH_SIZE]
+        metadata_by_hash.update(_read_commits_metadata_batch(repo_path, batch))
+    return metadata_by_hash
+
+
+def _read_commits_metadata_batch(repo_path: Path, commits: list[Commit]) -> dict[str, dict]:
+    commit_hashes = [commit.hash for commit in commits]
+    result = subprocess.run(
+        ["git", "show", "--no-patch", f"--format={METADATA_FORMAT}", *commit_hashes],
         cwd=repo_path,
-    ).rstrip("\n").split("\x00")
-    if len(fields) != 6:
-        raise ValueError(f"커밋 메타데이터를 읽을 수 없습니다: {commit_hash}")
+        capture_output=True,
+        encoding="utf-8",
+        errors="replace",
+        env=_git_env(),
+    )
+    if result.returncode != 0:
+        raise ValueError(f"커밋 메타데이터를 읽을 수 없습니다:\n{result.stderr}")
 
-    message = run_git(["log", "-1", "--format=%B", commit_hash], cwd=repo_path).rstrip("\n")
-    parents_line = run_git(["rev-list", "--parents", "-n", "1", commit_hash], cwd=repo_path)
-    parents = parents_line.strip().split()[1:]
+    metadata_by_hash: dict[str, dict] = {}
+    records = [record.strip("\n") for record in result.stdout.split("\x1e") if record.strip()]
+    for record in records:
+        parts = record.split("\x00", 8)
+        if len(parts) != 9:
+            raise ValueError("커밋 메타데이터 응답을 파싱할 수 없습니다.")
 
-    return {
-        "hash": commit_hash,
-        "subject": message.splitlines()[0] if message else "",
-        "message": message,
-        "author_name": fields[0],
-        "author_email": fields[1],
-        "author_date": fields[2],
-        "committer_name": fields[3],
-        "committer_email": fields[4],
-        "committer_date": fields[5],
-        "parents": parents,
-        "parent_count": len(parents),
-    }
+        (
+            commit_hash,
+            parents_text,
+            author_name,
+            author_email,
+            author_date,
+            committer_name,
+            committer_email,
+            committer_date,
+            message,
+        ) = parts
+        message = message.rstrip("\n")
+        parents = parents_text.split() if parents_text else []
+        metadata_by_hash[commit_hash] = {
+            "hash": commit_hash,
+            "subject": message.splitlines()[0] if message else "",
+            "message": message,
+            "author_name": author_name,
+            "author_email": author_email,
+            "author_date": author_date,
+            "committer_name": committer_name,
+            "committer_email": committer_email,
+            "committer_date": committer_date,
+            "parents": parents,
+            "parent_count": len(parents),
+        }
+
+    missing = [commit_hash for commit_hash in commit_hashes if commit_hash not in metadata_by_hash]
+    if missing:
+        raise ValueError(f"커밋 메타데이터를 읽을 수 없습니다: {', '.join(missing)}")
+
+    return metadata_by_hash
 
 
-def _read_commit_patch(repo_path: Path, commit_hash: str) -> bytes:
-    parents_line = run_git(["rev-list", "--parents", "-n", "1", commit_hash], cwd=repo_path)
-    parts = parents_line.strip().split()
-    parents = parts[1:]
+def _read_commit_patch(repo_path: Path, commit_hash: str, parents: list[str]) -> bytes:
     base = parents[0] if parents else EMPTY_TREE
     result = subprocess.run(
         ["git", "diff", "--binary", "--full-index", base, commit_hash],
@@ -213,6 +268,30 @@ def _read_commit_patch(repo_path: Path, commit_hash: str) -> bytes:
         stderr = result.stderr.decode("utf-8", errors="replace")
         raise ValueError(f"patch 생성 실패 ({commit_hash}):\n{stderr}")
     return result.stdout
+
+
+def _zip_options(compression: str) -> dict:
+    if compression == "stored":
+        return {"compression": zipfile.ZIP_STORED}
+    if compression == "fast":
+        return {"compression": zipfile.ZIP_DEFLATED, "compresslevel": 1}
+    if compression == "deflated":
+        return {"compression": zipfile.ZIP_DEFLATED}
+    raise ValueError("patchset compression은 fast, stored, deflated 중 하나여야 합니다.")
+
+
+def _is_contiguous_first_parent_series(
+    replay_commits: list[Commit],
+    metadata_by_hash: dict[str, dict],
+) -> bool:
+    if len(replay_commits) < 2:
+        return True
+
+    for previous, current in zip(replay_commits, replay_commits[1:]):
+        parents = metadata_by_hash[current.hash]["parents"]
+        if not parents or parents[0] != previous.hash:
+            return False
+    return True
 
 
 def _load_patchset_metadata(patchset_path: Path) -> dict:

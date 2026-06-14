@@ -29,6 +29,7 @@ def run_export(
     branch: str = "unknown",
     filename: str | None = None,
     package_format: str = "bundle",
+    patchset_compression: str = "fast",
 ) -> ExportResult:
     """선택된 커밋으로 bundle + sha256 + manifest 를 생성한다.
 
@@ -39,6 +40,7 @@ def run_export(
         branch:      브랜치 이름 (manifest 헤더에 기록).
         filename:    패키지 파일명 (확장자 제외). 미지정 시 shuttle_YYMMDD.
         package_format: "bundle" 또는 "patchset".
+        patchset_compression: patchset zip 압축 방식 ("fast", "stored", "deflated").
 
     Returns:
         ExportResult (bundle, sha256, manifest 경로 포함).
@@ -77,6 +79,7 @@ def run_export(
             output_dir=output_dir,
             filename=package_filename,
             branch=branch,
+            compression=patchset_compression,
         )
     else:
         package_path = create_bundle(

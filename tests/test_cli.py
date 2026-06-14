@@ -87,19 +87,28 @@ def test_export_accepts_repo_option(tmp_path, monkeypatch):
         files_changed=1,
     )
 
-    def fake_get_commits(repo_path, branch="HEAD"):
+    def fake_get_commits(repo_path, branch="HEAD", limit=None):
         captured["get_commits_repo"] = repo_path
         captured["branch"] = branch
+        captured["limit"] = limit
         return [fake_commit]
 
     def fake_select_commits(commits):
         return commits
 
-    def fake_run_export(repo_path, commits, output_dir, branch, package_format="bundle"):
+    def fake_run_export(
+        repo_path,
+        commits,
+        output_dir,
+        branch,
+        package_format="bundle",
+        patchset_compression="fast",
+    ):
         captured["run_export_repo"] = repo_path
         captured["output_dir"] = output_dir
         captured["export_branch"] = branch
         captured["package_format"] = package_format
+        captured["patchset_compression"] = patchset_compression
         return ExportResult(
             bundle=output_dir / "test.bundle",
             sha256=output_dir / "test.bundle.sha256",
@@ -128,8 +137,10 @@ def test_export_accepts_repo_option(tmp_path, monkeypatch):
     assert captured["get_commits_repo"] == repo_dir.resolve()
     assert captured["run_export_repo"] == repo_dir.resolve()
     assert captured["branch"] == "main"
+    assert captured["limit"] is None
     assert captured["output_dir"] == output_dir
     assert captured["package_format"] == "bundle"
+    assert captured["patchset_compression"] == "fast"
 
 
 def test_export_accepts_patchset_format(tmp_path, monkeypatch):
@@ -154,11 +165,23 @@ def test_export_accepts_patchset_format(tmp_path, monkeypatch):
         files_changed=1,
     )
 
-    monkeypatch.setattr(git_ops_module, "get_commits", lambda repo_path, branch="HEAD": [fake_commit])
+    monkeypatch.setattr(
+        git_ops_module,
+        "get_commits",
+        lambda repo_path, branch="HEAD", limit=None: [fake_commit],
+    )
     monkeypatch.setattr(tui_module, "select_commits_tui", lambda commits: commits)
 
-    def fake_run_export(repo_path, commits, output_dir, branch, package_format="bundle"):
+    def fake_run_export(
+        repo_path,
+        commits,
+        output_dir,
+        branch,
+        package_format="bundle",
+        patchset_compression="fast",
+    ):
         captured["package_format"] = package_format
+        captured["patchset_compression"] = patchset_compression
         return ExportResult(
             bundle=output_dir / "test.patchset",
             sha256=output_dir / "test.patchset.sha256",
@@ -178,12 +201,86 @@ def test_export_accepts_patchset_format(tmp_path, monkeypatch):
             str(output_dir),
             "--format",
             "patchset",
+            "--patchset-compression",
+            "stored",
         ],
     )
 
     assert result.exit_code == 0, f"exit code {result.exit_code}: {result.output}"
     assert captured["package_format"] == "patchset"
+    assert captured["patchset_compression"] == "stored"
     assert "patchset" in result.output
+
+
+def test_export_recent_selects_latest_without_ui(tmp_path, monkeypatch):
+    """export --recent N 은 UI 없이 최신 N개만 읽어 선택한다."""
+    from gitshuttle.cli import app
+    from gitshuttle.export_ import ExportResult
+    from gitshuttle.git_ops import Commit
+    import gitshuttle.export_ as export_module
+    import gitshuttle.git_ops as git_ops_module
+    import gitshuttle.ui.tui as tui_module
+
+    repo_dir = tmp_path / "source_repo"
+    repo_dir.mkdir()
+    output_dir = tmp_path / "out"
+    captured = {}
+    commits = [
+        Commit(
+            hash=str(index) * 40,
+            short_hash=str(index) * 7,
+            date="2026-06-10 09:00:00 +0900",
+            author="ltw070",
+            message=f"commit {index}",
+            files_changed=1,
+        )
+        for index in (1, 2)
+    ]
+
+    def fake_get_commits(repo_path, branch="HEAD", limit=None):
+        captured["limit"] = limit
+        return commits
+
+    def fail_select_commits(commits):
+        raise AssertionError("recent mode should not open TUI")
+
+    def fake_run_export(
+        repo_path,
+        commits,
+        output_dir,
+        branch,
+        package_format="bundle",
+        patchset_compression="fast",
+    ):
+        captured["selected"] = commits
+        return ExportResult(
+            bundle=output_dir / "test.bundle",
+            sha256=output_dir / "test.bundle.sha256",
+            manifest=output_dir / "test_manifest.txt",
+        )
+
+    monkeypatch.setattr(git_ops_module, "get_commits", fake_get_commits)
+    monkeypatch.setattr(tui_module, "select_commits_tui", fail_select_commits)
+    monkeypatch.setattr(export_module, "run_export", fake_run_export)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        app,
+        [
+            "export",
+            "--repo",
+            str(repo_dir),
+            "--output",
+            str(output_dir),
+            "--recent",
+            "2",
+        ],
+    )
+
+    assert result.exit_code == 0, f"exit code {result.exit_code}: {result.output}"
+    assert captured["limit"] == 2
+    assert captured["selected"] == commits
+    assert "UI 없이 선택" in result.output
 
 
 def test_import_stub():

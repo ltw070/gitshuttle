@@ -55,6 +55,17 @@ def export(
         "--format",
         help="패키지 형식 (bundle|patchset). patchset은 cherry-pick/replay용입니다.",
     ),
+    patchset_compression: str = typer.Option(
+        "fast",
+        "--patchset-compression",
+        help="patchset 압축 방식 (fast|stored|deflated). stored가 가장 빠르지만 파일이 큽니다.",
+    ),
+    recent: Optional[int] = typer.Option(
+        None,
+        "--recent",
+        min=1,
+        help="UI 없이 최신 N개 커밋을 바로 선택합니다.",
+    ),
 ) -> None:
     """선택한 커밋을 shuttle 패키지로 추출합니다."""
     from gitshuttle.git_ops import get_commits
@@ -68,7 +79,7 @@ def export(
 
     typer.echo(f"source        : {repo_path}")
     typer.echo(f"커밋 목록을 읽는 중... (브랜치: {branch_name})")
-    commits = get_commits(repo_path, branch=branch_name)
+    commits = get_commits(repo_path, branch=branch_name, limit=recent)
 
     if not commits:
         typer.echo("커밋이 없습니다.", err=True)
@@ -76,34 +87,41 @@ def export(
 
     typer.echo(f"총 {len(commits)}개 커밋을 찾았습니다.")
 
+    if recent is not None:
+        selected = commits
+        typer.echo(f"최근 {len(selected)}개 커밋을 UI 없이 선택했습니다.")
+    else:
+        selected = None
+
     # UI 모드 결정: --ui 플래그 > gitshuttle.toml > 기본값(tui)
     config_path = repo_path / "gitshuttle.toml" if repo is not None else None
     ui_mode = get_ui_mode(flag=ui, config_path=config_path)
 
-    if ui_mode == "tui":
-        selected = select_commits_tui(commits)
-    elif ui_mode == "csv":
-        from gitshuttle.ui.csv_ui import generate_csv, parse_csv
-        csv_path = output_dir / "commits.csv"
-        generate_csv(commits, csv_path)
-        typer.echo(f"commits.csv 생성: {csv_path}")
-        typer.echo("include 컬럼을 Y/N 으로 편집 후 Enter 를 누르세요.")
-        input()
-        selected = parse_csv(csv_path, commits)
-    elif ui_mode == "html":
-        from gitshuttle.ui.html_ui import generate_html, parse_selection_json
-        html_path = output_dir / "commits.html"
-        generate_html(commits, html_path)
-        typer.echo(f"HTML 생성: {html_path}")
-        typer.echo("브라우저에서 열어 커밋을 선택하고 selection.json 을 다운로드하세요.")
-        json_path_str = input("selection.json 경로 입력: ").strip()
-        selected = parse_selection_json(json_path_str, commits)
-    elif ui_mode == "prompt":
-        from gitshuttle.ui.prompt_ui import select_commits_prompt
-        selected = select_commits_prompt(commits)
-    else:
-        typer.echo(f"알 수 없는 UI 모드 '{ui_mode}'. tui 로 대체합니다.")
-        selected = select_commits_tui(commits)
+    if selected is None:
+        if ui_mode == "tui":
+            selected = select_commits_tui(commits)
+        elif ui_mode == "csv":
+            from gitshuttle.ui.csv_ui import generate_csv, parse_csv
+            csv_path = output_dir / "commits.csv"
+            generate_csv(commits, csv_path)
+            typer.echo(f"commits.csv 생성: {csv_path}")
+            typer.echo("include 컬럼을 Y/N 으로 편집 후 Enter 를 누르세요.")
+            input()
+            selected = parse_csv(csv_path, commits)
+        elif ui_mode == "html":
+            from gitshuttle.ui.html_ui import generate_html, parse_selection_json
+            html_path = output_dir / "commits.html"
+            generate_html(commits, html_path)
+            typer.echo(f"HTML 생성: {html_path}")
+            typer.echo("브라우저에서 열어 커밋을 선택하고 selection.json 을 다운로드하세요.")
+            json_path_str = input("selection.json 경로 입력: ").strip()
+            selected = parse_selection_json(json_path_str, commits)
+        elif ui_mode == "prompt":
+            from gitshuttle.ui.prompt_ui import select_commits_prompt
+            selected = select_commits_prompt(commits)
+        else:
+            typer.echo(f"알 수 없는 UI 모드 '{ui_mode}'. tui 로 대체합니다.")
+            selected = select_commits_tui(commits)
 
     if not selected:
         typer.echo("선택된 커밋이 없습니다. 종료합니다.")
@@ -117,6 +135,7 @@ def export(
         output_dir=output_dir,
         branch=branch_name,
         package_format=package_format,
+        patchset_compression=patchset_compression,
     )
 
     label = "patchset" if package_format == "patchset" else "bundle"

@@ -169,7 +169,7 @@ Sprint 5  →  79 passed
 Sprint 6  →  85 passed
 Sprint 7  → 102 passed
 최종 정리 → 106 passed  (0 failed)
-기능 보강 → 160 collected  (hidden refs, patchset/replay, TUI 단축키 포함)
+기능 보강 → 165 collected  (hidden refs, patchset/replay, TUI 단축키, patchset export 속도 개선 포함)
 ```
 
 **최근 TDD 사례 — patchset/replay:**
@@ -375,7 +375,9 @@ bundle은 Git object graph를 다루고, patchset은 diff replay를 다룬다.
 그래서 `--format patchset`, `--mode replay`로 별도 모드화했다.
 
 **성능 관점:**
-patchset import는 일부 커밋 적용 시 가볍지만, patchset export는 커밋마다 metadata 조회와 `git diff --binary`를 수행하므로 많은 커밋에서는 bundle보다 느릴 수 있다.
+patchset import는 일부 커밋 적용 시 가볍지만, patchset export는 커밋별 diff를 만들어야 하므로 많은 커밋에서는 bundle보다 느릴 수 있다.
+이 병목을 줄이기 위해 metadata는 `git show --no-patch`로 일괄 조회하고, parent 정보는 metadata에서 재사용해 `rev-list` 중복 호출을 제거했다.
+CLI에는 `--recent N`을 추가해 최신 N개만 조회·선택하게 했고, `--patchset-compression fast|stored|deflated`로 zip 압축 비용을 조절할 수 있게 했다.
 이미 적용된 patch는 skip하고, 같은 경로의 다른 내용 충돌은 복구 안내와 함께 중단하도록 보강했다.
 따라서 현재 권장 기준은 다음과 같다.
 
@@ -385,6 +387,7 @@ patchset import는 일부 커밋 적용 시 가볍지만, patchset export는 커
 | hidden 기준점 기반의 증분 이전 | `bundle` |
 | 기준점 없이 내부 브랜치 위에 일부 변경만 적용 | `patchset/replay` |
 | 많은 커밋을 한 번에 이동 | 대체로 `bundle` 우선 검토 |
+| 최신 몇 개 커밋만 patchset으로 이동 | `--recent N` + 필요 시 `--patchset-compression stored` |
 
 ---
 
@@ -651,4 +654,4 @@ Mock 테스트는 "명령 호출 방식", "오류 처리", "토큰 마스킹", "
 
 ---
 
-*GitShuttle · Sprint 0~7 완료 + 기능 보강 · 160 tests collected · patchset/replay 포함*
+*GitShuttle · Sprint 0~7 완료 + 기능 보강 · 165 tests collected · patchset/replay 및 patchset export 속도 개선 포함*

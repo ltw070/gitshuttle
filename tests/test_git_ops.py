@@ -93,3 +93,25 @@ def test_get_commits_files_changed(tmp_git_repo):
     assert init_commit.files_changed == 1, (
         f"init 커밋 files_changed 예상 1, 실제 {init_commit.files_changed}"
     )
+
+
+def test_get_commits_limit_reads_recent_only(tmp_git_repo):
+    """limit 옵션은 최신 N개 커밋만 반환한다."""
+    import os
+    import subprocess
+    from gitshuttle.git_ops import get_commits
+
+    env = {**os.environ, "PYTHONIOENCODING": "utf-8", "GIT_TERMINAL_PROMPT": "0"}
+    for index in range(3):
+        (tmp_git_repo / f"file{index}.txt").write_text(str(index), encoding="utf-8")
+        subprocess.run(["git", "add", "."], cwd=tmp_git_repo, check=True, env=env)
+        subprocess.run(
+            ["git", "commit", "-m", f"commit {index}"],
+            cwd=tmp_git_repo,
+            check=True,
+            env=env,
+        )
+
+    commits = get_commits(tmp_git_repo, branch="HEAD", limit=2)
+
+    assert [commit.message for commit in commits] == ["commit 2", "commit 1"]

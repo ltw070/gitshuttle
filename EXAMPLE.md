@@ -749,10 +749,14 @@ python -m gitshuttle import `
 python -m gitshuttle export `
   --repo C:\repos\source-gitshuttle `
   --branch main `
-  --ui tui `
   --format patchset `
+  --recent 2 `
+  --patchset-compression fast `
   --output C:\transfer
 ```
+
+`--recent 2`는 TUI를 열지 않고 최신 2개 커밋만 바로 선택합니다.
+더 빠른 생성이 필요하고 파일 크기가 커져도 괜찮다면 `--patchset-compression stored`를 사용할 수 있습니다.
 
 생성 파일:
 
@@ -794,6 +798,7 @@ python -m gitshuttle import `
 | 중복 | 같은 변경분이 이미 적용되어 있으면 해당 patch는 자동 skip |
 | 충돌 | 같은 경로의 파일이 다른 내용으로 이미 있으면 patch 적용 실패. 이미 반영된 커밋 이후만 다시 선택하거나 사용자가 직접 정리 후 재시도 |
 | 용도 | 내부 브랜치가 이미 달라졌고, 작업자 판단으로 일부 변경만 붙이는 경우 |
+| 속도 | 최신 N개는 `--recent N`, patchset 압축 비용은 `--patchset-compression stored`로 줄일 수 있음 |
 
 ---
 

@@ -94,6 +94,7 @@ def check_git_version() -> str:
 def get_commits(
     repo_path: Path | str,
     branch: str = "HEAD",
+    limit: int | None = None,
 ) -> list[Commit]:
     """지정 브랜치의 커밋 목록을 반환한다.
 
@@ -103,13 +104,19 @@ def get_commits(
     반환 순서: 최신 커밋이 index 0 (git log 기본 순서).
     """
     repo_path = Path(repo_path)
+    if limit is not None and limit <= 0:
+        return []
 
     # %x00 = null byte separator
     # format: hash\x00short_hash\x00date\x00author\x00subject\x1e
     # \x1e (RS, Record Separator) 로 레코드를 구분
     log_format = "%H%x00%h%x00%ai%x00%an%x00%s%x1e"
+    args = ["log", branch, f"--format={log_format}"]
+    if limit is not None:
+        args.insert(2, f"--max-count={limit}")
+
     raw = run_git(
-        ["log", branch, f"--format={log_format}"],
+        args,
         cwd=repo_path,
     )
 
