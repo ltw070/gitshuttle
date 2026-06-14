@@ -38,6 +38,16 @@ def main(
 @app.command()
 def export(
     branch: Optional[str] = typer.Option(None, "--branch", "-b", help="추출할 브랜치"),
+    repo: Optional[Path] = typer.Option(
+        None,
+        "--repo",
+        "-r",
+        exists=True,
+        file_okay=False,
+        dir_okay=True,
+        resolve_path=True,
+        help="원본 Git 리포지토리 경로 (기본값: 현재 디렉터리)",
+    ),
     ui: Optional[str] = typer.Option(None, "--ui", help="UI 모드 (tui|csv|html|prompt)"),
     output: Optional[str] = typer.Option(None, "--output", "-o", help="출력 경로"),
 ) -> None:
@@ -47,10 +57,11 @@ def export(
     from gitshuttle.ui.tui import select_commits_tui
     from gitshuttle.config import get_ui_mode
 
-    repo_path = Path.cwd()
+    repo_path = repo if repo is not None else Path.cwd()
     output_dir = Path(output) if output else repo_path
     branch_name = branch or "HEAD"
 
+    typer.echo(f"source        : {repo_path}")
     typer.echo(f"커밋 목록을 읽는 중... (브랜치: {branch_name})")
     commits = get_commits(repo_path, branch=branch_name)
 
@@ -61,7 +72,8 @@ def export(
     typer.echo(f"총 {len(commits)}개 커밋을 찾았습니다.")
 
     # UI 모드 결정: --ui 플래그 > gitshuttle.toml > 기본값(tui)
-    ui_mode = get_ui_mode(flag=ui)
+    config_path = repo_path / "gitshuttle.toml" if repo is not None else None
+    ui_mode = get_ui_mode(flag=ui, config_path=config_path)
 
     if ui_mode == "tui":
         selected = select_commits_tui(commits)
@@ -110,6 +122,16 @@ def export(
 @app.command(name="import")
 def import_(
     file: Optional[str] = typer.Option(None, "--file", "-f", help=".bundle 파일 경로"),
+    repo: Optional[Path] = typer.Option(
+        None,
+        "--repo",
+        "-r",
+        exists=True,
+        file_okay=False,
+        dir_okay=True,
+        resolve_path=True,
+        help="대상 Git 리포지토리 경로 (기본값: 현재 디렉터리)",
+    ),
     on_conflict: str = typer.Option("skip", "--on-conflict", help="충돌 처리 방식 (skip|force|abort)"),
     author_map: Optional[str] = typer.Option(
         None,
@@ -127,7 +149,7 @@ def import_(
         help="타임스탬프 재작성 모드 (now|original|from=DATETIME). CLI > toml > 기본값(now).",
     ),
 ) -> None:
-    """shuttle 패키지를 현재 리포지토리에 반입합니다."""
+    """shuttle 패키지를 대상 리포지토리에 반입합니다."""
     from gitshuttle.import_ import run_import, ChecksumError, ImportConflictError
     from gitshuttle.config import get_import_config
 
@@ -140,14 +162,16 @@ def import_(
         typer.echo(f"[오류] 파일을 찾을 수 없습니다: {bundle_path}", err=True)
         raise typer.Exit(1)
 
+    repo_path = repo if repo is not None else Path.cwd()
+
     # toml 기본값 읽기
-    import_cfg = get_import_config()
+    config_path = repo_path / "gitshuttle.toml" if repo is not None else None
+    import_cfg = get_import_config(config_path=config_path)
 
     # CLI 옵션 우선 (CLI > toml > 기본값)
     effective_author_map = author_map if author_map is not None else import_cfg.get("author_map")
     effective_timestamp = timestamp if timestamp is not None else import_cfg.get("timestamp", "now")
 
-    repo_path = Path.cwd()
     typer.echo(f"bundle        : {bundle_path}")
     typer.echo(f"target        : {repo_path}")
     typer.echo(f"conflict      : {on_conflict}")

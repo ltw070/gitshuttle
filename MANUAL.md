@@ -232,9 +232,10 @@ gitshuttle export [OPTIONS]
 
 | 옵션 | 설명 | 예시 |
 |------|------|------|
+| `--repo PATH` | 원본 Git 리포지토리 경로 지정 | `--repo C:\projects\my-repo` |
 | `--branch TEXT` | 특정 브랜치의 커밋만 추출 | `--branch feature/login` |
 | `--ui [tui\|csv\|html\|prompt]` | 커밋 선택 방식 | `--ui csv` |
-| `--output TEXT` | 출력 파일명 지정 | `--output patch_v2.bundle` |
+| `--output TEXT` | 출력 경로 지정 | `--output C:\transfer` |
 
 ### 실행 예시
 
@@ -244,6 +245,9 @@ gitshuttle export
 
 # main 브랜치만
 gitshuttle export --branch main
+
+# 현재 위치와 다른 폴더의 repo를 export
+gitshuttle export --repo C:\projects\my-repo --branch main --output C:\transfer
 
 # CSV 방식으로 Excel에서 선택
 gitshuttle export --ui csv
@@ -288,6 +292,7 @@ gitshuttle import --file FILE [OPTIONS]
 | 옵션 | 설명 | 기본값 |
 |------|------|--------|
 | `--file TEXT` | bundle 파일 경로 **(필수)** | — |
+| `--repo PATH` | 대상 Git 리포지토리 경로 | 현재 디렉터리 |
 | `--on-conflict [skip\|force\|abort]` | 충돌 처리 방식 | `skip` |
 | `--author-map FILE` | 작성자 매핑 JSON 파일 경로 | 없음 (원본 유지) |
 | `--target-branch TEXT` | import 커밋을 담을 브랜치명 | `imported/<소스브랜치>` |
@@ -301,6 +306,9 @@ gitshuttle import --file D:\USB\shuttle_260508.bundle
 
 # 현재 폴더에 있는 bundle 파일
 gitshuttle import --file shuttle_260508.bundle
+
+# 현재 위치와 다른 폴더의 repo에 반입
+gitshuttle import --file D:\USB\shuttle_260508.bundle --repo C:\internal\my-repo
 
 # 충돌 시 강제 덮어쓰기
 gitshuttle import --file shuttle_260508.bundle --on-conflict force

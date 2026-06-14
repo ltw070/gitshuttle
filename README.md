@@ -65,9 +65,16 @@ python -m gitshuttle --help
 gitshuttle export [OPTIONS]
 
 Options:
+  --repo PATH                    원본 Git 리포지토리 경로 (기본값: 현재 디렉터리)
   --branch TEXT                  대상 브랜치 (기본값: 현재 브랜치)
   --ui [tui|csv|html|prompt]     커밋 선택 UI 방식 (기본값: 설정 파일 또는 tui)
-  --output TEXT                  출력 파일명 (기본값: shuttle_YYMMDD.bundle)
+  --output TEXT                  출력 경로 (기본값: 원본 리포지토리 경로)
+```
+
+현재 위치가 원본 리포지토리가 아니어도 `--repo`로 대상 경로를 지정할 수 있습니다.
+
+```
+gitshuttle export --repo C:\repos\external-repo --branch main --output C:\transfer
 ```
 
 **커밋 선택 UI 방식:**
@@ -88,10 +95,17 @@ gitshuttle import --file FILE [OPTIONS]
 
 Options:
   --file TEXT                                .bundle 파일 경로 (필수)
+  --repo PATH                                대상 Git 리포지토리 경로 (기본값: 현재 디렉터리)
   --on-conflict [skip|force|abort]           충돌 처리 방식 (기본값: skip)
   --author-map FILE                          작성자 매핑 JSON 파일 경로
   --target-branch TEXT                       import 커밋을 담을 브랜치명 (기본값: imported/<소스브랜치>)
   --timestamp [now|original|from=DATETIME]  커밋 타임스탬프 모드 (기본값: now)
+```
+
+현재 위치가 대상 리포지토리가 아니어도 `--repo`로 반입 대상 경로를 지정할 수 있습니다.
+
+```
+gitshuttle import --file C:\transfer\shuttle_260612.bundle --repo C:\repos\internal-repo
 ```
 
 **충돌 처리 옵션:**
