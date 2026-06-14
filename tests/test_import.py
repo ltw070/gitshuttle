@@ -6,6 +6,7 @@ E2E 흐름: source repo export → target repo import → 커밋 수 확인.
 from __future__ import annotations
 
 import os
+import json
 import subprocess
 from pathlib import Path
 from types import SimpleNamespace
@@ -322,6 +323,210 @@ def test_rewrite_import_non_ff_error_has_recovery_hint(tmp_path, monkeypatch):
     assert "대상 브랜치 'feat/gitshuttle'가 이미 존재" in error_message
     assert "--target-branch" in error_message
     assert "--on-conflict force" in error_message
+
+
+def test_fetch_original_shadow_refs_copies_hidden_refs(tmp_path, monkeypatch):
+    """증분 rewrite import 전에 target repo의 원본 SHA refs를 임시 repo로 복사한다."""
+    import gitshuttle.import_ as import_module
+
+    source_repo = tmp_path / "target"
+    tmp_repo = tmp_path / "tmp.git"
+    source_repo.mkdir()
+    tmp_repo.mkdir()
+    calls = []
+
+    monkeypatch.setattr(
+        import_module,
+        "run_git",
+        lambda args, cwd: "refs/gitshuttle/original/main/gitshuttle/tmp_abc\n",
+    )
+
+    def fake_run(args, **kwargs):
+        calls.append((args, kwargs))
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(import_module.subprocess, "run", fake_run)
+
+    import_module._fetch_original_shadow_refs(source_repo, tmp_repo)
+
+    assert calls
+    assert calls[0][0] == [
+        "git",
+        "fetch",
+        str(source_repo),
+        "+refs/gitshuttle/original/*:refs/gitshuttle/original/*",
+    ]
+    assert calls[0][1]["cwd"] == tmp_repo
+
+
+def test_fetch_original_shadow_refs_noops_when_empty(tmp_path, monkeypatch):
+    """보관된 원본 SHA refs가 없으면 추가 fetch를 하지 않는다."""
+    import gitshuttle.import_ as import_module
+
+    calls = []
+
+    monkeypatch.setattr(import_module, "run_git", lambda args, cwd: "")
+    monkeypatch.setattr(
+        import_module.subprocess,
+        "run",
+        lambda args, **kwargs: calls.append(args),
+    )
+
+    import_module._fetch_original_shadow_refs(tmp_path / "target", tmp_path / "tmp.git")
+
+    assert calls == []
+
+
+def test_delete_original_shadow_refs_removes_only_hidden_refs(tmp_path, monkeypatch):
+    """fast-export 전에 shadow refs를 삭제해 실제 export 대상에 섞이지 않게 한다."""
+    import gitshuttle.import_ as import_module
+
+    calls = []
+
+    def fake_run_git(args, cwd):
+        calls.append(args)
+        if args == ["for-each-ref", "--format=%(refname)", "refs/gitshuttle/original"]:
+            return (
+                "refs/gitshuttle/original/main/gitshuttle/tmp_abc\n"
+                "refs/gitshuttle/original/main/heads/main\n"
+            )
+        return ""
+
+    monkeypatch.setattr(import_module, "run_git", fake_run_git)
+
+    import_module._delete_original_shadow_refs(tmp_path)
+
+    assert ["update-ref", "-d", "refs/gitshuttle/original/main/gitshuttle/tmp_abc"] in calls
+    assert ["update-ref", "-d", "refs/gitshuttle/original/main/heads/main"] in calls
+
+
+def test_store_original_bundle_refs_uses_hidden_namespace(tmp_path, monkeypatch):
+    """rewrite import 후 원본 bundle refs를 target branch별 hidden namespace에 보관한다."""
+    import gitshuttle.import_ as import_module
+
+    calls = []
+
+    def fake_run(args, **kwargs):
+        calls.append((args, kwargs))
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(import_module.subprocess, "run", fake_run)
+
+    warning = import_module._store_original_bundle_refs(
+        bundle_path=tmp_path / "shuttle.bundle",
+        repo_path=tmp_path / "repo",
+        target_branch="migration/gitshuttle-20260610",
+    )
+
+    assert warning is None
+    assert calls[0][0] == [
+        "git",
+        "fetch",
+        str(tmp_path / "shuttle.bundle"),
+        "+refs/*:refs/gitshuttle/original/migration/gitshuttle-20260610/*",
+    ]
+    assert calls[0][1]["cwd"] == tmp_path / "repo"
+
+
+def test_store_original_bundle_refs_returns_warning_on_failure(tmp_path, monkeypatch):
+    """원본 SHA refs 보관 실패는 import 자체 실패 대신 경고로 전달한다."""
+    import gitshuttle.import_ as import_module
+
+    monkeypatch.setattr(
+        import_module.subprocess,
+        "run",
+        lambda args, **kwargs: SimpleNamespace(
+            returncode=1,
+            stdout="",
+            stderr="fatal: bad bundle\n",
+        ),
+    )
+
+    warning = import_module._store_original_bundle_refs(
+        bundle_path=tmp_path / "shuttle.bundle",
+        repo_path=tmp_path / "repo",
+        target_branch="migration/main",
+    )
+
+    assert warning is not None
+    assert "원본 SHA shadow refs 보관 실패" in warning
+    assert "fatal: bad bundle" in warning
+
+
+def test_rewrite_import_partial_bundle_continues_from_hidden_original_refs(two_git_repos, tmp_path):
+    """rewrite import 후 저장된 원본 SHA refs 덕분에 후속 부분 bundle을 반입할 수 있다."""
+    from gitshuttle.export_ import run_export
+    from gitshuttle.git_ops import get_commits
+    from gitshuttle.import_ import run_import
+
+    source, target = two_git_repos
+    _add_commit(source, "one.txt", "one", "feat: one")
+    _add_commit(source, "two.txt", "two", "feat: two")
+
+    commits = get_commits(source)
+    newest, middle, oldest = commits[0], commits[1], commits[2]
+    author_map_path = tmp_path / "author_map.json"
+    author_map_path.write_text(
+        json.dumps({
+            "test@test.com": {
+                "name": "ltw070",
+                "email": "ltw070@naver.com",
+            },
+        }),
+        encoding="utf-8",
+    )
+
+    initial_bundle = run_export(
+        repo_path=source,
+        commits=[middle, oldest],
+        output_dir=tmp_path,
+        branch="HEAD",
+        filename="initial",
+    ).bundle
+    partial_bundle = run_export(
+        repo_path=source,
+        commits=[newest],
+        output_dir=tmp_path,
+        branch="HEAD",
+        filename="partial",
+    ).bundle
+
+    first = run_import(
+        bundle_path=initial_bundle,
+        repo_path=target,
+        author_map_path=str(author_map_path),
+        target_branch="migration/main",
+        timestamp_mode="original",
+    )
+    second = run_import(
+        bundle_path=partial_bundle,
+        repo_path=target,
+        author_map_path=str(author_map_path),
+        target_branch="migration/main",
+        timestamp_mode="original",
+    )
+
+    assert first.imported >= 2
+    assert second.imported == 1
+    commit_count = subprocess.run(
+        ["git", "rev-list", "--count", "migration/main"],
+        cwd=target,
+        check=True,
+        capture_output=True,
+        encoding="utf-8",
+        env=_git_env(),
+    ).stdout.strip()
+    latest_author = subprocess.run(
+        ["git", "log", "-1", "--format=%an <%ae>", "migration/main"],
+        cwd=target,
+        check=True,
+        capture_output=True,
+        encoding="utf-8",
+        env=_git_env(),
+    ).stdout.strip()
+
+    assert commit_count == "3"
+    assert latest_author == "ltw070 <ltw070@naver.com>"
 
 
 def test_checkout_or_create_branch_updates_worktree(tmp_path, monkeypatch):

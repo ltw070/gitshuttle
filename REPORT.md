@@ -27,7 +27,7 @@
   - 5번 항목: SOLID 원칙 관점 추가
   - 6번 항목: Mock 테스트 관점 추가
 - `PR_REVIEW_POINTS.md`
-  - 현재 테스트 수를 147개 기준으로 업데이트
+  - 현재 테스트 수를 153개 기준으로 업데이트
   - `--repo` 옵션, fast-import 바이너리 입력, fast-export `data N` payload 보존 포인트 반영
   - `author_map.json` 형식을 이메일 키 + `{name,email}` dict 형식으로 정리
 - `README.md`
@@ -57,13 +57,21 @@
 - `gitshuttle/bundle.py`, `gitshuttle/import_.py`
   - `git bundle verify` 실패 상세 메시지 보존
   - 최근 일부 커밋 bundle의 prerequisite 실패와 rewrite SHA 변경 가능성을 import 오류 메시지에 안내
+- `gitshuttle/import_.py`
+  - rewrite import 성공 후 원본 bundle refs를 `refs/gitshuttle/original/<target-branch>/...`에 보관
+  - 후속 부분 bundle import 시 숨김 원본 refs를 임시 repo로 가져와 prerequisite 객체를 채움
+  - fast-export 대상에 숨김 refs가 섞이지 않도록 임시 repo에서 ref만 삭제하고 object는 유지
+  - rewrite import의 `imported` 수가 보관용 원본 객체가 아니라 target branch에 새로 추가된 커밋만 세도록 보정
 - `tests/test_bundle.py`, `tests/test_import.py`
   - bundle verify 상세 메시지 보존 테스트 추가
   - 부분 bundle prerequisite 실패 안내 테스트 추가
+  - rewrite import 후 최신 1개 커밋만 담은 부분 bundle이 숨김 원본 refs를 기준으로 이어지는 통합 테스트 추가
 - `README.md`, `MANUAL.md`, `EXAMPLE.md`
   - 최근 1~2개 커밋만 export할 때의 bundle prerequisite 제약 문서화
+  - 최신 버전의 `refs/gitshuttle/original/...` 기준점 보관 방식과 구버전 repo의 1회 전체 import 필요성 문서화
+  - cherry-pick/replay 방식은 가능하지만 원본 bundle 이력 이전과 달리 SHA/merge 구조가 달라질 수 있음을 안내
 
-**현재 기준 테스트:** 147개 테스트 수집 확인. 관련 단위 테스트 통과.
+**현재 기준 테스트:** 153개 테스트 수집 확인. 관련 단위/통합 테스트 통과.
 
 ---
 
@@ -80,7 +88,7 @@
   - 🟡 일반 검토 6개 (split archive, checksum 강제화, branch fallback, author_map 키 검증, toml 우선순위, Phase 2 노출)
   - 🟢 확인 완료 항목, exe 빌드 방법 및 제약 명시
 
-**최종 테스트 확인:** 당시 `134/134 PASS` (2026-06-14 현재 문서 기준: 147개 테스트)
+**최종 테스트 확인:** 당시 `134/134 PASS` (2026-06-14 현재 문서 기준: 153개 테스트)
 
 **현재 상태 요약:**
 
@@ -88,7 +96,7 @@
 |------|------|
 | Phase 1 구현 | ✅ 완료 (Sprint 0~6, 4b 포함) |
 | Phase 2 (Direct Sync) | ✅ Python API 구현 완료, CLI 노출 예정 |
-| 전체 테스트 | ✅ 147개 수집 확인 (2026-06-14 기준) |
+| 전체 테스트 | ✅ 153개 수집 확인 (2026-06-14 기준) |
 | gitshuttle.exe | ⚠️ 미빌드 (사내 PyInstaller 설치 불가, spec/build.ps1 준비 완료) |
 | GitHub push | ✅ main 브랜치 최신 |
 | PR #1 | ✅ Sprint 4b feat/PR 병합 완료 |
@@ -712,7 +720,7 @@ GitHub: https://github.com/ltw070/gitshuttle (private)
 
 ## Phase 1 완료 (2026-05-08)
 
-모든 Sprint(0~7)가 완료되었습니다. 당시 최종 테스트는 **106 passed**, 0 failed였고, 이후 기능 보강을 포함한 2026-06-14 기준 테스트 수는 147개입니다.
+모든 Sprint(0~7)가 완료되었습니다. 당시 최종 테스트는 **106 passed**, 0 failed였고, 이후 기능 보강을 포함한 2026-06-14 기준 테스트 수는 153개입니다.
 
 ### 남은 작업 (Phase 2 이후)
 

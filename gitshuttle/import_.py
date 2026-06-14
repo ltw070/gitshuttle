@@ -183,8 +183,12 @@ def run_import(
     # ------------------------------------------------------------------
     # Step 8. ImportResult 계산 — before/after 비교로 정확한 커밋 수 집계
     # ------------------------------------------------------------------
-    existing_hashes_after = _get_existing_hashes(repo_path)
-    newly_added = existing_hashes_after - existing_hashes_before
+    if rewrite_needed:
+        imported_hashes_after = _get_reachable_hashes(repo_path, tip_hashes)
+        newly_added = imported_hashes_after - existing_hashes_before
+    else:
+        existing_hashes_after = _get_existing_hashes(repo_path)
+        newly_added = existing_hashes_after - existing_hashes_before
 
     imported = len(newly_added)
     skipped = len(duplicates) if on_conflict == "skip" else 0
@@ -268,10 +272,11 @@ def _format_bundle_verify_failure(bundle_path: Path, detail: str) -> str:
         "가능한 원인:",
         "- 최근 1~2개처럼 일부 커밋만 export한 bundle은 대상 repo에 그 직전 원본 부모 커밋 SHA가 있어야 합니다.",
         "- 대상 repo에 이전 이력이 없거나, 작성자/날짜 rewrite로 기존 커밋 SHA가 바뀐 경우 prerequisite 검증에 실패합니다.",
+        "- 최신 GitShuttle은 rewrite import 시 원본 SHA를 refs/gitshuttle/original 아래 보관해 이후 증분 import를 지원합니다.",
         "",
         "해결 방법:",
         "- 대상 repo에 원본 부모 커밋이 있는지 확인하세요.",
-        "- 작성자/날짜 rewrite를 적용한 이전이라면 증분 bundle 대신 필요한 전체 범위를 다시 export/import하세요.",
+        "- 기존 버전으로 이미 rewrite import한 repo라면, 한 번은 필요한 전체 범위를 다시 export/import해 증분 기준점을 만드세요.",
         "- 안전하게는 새 --target-branch 이름으로 전체 이력을 다시 import한 뒤 검토하세요.",
     ])
     return "\n".join(lines)
@@ -354,6 +359,24 @@ def _get_existing_hashes(repo_path: Path) -> set[str]:
 
     result = subprocess.run(
         ["git", "rev-list", "--all"],
+        cwd=repo_path,
+        capture_output=True,
+        encoding='utf-8',
+        env=_git_env(),
+    )
+    if result.returncode != 0:
+        return set()
+
+    return {line.strip() for line in result.stdout.splitlines() if line.strip()}
+
+
+def _get_reachable_hashes(repo_path: Path, tips: list[str]) -> set[str]:
+    """지정 tip들에서 도달 가능한 커밋 해시 집합을 반환한다."""
+    if not tips:
+        return set()
+
+    result = subprocess.run(
+        ["git", "rev-list", *tips],
         cwd=repo_path,
         capture_output=True,
         encoding='utf-8',
@@ -523,6 +546,8 @@ def _rewrite_and_import(
             check=True,
         )
 
+        _fetch_original_shadow_refs(repo_path, tmp_dir)
+
         # bundle → 임시 bare repo fetch
         fetch_result = subprocess.run(
             ["git", "fetch", str(bundle_path), "+refs/*:refs/*"],
@@ -533,6 +558,8 @@ def _rewrite_and_import(
         )
         if fetch_result.returncode != 0:
             raise ValueError(f"bundle fetch 실패:\n{fetch_result.stderr}")
+
+        _delete_original_shadow_refs(tmp_dir)
 
         # 임시 bare repo에서 fast-export 스트림 추출
         export_result = subprocess.run(
@@ -592,6 +619,10 @@ def _rewrite_and_import(
                     "덮어써도 된다면 --on-conflict force 옵션을 사용하세요."
                 )
             raise ValueError(f"fast-import 실패:\n{stderr_text}")
+
+        shadow_warning = _store_original_bundle_refs(bundle_path, repo_path, target_branch)
+        if shadow_warning:
+            warnings.append(shadow_warning)
 
         # target_branch에서 HEAD 업데이트 (checkout or reset)
         tip_hashes = _checkout_or_create_branch(repo_path, target_branch)
@@ -654,3 +685,80 @@ def _ensure_clean_worktree(repo_path: Path) -> None:
             "import 후 target branch로 checkout/reset 해야 하므로, 먼저 변경 사항을 "
             "commit/stash 하거나 정리한 뒤 다시 실행하세요."
         )
+
+
+def _fetch_original_shadow_refs(repo_path: Path, tmp_dir: Path) -> None:
+    """target repo의 원본 SHA shadow refs를 임시 repo로 가져온다.
+
+    rewrite import 후속 증분 bundle은 원본 부모 SHA를 prerequisite로 요구한다.
+    이전 import에서 보관한 refs/gitshuttle/original/* refs를 임시 repo에 먼저
+    가져와야 부분 bundle fetch/fast-export가 가능하다.
+    """
+    try:
+        refs = run_git(
+            ["for-each-ref", "--format=%(refname)", "refs/gitshuttle/original"],
+            cwd=repo_path,
+        )
+    except RuntimeError:
+        return
+
+    if not refs.strip():
+        return
+
+    result = subprocess.run(
+        [
+            "git",
+            "fetch",
+            str(repo_path),
+            "+refs/gitshuttle/original/*:refs/gitshuttle/original/*",
+        ],
+        cwd=tmp_dir,
+        capture_output=True,
+        encoding='utf-8',
+        env=_git_env(),
+    )
+    if result.returncode != 0:
+        raise ValueError(f"원본 SHA shadow refs fetch 실패:\n{result.stderr}")
+
+
+def _delete_original_shadow_refs(tmp_dir: Path) -> None:
+    """임시 repo에서 shadow refs만 삭제하고 object는 남겨 fast-export 대상을 제한한다."""
+    try:
+        refs = run_git(
+            ["for-each-ref", "--format=%(refname)", "refs/gitshuttle/original"],
+            cwd=tmp_dir,
+        )
+    except RuntimeError:
+        return
+
+    for ref in refs.splitlines():
+        ref = ref.strip()
+        if not ref:
+            continue
+        try:
+            run_git(["update-ref", "-d", ref], cwd=tmp_dir)
+        except RuntimeError:
+            pass
+
+
+def _store_original_bundle_refs(
+    bundle_path: Path,
+    repo_path: Path,
+    target_branch: str,
+) -> str | None:
+    """원본 bundle refs를 hidden namespace에 보관해 다음 증분 import 기준점으로 삼는다."""
+    refspec = f"+refs/*:refs/gitshuttle/original/{target_branch}/*"
+    result = subprocess.run(
+        ["git", "fetch", str(bundle_path), refspec],
+        cwd=repo_path,
+        capture_output=True,
+        encoding='utf-8',
+        env=_git_env(),
+    )
+    if result.returncode == 0:
+        return None
+
+    return (
+        "원본 SHA shadow refs 보관 실패: 이후 부분 bundle 증분 import가 실패할 수 있습니다.\n"
+        f"{result.stderr.strip()}"
+    )

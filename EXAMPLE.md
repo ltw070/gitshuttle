@@ -195,8 +195,8 @@ git push -u origin main
 bundle 파일을 `C:\shuttle_transfer\`에 저장해 두었다가 내부망에서 반입하는 흐름을 시뮬레이션합니다.
 
 > 증분 bundle은 대상 repo에 직전 원본 부모 커밋 SHA가 있어야 검증됩니다.  
-> 작성자/날짜 rewrite를 적용해 커밋 SHA가 바뀐 대상 repo에서는 최근 몇 개 커밋만 담은 증분 bundle이 `bundle 검증 실패`가 될 수 있습니다.
-> 그 경우 필요한 전체 범위를 다시 export/import하세요.
+> 작성자/날짜 rewrite를 적용해 커밋 SHA가 바뀐 대상 repo에서는 최신 GitShuttle이 보관한 `refs/gitshuttle/original/...` 기준점이 있어야 최근 몇 개 커밋만 담은 증분 bundle이 검증됩니다.
+> 구버전으로 이전한 repo라면 최신 버전으로 전체 또는 필요한 기준 범위를 한 번 다시 import한 뒤 증분을 이어가세요.
 
 ### 사전 준비
 
@@ -673,6 +673,7 @@ python -m gitshuttle import `
 
 > 현재 `from=` 모드는 첫 커밋을 지정 시각으로 맞추고 이후 커밋은 원본 상대 간격을 유지합니다.  
 > 30분 고정 간격으로 모든 커밋을 재배치하는 옵션은 아직 없습니다.
+> 최신 GitShuttle은 rewrite import 후 원본 refs를 `refs/gitshuttle/original/...`에 숨겨 보관하므로, 이후 같은 대상 브랜치에는 최신 커밋 몇 개만 선택한 부분 bundle도 이어서 import할 수 있습니다.
 
 ---
 
@@ -711,6 +712,29 @@ git -C C:\repos\target-gitshuttle push origin migration/gitshuttle-20260610:main
 
 GitHub 화면에서 "push한 사람"으로 보이는 계정은 커밋 author가 아니라 실제 push 인증 계정입니다.  
 그 표시까지 바꾸려면 해당 계정의 PAT 또는 SSH 인증으로 push해야 합니다.
+
+### Step 8 — 이후 변경분만 부분 import
+
+최초 전체 이전을 최신 GitShuttle로 완료했다면, 다음부터는 새로 생긴 커밋만 선택해 bundle을 만들 수 있습니다.
+
+```powershell
+python -m gitshuttle export `
+  --repo C:\repos\source-gitshuttle `
+  --branch main `
+  --ui tui `
+  --output C:\transfer
+
+python -m gitshuttle import `
+  --repo C:\repos\target-gitshuttle `
+  --file C:\transfer\shuttle_YYMMDD.bundle `
+  --author-map C:\transfer\author_map.json `
+  --target-branch migration/gitshuttle-20260610 `
+  --timestamp original
+```
+
+부분 bundle은 직전 원본 부모 SHA가 필요합니다. 최신 버전은 최초 rewrite import 때 그 기준점을 숨김 ref로 보관하므로, 구버전으로 만든 대상 repo라면 한 번 전체 import를 다시 수행해 기준점을 만든 뒤 부분 import를 사용하세요.
+
+체리픽처럼 변경분만 대상 브랜치 위에 재생하는 방식은 별도 replay 모드가 필요한 대안입니다. 원본 bundle 이력 이전과 달리 merge 구조와 커밋 SHA가 달라질 수 있으므로, 이 예제에서는 bundle 기반 증분 import를 사용합니다.
 
 ---
 

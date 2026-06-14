@@ -148,7 +148,12 @@ import 시 SHA-256 체크섬이 자동 검증됩니다. 불일치 시 작업이 
 
 최근 1~2개처럼 일부 커밋만 export한 bundle은 대상 repo에 그 직전 **원본 부모 커밋 SHA**가 있어야 검증됩니다.
 작성자/날짜 rewrite를 적용한 대상 repo는 커밋 SHA가 바뀌므로, 이런 증분 bundle이 `bundle 검증 실패`가 될 수 있습니다.
-rewrite 이전은 필요한 전체 범위를 한 번에 export/import하는 방식이 가장 안전합니다.
+최신 GitShuttle은 rewrite import 시 원본 bundle refs를 `refs/gitshuttle/original/...` 아래 숨겨 보관해 다음 부분 bundle의 기준점으로 사용합니다.
+따라서 이 버전으로 한 번 전체 또는 필요한 기준 범위를 import한 뒤에는 이후 최신 커밋 몇 개만 export/import하는 증분 흐름을 사용할 수 있습니다.
+구버전으로 이미 이전한 대상 repo는 한 번 전체 범위를 다시 import해 기준점을 만든 뒤 부분 증분을 이어가세요.
+
+체리픽처럼 변경분만 대상 브랜치 위에 재생하는 방식도 가능하지만, 이는 원본 Git 이력을 그대로 옮기는 bundle 방식과 다릅니다.
+커밋 SHA와 merge 구조가 달라질 수 있으므로 GitShuttle의 기본 흐름은 bundle 기반 이력 이전을 유지합니다.
 
 **작성자 매핑 JSON 형식:**
 

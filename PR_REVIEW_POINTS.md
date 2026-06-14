@@ -64,7 +64,7 @@ gitshuttle/                   17개 모듈, 2,724 라인
     ├── html_ui.py            단일 HTML (인터넷 불필요), selection.json 파싱
     └── prompt_ui.py          InquirerPy 방향키 멀티셀렉트
 
-tests/                        15개 테스트 파일, 147개 테스트
+tests/                        15개 테스트 파일, 153개 테스트
 ├── conftest.py               임시 git repo 픽스처
 ├── test_git_ops.py
 ├── test_bundle.py
@@ -148,7 +148,7 @@ gitshuttle sync     (Phase 2 — Python API 단계)
 ### 테스트 현황
 
 ```
-현재 수집 테스트: 147개
+현재 수집 테스트: 153개
 커버리지 대상 모듈: git_ops, bundle, checksum, manifest, export_, import_,
                    rewrite, config, sync, ui(csv/html/prompt), build
 ```
@@ -245,6 +245,19 @@ def _rewrite_control_lines(stream: str, rewrite_line: Callable[[str], str]) -> s
 rewrite import 완료 후 `_checkout_or_create_branch()`가 대상 브랜치로 checkout하고 `reset --hard <tip>`을 실행해 실제 파일이 폴더에 보이도록 맞춥니다.
 사용자 변경 손실을 막기 위해 fast-import 전에 `_ensure_clean_worktree()`가 `git status --porcelain`을 확인합니다.
 
+#### R7. rewrite 이후 부분 bundle 증분 기준점 (`import_.py`)
+
+부분 bundle은 직전 원본 부모 SHA를 prerequisite로 요구합니다.
+author/timestamp rewrite를 하면 target branch의 커밋 SHA가 원본과 달라지므로, 기존 방식만으로는 다음 부분 bundle 검증이 실패할 수 있습니다.
+
+최신 구현은 rewrite import 성공 후 원본 bundle refs를 `refs/gitshuttle/original/<target-branch>/...`에 보관합니다.
+다음 rewrite import에서는 이 숨김 ref를 임시 bare repo로 fetch해 prerequisite 객체를 채운 뒤, fast-export 대상에 섞이지 않도록 숨김 ref 자체는 삭제합니다.
+
+검토 포인트:
+- 숨김 ref가 일반 target branch나 push 대상에 섞이지 않는지
+- `fast-export --all`에 `refs/gitshuttle/original/...` reset/commit 라인이 포함되지 않는지
+- reported `imported` 수가 보관용 원본 객체를 세지 않고 target branch의 새 커밋만 세는지
+
 ---
 
 ### 🟡 일반 검토
@@ -263,7 +276,10 @@ rewrite import 완료 후 `_checkout_or_create_branch()`가 대상 브랜치로 
 
 최근 1~2개 커밋만 선택한 bundle은 직전 부모 커밋을 prerequisite로 가집니다.  
 대상 repo가 원본 부모 SHA를 갖고 있지 않거나, author/timestamp rewrite로 SHA가 바뀐 경우 `git bundle verify`가 실패합니다.
-`verify_bundle_detailed()`와 import 오류 메시지가 이 원인을 사용자에게 설명하는지 확인해 주세요.
+`verify_bundle_detailed()`와 import 오류 메시지가 이 원인 및 `refs/gitshuttle/original/...` 기준점 생성 필요성을 사용자에게 설명하는지 확인해 주세요.
+
+체리픽/replay 방식은 선택 커밋을 대상 브랜치 위에 새 커밋으로 재생할 수 있는 대안입니다.
+다만 원본 bundle 이력 이전과 달리 커밋 SHA와 merge 구조가 달라질 수 있으므로 현재 기본 모드에는 포함하지 않았습니다.
 
 #### Y3. `_detect_source_branch` fallback (`import_.py:~390`)
 
@@ -296,7 +312,7 @@ Phase 2 승인 전 코드가 임의로 호출되지 않도록 `__all__` 제한�
 
 ### 🟢 확인 완료
 
-- **테스트 147개 수집 확인** — 전체 suite는 환경에 따라 장시간 실행될 수 있음
+- **테스트 153개 수집 확인** — 전체 suite는 환경에 따라 장시간 실행될 수 있음
 - **UTF-8 / 한글 처리** — 모든 파일 I/O, subprocess, TUI에 인코딩 명시
 - **망분리 제약** — 외부 네트워크 호출 코드 없음 (sync_.py는 명시적 Phase 2 API)
 - **Breaking Changes 없음** — 기존 `gitshuttle import --file <bundle>` 호환 유지
