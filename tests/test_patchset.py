@@ -50,6 +50,7 @@ def test_create_patchset_writes_metadata_and_patches(tmp_git_repo, tmp_path):
         assert metadata["commits"][0]["subject"] == "feat: replay"
         assert metadata["commits"][0]["patch"] in zf.namelist()
         assert metadata["selection"]["contiguous_first_parent"] is True
+        assert metadata["selection"]["patch_source"] == "format-patch"
 
 
 def test_create_patchset_reuses_batch_metadata_and_parent_cache(tmp_path, monkeypatch):

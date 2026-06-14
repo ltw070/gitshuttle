@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import tempfile
 import zipfile
@@ -19,6 +20,7 @@ PATCHSET_VERSION = 1
 EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 METADATA_FORMAT = "%H%x00%P%x00%an%x00%ae%x00%aI%x00%cn%x00%ce%x00%cI%x00%B%x1e"
 METADATA_BATCH_SIZE = 100
+FORMAT_PATCH_FROM_RE = re.compile(br"(?m)^From [0-9a-f]{40} .*(?:\r?\n)")
 
 
 @dataclass
@@ -58,6 +60,11 @@ def create_patchset(
     patchset_path = output_dir / filename
     replay_commits = list(reversed(commits))
     metadata_by_hash = _read_commits_metadata(repo_path, replay_commits)
+    patches_by_hash, patch_source = _read_commit_patches(
+        repo_path,
+        replay_commits,
+        metadata_by_hash,
+    )
 
     metadata: dict = {
         "type": PATCHSET_TYPE,
@@ -68,7 +75,7 @@ def create_patchset(
                 replay_commits,
                 metadata_by_hash,
             ),
-            "patch_source": "per-commit-diff",
+            "patch_source": patch_source,
         },
         "commits": [],
     }
@@ -79,10 +86,7 @@ def create_patchset(
             commit_meta = metadata_by_hash[commit.hash]
             commit_meta["patch"] = patch_name
             metadata["commits"].append(commit_meta)
-            zf.writestr(
-                patch_name,
-                _read_commit_patch(repo_path, commit.hash, commit_meta["parents"]),
-            )
+            zf.writestr(patch_name, patches_by_hash[commit.hash])
 
         zf.writestr(
             "metadata.json",
@@ -256,6 +260,81 @@ def _read_commits_metadata_batch(repo_path: Path, commits: list[Commit]) -> dict
     return metadata_by_hash
 
 
+def _read_commit_patches(
+    repo_path: Path,
+    replay_commits: list[Commit],
+    metadata_by_hash: dict[str, dict],
+) -> tuple[dict[str, bytes], str]:
+    if _can_use_format_patch(replay_commits, metadata_by_hash):
+        try:
+            return _read_format_patches(repo_path, replay_commits, metadata_by_hash), "format-patch"
+        except ValueError:
+            pass
+
+    return (
+        {
+            commit.hash: _read_commit_patch(
+                repo_path,
+                commit.hash,
+                metadata_by_hash[commit.hash]["parents"],
+            )
+            for commit in replay_commits
+        },
+        "per-commit-diff",
+    )
+
+
+def _read_format_patches(
+    repo_path: Path,
+    replay_commits: list[Commit],
+    metadata_by_hash: dict[str, dict],
+) -> dict[str, bytes]:
+    first = replay_commits[0]
+    tip = replay_commits[-1]
+    first_parents = metadata_by_hash[first.hash]["parents"]
+    cmd = [
+        "git",
+        "format-patch",
+        "--stdout",
+        "--binary",
+        "--full-index",
+        "--no-stat",
+        "--no-signature",
+    ]
+    if first_parents:
+        cmd.append(f"{first_parents[0]}..{tip.hash}")
+    else:
+        cmd.extend(["--root", tip.hash])
+
+    result = subprocess.run(
+        cmd,
+        cwd=repo_path,
+        capture_output=True,
+        env=_git_env(),
+    )
+    if result.returncode != 0:
+        stderr = result.stderr.decode("utf-8", errors="replace")
+        raise ValueError(f"format-patch 생성 실패:\n{stderr}")
+
+    chunks = _split_format_patch_stream(result.stdout)
+    if len(chunks) != len(replay_commits):
+        raise ValueError("format-patch 결과 개수가 선택 커밋 수와 일치하지 않습니다.")
+
+    return {
+        commit.hash: patch_bytes
+        for commit, patch_bytes in zip(replay_commits, chunks)
+    }
+
+
+def _split_format_patch_stream(patch_bytes: bytes) -> list[bytes]:
+    matches = list(FORMAT_PATCH_FROM_RE.finditer(patch_bytes))
+    chunks: list[bytes] = []
+    for index, match in enumerate(matches):
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(patch_bytes)
+        chunks.append(patch_bytes[match.start():end])
+    return chunks
+
+
 def _read_commit_patch(repo_path: Path, commit_hash: str, parents: list[str]) -> bytes:
     base = parents[0] if parents else EMPTY_TREE
     result = subprocess.run(
@@ -292,6 +371,17 @@ def _is_contiguous_first_parent_series(
         if not parents or parents[0] != previous.hash:
             return False
     return True
+
+
+def _can_use_format_patch(
+    replay_commits: list[Commit],
+    metadata_by_hash: dict[str, dict],
+) -> bool:
+    if not replay_commits:
+        return False
+    if not _is_contiguous_first_parent_series(replay_commits, metadata_by_hash):
+        return False
+    return all(metadata_by_hash[commit.hash]["parent_count"] <= 1 for commit in replay_commits)
 
 
 def _load_patchset_metadata(patchset_path: Path) -> dict:

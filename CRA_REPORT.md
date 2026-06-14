@@ -375,8 +375,9 @@ bundle은 Git object graph를 다루고, patchset은 diff replay를 다룬다.
 그래서 `--format patchset`, `--mode replay`로 별도 모드화했다.
 
 **성능 관점:**
-patchset import는 일부 커밋 적용 시 가볍지만, patchset export는 커밋별 diff를 만들어야 하므로 많은 커밋에서는 bundle보다 느릴 수 있다.
-이 병목을 줄이기 위해 metadata는 `git show --no-patch`로 일괄 조회하고, parent 정보는 metadata에서 재사용해 `rev-list` 중복 호출을 제거했다.
+patchset import는 일부 커밋 적용 시 가볍지만, patchset export는 patch 파일을 만들어야 하므로 많은 커밋에서는 bundle보다 느릴 수 있다.
+이 병목을 줄이기 위해 metadata는 `git show --no-patch`로 batch 조회하고, parent 정보는 metadata에서 재사용해 `rev-list` 중복 호출을 제거했다.
+연속 선형 first-parent 범위는 `git format-patch --stdout` 기반으로 빠르게 만들고, merge나 비연속 선택은 기존 커밋별 diff 방식으로 fallback한다.
 CLI에는 `--recent N`을 추가해 최신 N개만 조회·선택하게 했고, `--patchset-compression fast|stored|deflated`로 zip 압축 비용을 조절할 수 있게 했다.
 이미 적용된 patch는 skip하고, 같은 경로의 다른 내용 충돌은 복구 안내와 함께 중단하도록 보강했다.
 따라서 현재 권장 기준은 다음과 같다.

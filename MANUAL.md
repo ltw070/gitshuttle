@@ -527,7 +527,7 @@ replay는 원본 커밋 객체를 옮기는 것이 아니라 각 커밋의 diff�
 하지만 같은 경로의 파일이 이미 있고 내용이 다르면 `patch failed`, `patch does not apply`, `already exists in index` 계열 오류가 날 수 있습니다.
 이 경우 이미 반영된 커밋은 선택하지 말고 그 이후 커밋만 다시 patchset으로 만들거나, 대상 브랜치에서 충돌 파일을 직접 정리한 뒤 다시 실행하세요.
 
-patchset export는 metadata를 커밋별로 반복 조회하지 않고 한 번에 읽고, parent 정보도 patch 생성에 재사용합니다. 압축은 기본 `fast`이며, CPU 시간이 더 중요하면 `--patchset-compression stored`로 무압축 저장을 선택할 수 있습니다. 연속 first-parent 범위 여부는 metadata에 기록되지만, replay 호환성을 위해 patch 파일은 커밋별 diff 형태로 유지됩니다.
+patchset export는 metadata를 커밋별로 반복 조회하지 않고 batch로 읽고, parent 정보도 patch 생성에 재사용합니다. 압축은 기본 `fast`이며, CPU 시간이 더 중요하면 `--patchset-compression stored`로 무압축 저장을 선택할 수 있습니다. 연속 선형 first-parent 범위는 `git format-patch --stdout` 기반으로 빠르게 생성하고, merge나 비연속 선택은 기존 커밋별 diff 방식으로 자동 fallback합니다.
 
 ---
 

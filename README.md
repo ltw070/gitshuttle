@@ -192,7 +192,7 @@ replay import는 대상 브랜치의 마지막 커밋 메시지와 새로 붙일
 이미 같은 변경분이 대상 브랜치에 적용되어 있으면 해당 replay patch는 건너뜁니다.
 같은 경로의 파일이 이미 있지만 내용이 달라 `patch failed`, `patch does not apply`, `already exists in index`가 나는 경우에는 충돌로 보고 중단하며, 이미 반영된 커밋 이후만 다시 선택해 patchset을 만드는 것이 안전합니다.
 
-patchset export는 커밋 metadata를 일괄 조회하고 parent 정보를 재사용하도록 최적화되어 있습니다. 연속 first-parent 범위 여부도 metadata에 기록되며, 현재 replay 호환성을 유지하기 위해 patch는 커밋별 diff로 저장합니다.
+patchset export는 커밋 metadata를 batch 조회하고 parent 정보를 재사용하도록 최적화되어 있습니다. 연속 선형 first-parent 범위는 `git format-patch --stdout` 기반으로 patch를 만들고, merge나 비연속 선택은 기존 커밋별 diff 방식으로 자동 fallback합니다.
 
 **작성자 매핑 JSON 형식:**
 

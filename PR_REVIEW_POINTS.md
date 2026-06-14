@@ -276,6 +276,7 @@ author/timestamp rewrite를 하면 target branch의 커밋 SHA가 원본과 달�
 - 이미 적용된 patch는 skip하고, 같은 경로의 다른 내용 충돌은 복구 안내와 함께 중단되는지
 - patch 적용 실패 시 사용자 변경 손실 없이 중단되는지
 - patchset export가 metadata를 일괄 조회하고 parent 정보를 재사용해 커밋별 중복 Git 호출을 줄이는지
+- 연속 선형 first-parent 범위에서는 `git format-patch --stdout` 경로를 사용하고, merge/비연속 선택에서는 per-commit diff로 fallback하는지
 - `--recent N`이 TUI를 열지 않고 최신 N개만 조회·선택하는지
 - `--patchset-compression stored` 사용 시 무압축 저장으로 CPU 시간을 줄이는 대신 파일 크기 증가를 감수하는 동작이 문서와 일치하는지
 

@@ -33,7 +33,8 @@
   - 커밋 metadata를 커밋별 3회 조회하던 구조를 `git show --no-patch` batch 조회로 변경
   - parent 정보를 metadata에서 재사용해 patch 생성 시 `rev-list` 중복 조회 제거
   - zip 기본 압축을 `fast`로 낮추고, `stored` 무압축 저장을 지원
-  - 연속 first-parent 범위 여부를 patchset metadata에 기록
+  - 연속 선형 first-parent 범위는 `git format-patch --stdout` 기반으로 patch 생성
+  - merge나 비연속 선택은 기존 per-commit diff 방식으로 자동 fallback
 - `tests/test_cli.py`, `tests/test_git_ops.py`, `tests/test_patchset.py`
   - `--recent N`이 UI를 열지 않고 limit 조회로 이어지는지 검증
   - patchset metadata/parent 재사용과 `stored` 압축 옵션 검증
