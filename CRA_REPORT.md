@@ -3,7 +3,7 @@
 > **작성 가이드**  
 > 이 문서는 GitShuttle 프로젝트의 기술적 성과를 분석합니다.  
 > 1부: 프로젝트 개요 및 배경·기여 효과  
-> 2부: Agents / TDD / Clean Code / Refactoring 네 가지 관점의 핵심 사례
+> 2부: Agents / TDD / Clean Code / Refactoring / SOLID / Mock 관점의 핵심 사례
 
 ---
 
@@ -313,6 +313,216 @@ After refactoring:
   test_import_abort_on_conflict          PASSED
   (전체 7/7 PASSED)
 ```
+
+---
+
+### 5. SOLID 원칙 관점
+
+**제목:** Git 히스토리 이전 파이프라인에 적용된 실용적 SOLID
+
+**설명:**  
+GitShuttle은 대규모 객체지향 계층을 가진 프로젝트는 아니지만, 핵심 파이프라인을 작은 함수와 명확한 경계로 나누면서 SOLID의 일부 원칙을 실용적으로 적용했다.  
+특히 단일 책임 원칙(SRP), 개방-폐쇄 원칙(OCP), 인터페이스 분리 원칙(ISP), 의존성 역전 관점(DIP)이 코드 구조에서 확인된다.
+
+#### SRP — Single Responsibility Principle
+
+**사례:** `run_import()`는 전체 흐름을 조율하고, 실제 책임은 작은 내부 함수로 분리한다.
+
+```python
+def _verify_checksum(bundle_path, sha256_path) -> None:
+    """SHA-256 검증."""
+
+def _get_existing_hashes(repo_path: Path) -> set[str]:
+    """target repo의 전체 커밋 해시 집합 반환."""
+
+def _unbundle(bundle_path: Path, repo_path: Path) -> list[str]:
+    """bundle objects 추가 + tip 해시 반환."""
+
+def _merge_tip(repo_path: Path, tip_hash: str) -> None:
+    """tip 해시를 현재 브랜치에 병합."""
+```
+
+**분석:**  
+체크섬 검증, 중복 감지, bundle 반입, merge 처리가 한 함수 안에 뒤섞이지 않는다.  
+이 덕분에 `bundle 검증 실패`, `fast-import 실패`, `중복 커밋 처리` 같은 문제를 각각 독립적으로 수정하고 테스트할 수 있다.
+
+#### OCP — Open/Closed Principle
+
+**사례:** `rewrite.py`는 author, branch, timestamp 재작성을 독립 함수로 나누고 `apply_rewrites()`에서 조합한다.
+
+```python
+def apply_rewrites(
+    stream: str,
+    author_map: dict,
+    target_branch: str,
+    timestamp_mode: str,
+    from_dt: Optional[datetime] = None,
+) -> tuple[str, list[str]]:
+    stream, warnings = rewrite_authors(stream, author_map)
+    stream = rewrite_branch_ref(stream, target_branch)
+    stream = rewrite_timestamps(stream, mode=timestamp_mode, from_dt=from_dt)
+    return stream, warnings
+```
+
+**분석:**  
+새로운 rewrite 규칙이 필요해도 기존 `rewrite_authors()`나 `rewrite_branch_ref()`를 직접 깨뜨릴 필요가 적다.  
+예를 들어 커밋 메시지 prefix 추가, 특정 파일 경로 rewrite 같은 요구가 생기면 새 함수를 만들고 `apply_rewrites()`에 한 단계로 추가할 수 있다.
+
+#### ISP — Interface Segregation Principle
+
+**사례:** CLI는 복잡한 내부 구현을 직접 알지 않고, 좁은 API와 결과 객체만 사용한다.
+
+```python
+result = run_import(
+    bundle_path=bundle_path,
+    repo_path=repo_path,
+    on_conflict=on_conflict,
+    author_map_path=effective_author_map,
+    target_branch=target_branch,
+    timestamp_mode=effective_timestamp,
+)
+
+typer.echo(f"  imported : {result.imported}개")
+typer.echo(f"  skipped  : {result.skipped}개")
+typer.echo(f"  total    : {result.total}개")
+```
+
+**분석:**  
+CLI 레이어는 `git bundle`, `fast-export`, `fast-import`, SHA-256 계산 방식까지 알 필요가 없다.  
+`ImportResult`의 `imported`, `skipped`, `total`, `warnings`만 사용하므로 호출자 관점의 인터페이스가 작고 명확하다.
+
+#### DIP — Dependency Inversion Principle 관점
+
+**사례:** 상위 레이어인 `cli.py`는 Git 명령 실행 세부사항에 직접 의존하지 않고 `run_export()`, `run_import()` 같은 유스케이스 함수에 의존한다.
+
+```python
+# cli.py
+from gitshuttle.import_ import run_import, ChecksumError, ImportConflictError
+
+# import_.py 내부에서만 subprocess, git bundle, fast-import 세부 구현 처리
+```
+
+**분석:**  
+완전한 DI 컨테이너 구조는 아니지만, 사용자 인터페이스와 Git 처리 세부 구현이 분리되어 있다.  
+테스트에서도 이 경계가 활용되어 `cli.py`는 `run_import()`를 monkeypatch하고, `sync_.py`는 `subprocess.run`을 mock 처리해 네트워크 없이 검증한다.
+
+**적용하지 않은 원칙 — LSP:**  
+이 프로젝트는 상속 기반 다형성보다 함수 조합과 데이터클래스를 중심으로 구성되어 있어 LSP(Liskov Substitution Principle)를 평가할 만한 클래스 계층이 거의 없다.  
+이는 SOLID 미준수라기보다, 문제 크기에 맞게 불필요한 상속 구조를 만들지 않은 설계 선택에 가깝다.
+
+---
+
+### 6. Mock 관점
+
+**제목:** 외부 GitHub·Git subprocess를 격리한 테스트 전략
+
+**설명:**  
+GitShuttle은 실제 GitHub 접근, 토큰 인증, 네트워크 push처럼 느리고 실패 가능성이 높은 동작을 테스트에서 직접 수행하지 않는다.  
+대신 `unittest.mock.patch`, `MagicMock`, `monkeypatch`, `CliRunner`를 사용해 외부 의존성을 격리하고, 코드가 어떤 명령과 옵션을 호출하는지 검증한다.
+
+#### 사례 1 — Direct Sync의 subprocess mock
+
+`tests/test_sync.py`는 `gitshuttle.sync_.subprocess.run`을 mock 처리해 실제 clone/push 없이 Direct Sync 흐름을 검증한다.
+
+```python
+with patch("gitshuttle.sync_.subprocess.run") as mock_run:
+    mock_result = MagicMock()
+    mock_result.returncode = 0
+    mock_result.stdout = ""
+    mock_result.stderr = ""
+    mock_run.return_value = mock_result
+
+    run_sync(
+        source_url="https://github.com/org1/repo",
+        target_url="https://github.com/org2/repo",
+        work_dir=tmp_path,
+    )
+
+assert mock_run.call_count >= 1
+```
+
+**효과:**  
+테스트가 네트워크 상태, GitHub 권한, 토큰 만료 여부에 영향을 받지 않는다.  
+CI 환경에서도 안정적으로 실행할 수 있고, 실패 원인이 비즈니스 로직인지 외부 서비스인지 분리된다.
+
+#### 사례 2 — subprocess 호출 옵션 검증
+
+동기화 테스트는 mock 호출 기록을 검사해 모든 Git 명령이 UTF-8 인코딩과 안전한 환경변수를 사용하는지 확인한다.
+
+```python
+for c in mock_run.call_args_list:
+    kwargs = c.kwargs if c.kwargs else {}
+    assert kwargs.get("encoding") == "utf-8"
+
+    env = kwargs.get("env")
+    if env is not None:
+        assert env.get("PYTHONIOENCODING") == "utf-8"
+```
+
+**효과:**  
+실제 Git 명령을 실행하지 않아도 "명령을 어떤 방식으로 호출하는가"를 검증할 수 있다.  
+Windows 한글 경로, 콘솔 인코딩, 망분리 환경에서 자주 발생하는 문자 깨짐 위험을 테스트 레벨에서 줄인다.
+
+#### 사례 3 — 보안 관점 mock: 토큰 노출 방지
+
+실패하는 subprocess 결과를 mock으로 만들고, 예외 메시지에 토큰이 포함되지 않는지 검증한다.
+
+```python
+secret_token = "ghp_VERYSECRETTOKEN999"
+
+with patch("gitshuttle.sync_.subprocess.run") as mock_run:
+    mock_result = MagicMock()
+    mock_result.returncode = 1
+    mock_result.stderr = "fatal: repository not found"
+    mock_run.return_value = mock_result
+
+    with pytest.raises(Exception) as exc_info:
+        run_sync(
+            source_url="https://github.com/org/repo",
+            target_url="https://github.com/org/repo2",
+            source_token=secret_token,
+            work_dir=tmp_path,
+        )
+
+assert secret_token not in str(exc_info.value)
+```
+
+**효과:**  
+보안 요구사항을 사람이 리뷰로만 확인하지 않고 테스트로 고정했다.  
+토큰이 URL에 삽입되는 구조에서도 오류 메시지에는 마스킹된 값만 남도록 강제한다.
+
+#### 사례 4 — CLI 테스트의 monkeypatch
+
+`tests/test_cli.py`는 `run_export()`와 `run_import()`를 fake 함수로 바꿔 CLI 옵션 전달만 검증한다.
+
+```python
+def fake_run_import(
+    bundle_path,
+    repo_path,
+    on_conflict="skip",
+    sha256_path=None,
+    author_map_path=None,
+    target_branch=None,
+    timestamp_mode="now",
+):
+    captured["repo_path"] = repo_path
+    captured["timestamp_mode"] = timestamp_mode
+    return ImportResult(imported=1, skipped=0, total=1)
+
+monkeypatch.setattr(import_module, "run_import", fake_run_import)
+```
+
+**효과:**  
+CLI 테스트가 실제 bundle 검증이나 fast-import에 의존하지 않는다.  
+`--repo`, `--timestamp` 같은 옵션이 내부 API로 정확히 전달되는지 빠르게 확인할 수 있다.
+
+#### Mock 사용 시 주의점
+
+Mock은 외부 의존성을 빠르고 안정적으로 격리하지만, 실제 Git 동작과 완전히 같지는 않다.  
+그래서 GitShuttle은 mock 테스트만 두지 않고 `test_import.py`, `test_bundle.py`, `test_e2e.py`처럼 실제 임시 Git repo를 만들어 검증하는 테스트도 함께 둔다.
+
+**정리:**  
+Mock 테스트는 "명령 호출 방식", "오류 처리", "토큰 마스킹", "CLI 옵션 전달"을 빠르게 검증하고, 실제 Git repo 기반 테스트는 bundle 생성·검증·반입의 현실 동작을 보완한다.
 
 ---
 

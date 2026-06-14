@@ -164,6 +164,7 @@ def run_import(
             target_branch=effective_target_branch,
             timestamp_mode=effective_ts_mode,
             from_dt=from_dt,
+            force_ref_update=on_conflict == "force",
         )
     else:
         # ------------------------------------------------------------------
@@ -473,6 +474,7 @@ def _rewrite_and_import(
     target_branch: str,
     timestamp_mode: str,
     from_dt,
+    force_ref_update: bool = False,
 ) -> tuple[list[str], list[str]]:
     """fast-export → apply_rewrites → fast-import 파이프라인.
 
@@ -543,8 +545,12 @@ def _rewrite_and_import(
             'GIT_COMMITTER_NAME': 'GitShuttle',
             'GIT_COMMITTER_EMAIL': 'gitshuttle@local',
         }
+        fast_import_cmd = ["git", "fast-import", "--quiet"]
+        if force_ref_update:
+            fast_import_cmd.append("--force")
+
         import_result = subprocess.run(
-            ["git", "fast-import", "--quiet"],
+            fast_import_cmd,
             cwd=repo_path,
             input=rewritten_stream.encode('utf-8', errors='surrogateescape'),
             capture_output=True,
@@ -552,6 +558,16 @@ def _rewrite_and_import(
         )
         if import_result.returncode != 0:
             stderr_text = import_result.stderr.decode('utf-8', errors='replace') if import_result.stderr else ''
+            if "Not updating refs/heads/" in stderr_text and "does not contain" in stderr_text:
+                raise ValueError(
+                    "fast-import 실패:\n"
+                    f"{stderr_text}\n"
+                    f"대상 브랜치 '{target_branch}'가 이미 존재하지만, "
+                    "이번 import 이력이 기존 브랜치 tip을 포함하지 않습니다.\n"
+                    "해결 방법: 다른 --target-branch 이름을 사용하거나, "
+                    "기존 로컬 브랜치를 삭제한 뒤 다시 import하거나, "
+                    "덮어써도 된다면 --on-conflict force 옵션을 사용하세요."
+                )
             raise ValueError(f"fast-import 실패:\n{stderr_text}")
 
         # target_branch에서 HEAD 업데이트 (checkout or reset)

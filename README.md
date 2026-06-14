@@ -22,12 +22,21 @@
 
 ### 방법 1 — 실행 파일 (권장, Python 불필요)
 
-[GitHub Releases](https://github.com/ltw070/gitshuttle/releases)에서 `gitshuttle.exe`를 다운로드하여 원하는 경로에 배치합니다.
+`gitshuttle.exe` 릴리즈가 등록된 경우 [GitHub Releases](https://github.com/ltw070/gitshuttle/releases)에서 다운로드하여 원하는 경로에 배치합니다.
+현재 릴리즈 파일이 없다면 아래 Python 직접 실행 또는 PyInstaller 직접 빌드 방식을 사용하세요.
 
 ```
 gitshuttle export
 gitshuttle import --file shuttle_260508.bundle
 gitshuttle config
+```
+
+직접 빌드:
+
+```powershell
+pip install pyinstaller
+powershell -ExecutionPolicy Bypass -File build.ps1
+# dist\gitshuttle.exe 생성
 ```
 
 ### 방법 2 — Python 직접 실행
@@ -77,6 +86,14 @@ Options:
 gitshuttle export --repo C:\repos\external-repo --branch main --output C:\transfer
 ```
 
+모든 커밋을 선택하고 싶고 TUI 선택 화면을 건너뛰려면 headless 모드를 사용할 수 있습니다.
+
+```powershell
+$env:GITSHUTTLE_HEADLESS = "1"
+gitshuttle export --repo C:\repos\external-repo --branch main --ui tui --output C:\transfer
+Remove-Item Env:\GITSHUTTLE_HEADLESS
+```
+
 **커밋 선택 UI 방식:**
 
 | 옵션 | 방식 | 설명 |
@@ -113,7 +130,7 @@ gitshuttle import --file C:\transfer\shuttle_260612.bundle --repo C:\repos\inter
 | 옵션 | 동작 |
 |------|------|
 | `skip` (기본값) | 이미 존재하는 커밋은 건너뛰고 나머지 계속 진행 |
-| `force` | 이미 존재해도 강제 계속 진행 |
+| `force` | 이미 존재해도 강제 계속 진행. rewrite import에서는 기존 대상 브랜치 ref도 덮어씀 |
 | `abort` | 충돌 발견 즉시 전체 작업 중단 |
 
 **브랜치 격리:** 소스의 `main`/`master`는 타겟의 기존 기본 브랜치에 직접 병합되지 않고, 별도 브랜치(`imported/main` 등)로 격리됩니다.
@@ -127,6 +144,19 @@ gitshuttle import --file C:\transfer\shuttle_260612.bundle --repo C:\repos\inter
 | `from=YYYY-MM-DDTHH:MM:SS` | 최초 커밋 = 지정 시각, 이후 커밋은 원본 상대 간격 유지 |
 
 import 시 SHA-256 체크섬이 자동 검증됩니다. 불일치 시 작업이 중단되며 재export 방법이 안내됩니다.
+
+**작성자 매핑 JSON 형식:**
+
+```json
+{
+  "old@example.com": {
+    "name": "ltw070",
+    "email": "ltw070@naver.com"
+  }
+}
+```
+
+매핑 키는 `"Name <email>"`이 아니라 이메일 주소만 사용합니다.
 
 ### `config` — 설정 마법사
 
@@ -148,9 +178,7 @@ ui = "tui"   # tui | csv | html | prompt
 
 [import]
 timestamp = "now"   # now | original | from=2024-01-01T09:00:00
-
-[import.author_map]
-"Jane Doe <jane@external.com>" = "홍길동 <hong@internal.com>"
+author_map = "C:\\transfer\\author_map.json"
 ```
 
 CLI 옵션은 설정 파일보다 항상 우선합니다.
@@ -190,9 +218,7 @@ merge_bundles(parts, "shuttle_260508_merged.bundle")
 
 네트워크가 연결된 환경에서 파일 없이 두 GitHub repo를 직접 동기화합니다.
 
-```
-gitshuttle sync [--on-conflict skip|force|abort]
-```
+현재 `gitshuttle sync` CLI는 안내 메시지만 출력합니다. 실제 동기화는 Python API `run_sync()`로 사용할 수 있습니다.
 
 **연결 설정 (`gitshuttle.toml`):**
 
@@ -211,7 +237,19 @@ auth = "token"
 ```
 set GS_SOURCE_TOKEN=ghp_...
 set GS_TARGET_TOKEN=ghp_...
-gitshuttle sync
+```
+
+```python
+import os
+from gitshuttle.sync_ import run_sync
+
+result = run_sync(
+    source_url="https://github.com/org1/repo",
+    target_url="https://github.com/org2/repo",
+    source_token=os.environ["GS_SOURCE_TOKEN"],
+    target_token=os.environ["GS_TARGET_TOKEN"],
+)
+print(result)
 ```
 
 **SSH 방식:**

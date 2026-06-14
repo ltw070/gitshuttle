@@ -11,10 +11,44 @@
 | 2 | `sprint/2-export-tui` | Export + TUI | ✅ DONE | PASS | PASS | PASS (39/39) | PASS |
 | 3 | `sprint/3-ui-config` | UI 모드 + Config | ✅ DONE | PASS | PASS | PASS (64/64) | PASS |
 | 4 | `sprint/4-import` | Import | ✅ DONE | PASS | PASS | PASS (71/71) | PASS |
-| 4b | `sprint/4b-import-rewrite` | 작성자 매핑 & 브랜치 리네임 | ✅ DONE | PASS | PASS | PASS (134/134) | PASS |
+| 4b | `sprint/4b-import-rewrite` | 작성자 매핑 & 브랜치 리네임 | ✅ DONE | PASS | PASS | PASS (당시 134/134) | PASS |
 | 5 | `sprint/5-e2e` | 분할 압축 + E2E | ✅ DONE | PASS | PASS | PASS (79/79) | PASS |
 | 6 | `sprint/6-build` | PyInstaller 빌드 | ✅ DONE | PASS | PASS | PASS (85/85) | PASS |
 | 7 | `sprint/7-direct-sync` | Direct Sync (Phase 2) | ✅ DONE | PASS | PASS | PASS (102/102) | PASS |
+
+---
+
+## 2026-06-14 — 문서 현행화 및 리뷰 관점 보강
+
+### CRA / 사용자 문서 / 리뷰 문서 업데이트 + fast-import 오류 개선
+
+**변경 내용:**
+- `CRA_REPORT.md`
+  - 5번 항목: SOLID 원칙 관점 추가
+  - 6번 항목: Mock 테스트 관점 추가
+- `PR_REVIEW_POINTS.md`
+  - 현재 테스트 수를 141개 기준으로 업데이트
+  - `--repo` 옵션, fast-import 바이너리 입력, fast-export `data N` payload 보존 포인트 반영
+  - `author_map.json` 형식을 이메일 키 + `{name,email}` dict 형식으로 정리
+- `README.md`
+  - `--repo` 기반 실행, headless 전체 선택, 작성자 매핑 JSON 예시 보강
+  - `sync`는 현재 CLI 직접 동기화가 아니라 Python API 단계임을 명확화
+- `MANUAL.md`
+  - `--output`을 파일명이 아닌 출력 폴더 옵션으로 수정
+  - 작성자 매핑 JSON 형식과 `gitshuttle.toml`의 `author_map` 파일 경로 설정 수정
+  - KST 기준 타임스탬프 입력 시 UTC 변환 필요성 추가
+  - `refs/gitshuttle/tmp_*` ref가 target branch로 rewrite되는 최신 동작 반영
+- `EXAMPLE.md`
+  - 일반 GitHub → 사내 GitHub 이전 예제 추가
+  - 전체 이력 선택을 위한 `GITSHUTTLE_HEADLESS=1` 흐름 문서화
+- `gitshuttle/import_.py`
+  - rewrite import에서 `--on-conflict force` 사용 시 `git fast-import --force`를 전달하도록 수정
+  - 기존 target branch가 non-fast-forward 관계일 때 복구 방법을 포함한 오류 메시지 출력
+- `tests/test_import.py`
+  - fast-import `--force` 전달 테스트 추가
+  - `Not updating refs/heads/... does not contain ...` 오류 안내 메시지 테스트 추가
+
+**현재 기준 테스트:** 141개 테스트 수집 확인. 관련 단위 테스트 3개 통과.
 
 ---
 
@@ -31,7 +65,7 @@
   - 🟡 일반 검토 6개 (split archive, checksum 강제화, branch fallback, author_map 키 검증, toml 우선순위, Phase 2 노출)
   - 🟢 확인 완료 항목, exe 빌드 방법 및 제약 명시
 
-**최종 테스트 확인:** `134/134 PASS` (백그라운드 pytest 전체 실행)
+**최종 테스트 확인:** 당시 `134/134 PASS` (2026-06-14 현재 문서 기준: 141개 테스트)
 
 **현재 상태 요약:**
 
@@ -39,7 +73,7 @@
 |------|------|
 | Phase 1 구현 | ✅ 완료 (Sprint 0~6, 4b 포함) |
 | Phase 2 (Direct Sync) | ✅ Python API 구현 완료, CLI 노출 예정 |
-| 전체 테스트 | ✅ 134/134 PASS |
+| 전체 테스트 | ✅ 141개 수집 확인 (2026-06-14 기준) |
 | gitshuttle.exe | ⚠️ 미빌드 (사내 PyInstaller 설치 불가, spec/build.ps1 준비 완료) |
 | GitHub push | ✅ main 브랜치 최신 |
 | PR #1 | ✅ Sprint 4b feat/PR 병합 완료 |
@@ -129,7 +163,7 @@
 **배경:** 리포지토리가 다를 경우 소스 커밋의 작성자·브랜치·타임스탬프가 타겟 조직 규칙과 맞지 않는 문제 발생.
 
 **PRD 변경 (3.6):**
-- 3.6.1 작성자 매핑: `--author-map <json>` + toml `[import.author_map]`
+- 3.6.1 작성자 매핑: `--author-map <json>` + toml `[import].author_map`
 - 3.6.2 브랜치 격리: 소스 `main`/`master`를 타겟의 **별도 브랜치**로 생성 (타겟 기본 브랜치 보호)
   - `--target-branch <name>` 미지정 시 기본값 `imported/<소스브랜치명>`
   - `--branch-map` 제거 → 단순화
@@ -663,7 +697,7 @@ GitHub: https://github.com/ltw070/gitshuttle (private)
 
 ## Phase 1 완료 (2026-05-08)
 
-모든 Sprint(0~7)가 완료되었습니다. 최종 테스트: **106 passed**, 0 failed.
+모든 Sprint(0~7)가 완료되었습니다. 당시 최종 테스트는 **106 passed**, 0 failed였고, 이후 기능 보강을 포함한 2026-06-14 기준 테스트 수는 141개입니다.
 
 ### 남은 작업 (Phase 2 이후)
 

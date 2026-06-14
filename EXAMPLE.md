@@ -1,6 +1,6 @@
 # GitShuttle 사용 예제
 
-실제 실행한 두 가지 시나리오를 단계별로 따라 할 수 있도록 정리했습니다.
+대표 시나리오를 단계별로 따라 할 수 있도록 정리했습니다.
 
 ---
 
@@ -567,7 +567,150 @@ To https://github.com/ltw070/gitshuttle_copyTest
 
 ---
 
-## 두 예제 비교
+## 예제 4 — 일반 GitHub에서 사내 GitHub로 전체 이력 이전
+
+**시나리오:** 외부 GitHub의 `ltw070/gitshuttle` 전체 이력을 사내 GitHub의 `tw070-lim/gitshuttle`로 옮깁니다.  
+커밋 author/committer는 한 사용자(`ltw070 <ltw070@naver.com>`)로 통일하고, import 결과는 별도 브랜치에 올립니다.
+
+> 사내 GitHub URL은 `https://github.samsungds.net/...`처럼 슬래시가 두 개 들어가야 합니다.
+
+---
+
+### Step 1 — 외부/사내 리포지토리 clone
+
+```powershell
+git clone https://github.com/ltw070/gitshuttle.git C:\repos\source-gitshuttle
+git clone https://github.samsungds.net/tw070-lim/gitshuttle.git C:\repos\target-gitshuttle
+```
+
+사내 리포지토리는 GitHub에서 빈 repo로 먼저 만들어 둡니다.
+
+---
+
+### Step 2 — 원본 작성자 이메일 확인
+
+```powershell
+git -C C:\repos\source-gitshuttle log --all --format="%an <%ae>" | Sort-Object -Unique
+```
+
+출력된 모든 이메일을 다음 단계의 `author_map.json` 키로 넣습니다.
+
+---
+
+### Step 3 — 모든 작성자를 한 명으로 매핑
+
+`C:\transfer\author_map.json` 파일을 만듭니다.
+
+```json
+{
+  "old-user-1@example.com": {
+    "name": "ltw070",
+    "email": "ltw070@naver.com"
+  },
+  "old-user-2@example.com": {
+    "name": "ltw070",
+    "email": "ltw070@naver.com"
+  }
+}
+```
+
+키는 `"Name <email>"`이 아니라 이메일 주소만 사용합니다.
+
+---
+
+### Step 4 — 전체 이력을 선택 없이 export
+
+`GITSHUTTLE_HEADLESS=1`을 켜면 TUI 선택 없이 조회된 커밋 전체가 선택됩니다.
+
+```powershell
+$env:GITSHUTTLE_HEADLESS = "1"
+
+python -m gitshuttle export `
+  --repo C:\repos\source-gitshuttle `
+  --branch main `
+  --ui tui `
+  --output C:\transfer
+
+Remove-Item Env:\GITSHUTTLE_HEADLESS
+```
+
+생성 파일:
+
+```text
+C:\transfer\shuttle_YYMMDD.bundle
+C:\transfer\shuttle_YYMMDD.bundle.sha256
+C:\transfer\shuttle_YYMMDD_manifest.txt
+```
+
+---
+
+### Step 5 — 사내 리포지토리에 import
+
+```powershell
+python -m gitshuttle import `
+  --repo C:\repos\target-gitshuttle `
+  --file C:\transfer\shuttle_YYMMDD.bundle `
+  --author-map C:\transfer\author_map.json `
+  --target-branch migration/gitshuttle-20260610 `
+  --timestamp original
+```
+
+커밋 날짜를 새 기준일로 옮기려면 `--timestamp from=`을 사용합니다.
+
+```powershell
+# 2026-06-10 09:00 KST로 보이게 하려면 UTC 00:00 입력
+python -m gitshuttle import `
+  --repo C:\repos\target-gitshuttle `
+  --file C:\transfer\shuttle_YYMMDD.bundle `
+  --author-map C:\transfer\author_map.json `
+  --target-branch migration/gitshuttle-20260610 `
+  --timestamp from=2026-06-10T00:00:00
+```
+
+> 현재 `from=` 모드는 첫 커밋을 지정 시각으로 맞추고 이후 커밋은 원본 상대 간격을 유지합니다.  
+> 30분 고정 간격으로 모든 커밋을 재배치하는 옵션은 아직 없습니다.
+
+---
+
+### Step 6 — 결과 확인
+
+```powershell
+git -C C:\repos\target-gitshuttle log migration/gitshuttle-20260610 `
+  --format="%h %an <%ae> %cn <%ce> %ad %s" `
+  --date=iso
+```
+
+확인 포인트:
+
+| 항목 | 확인 내용 |
+|------|-----------|
+| author | `ltw070 <ltw070@naver.com>`로 통일 |
+| committer | `ltw070 <ltw070@naver.com>`로 통일 |
+| branch | `migration/gitshuttle-20260610`에 생성 |
+| 파일 내용 | 코드 안의 `author`, `commit refs/...` 문자열은 변경되지 않음 |
+
+---
+
+### Step 7 — 사내 GitHub로 push
+
+검토용 브랜치로 먼저 올리는 방식:
+
+```powershell
+git -C C:\repos\target-gitshuttle push origin migration/gitshuttle-20260610
+```
+
+사내 리포지토리가 비어 있고 바로 `main`으로 올려도 되는 경우:
+
+```powershell
+git -C C:\repos\target-gitshuttle push origin migration/gitshuttle-20260610:main
+```
+
+GitHub 화면에서 "push한 사람"으로 보이는 계정은 커밋 author가 아니라 실제 push 인증 계정입니다.  
+그 표시까지 바꾸려면 해당 계정의 PAT 또는 SSH 인증으로 push해야 합니다.
+
+---
+
+## 예제 1/2 비교
 
 | 항목 | 예제 1 (최초 이전) | 예제 2 (증분 업데이트) |
 |------|-------------------|----------------------|

@@ -64,7 +64,7 @@ gitshuttle/                   17개 모듈, 2,724 라인
     ├── html_ui.py            단일 HTML (인터넷 불필요), selection.json 파싱
     └── prompt_ui.py          InquirerPy 방향키 멀티셀렉트
 
-tests/                        14개 테스트 파일, 134개 테스트
+tests/                        14개 테스트 파일, 141개 테스트
 ├── conftest.py               임시 git repo 픽스처
 ├── test_git_ops.py
 ├── test_bundle.py
@@ -72,7 +72,7 @@ tests/                        14개 테스트 파일, 134개 테스트
 ├── test_manifest.py
 ├── test_export.py
 ├── test_import.py
-├── test_rewrite.py           28개 (Sprint 4b)
+├── test_rewrite.py           30개 (Sprint 4b + data payload 보존)
 ├── test_config.py
 ├── test_build.py
 ├── test_sync.py
@@ -106,6 +106,9 @@ git fast-import (binary mode)
 `git fast-import` subprocess를 **바이너리 모드**(`input=bytes`, `encoding=` 파라미터 없음)로 호출합니다.
 Windows에서 `encoding='utf-8'` 사용 시 CRLF 변환이 발생해 `blob\r\n` → `blob?` 파싱 오류가 생기는 버그를 방지합니다.
 
+또한 fast-export 스트림의 `data N` payload는 파일 내용·커밋 메시지 본문이므로 rewrite 대상에서 제외합니다.  
+`rewrite_authors()`, `rewrite_branch_ref()`, `rewrite_timestamps()`는 control line만 변경하고 `data N` 뒤의 N바이트는 원문 그대로 보존합니다.
+
 #### 3. 브랜치 격리 전략
 
 소스 `main`/`master`를 타겟의 기본 브랜치에 직접 병합하지 않고, `imported/<소스브랜치>` 신규 브랜치에 격리합니다.
@@ -128,8 +131,9 @@ import 시 자동 검증 — 불일치 시 `ChecksumError`를 raise해 손상·�
 ### 커맨드 요약
 
 ```
-gitshuttle export   [--branch] [--ui tui|csv|html|prompt] [--output]
+gitshuttle export   [--repo <path>] [--branch] [--ui tui|csv|html|prompt] [--output]
 gitshuttle import   --file <path>
+                    [--repo <path>]
                     [--on-conflict skip|force|abort]
                     [--author-map <json>]
                     [--target-branch <name>]
@@ -143,7 +147,7 @@ gitshuttle sync     (Phase 2 — Python API 단계)
 ### 테스트 현황
 
 ```
-전체: 134/134 PASS
+현재 수집 테스트: 141개
 커버리지 대상 모듈: git_ops, bundle, checksum, manifest, export_, import_,
                    rewrite, config, sync, ui(csv/html/prompt), build
 ```
@@ -161,7 +165,7 @@ python -m pytest tests/ -v --tb=short
 |------|------|------|
 | `gitshuttle.exe` 빌드 | 미완 | 사내 PyInstaller 설치 불가 (프록시 SSL 차단). `build.ps1` + `gitshuttle.spec` 준비 완료 |
 | `gitshuttle sync` CLI | Phase 2 | Python API(`sync_.py`) 구현 완료, CLI 노출 예정 |
-| `author_map.json` 키 형식 검증 | 미구현 | `"Name <email>"` 형식 입력 시 경고 없이 미매핑 처리 |
+| `author_map.json` 키 형식 검증 | 문서화 완료 | 키는 이메일 주소 단독, 값은 `{name,email}` dict. 형식 검증 추가 여지 있음 |
 | TUI (Textual) Windows CMD | 제한적 | Windows Terminal / PowerShell 7+ 권장 |
 
 ---
@@ -170,13 +174,13 @@ python -m pytest tests/ -v --tb=short
 
 ### 🔴 중점 검토
 
-#### R1. `git fast-import` 바이너리 모드 (`import_.py:490~560`)
+#### R1. `git fast-import` 바이너리 모드 (`import_.py`)
 
 ```python
 # 올바른 방식 — encoding 파라미터 없이 bytes 전달
 subprocess.run(
     ["git", "fast-import", "--quiet"],
-    input=rewritten_stream.encode('utf-8'),   # bytes
+    input=rewritten_stream.encode('utf-8', errors='surrogateescape'),   # bytes
     capture_output=True,
     # encoding= 파라미터 없음 → binary mode
 )
@@ -216,6 +220,24 @@ rewrite_needed = (
 `timestamp_mode != "original"` 로 잘못 작성 시 기본값 `"now"` 에서도 rewrite 경로가
 활성화되어 기존 동작이 깨지는 버그가 있었습니다 (수정 완료). 조건식의 의도를 확인해 주세요.
 
+#### R4. fast-export `data N` payload 보존 (`rewrite.py`)
+
+```python
+def _rewrite_control_lines(stream: str, rewrite_line: Callable[[str], str]) -> str:
+    """data payload를 보존하며 control line만 재작성한다."""
+```
+
+`git fast-export`의 `data N` 다음 N바이트는 파일 내용 또는 커밋 메시지입니다.  
+이 영역에 정규식 치환을 적용하면 `data N` 길이와 실제 payload 길이가 어긋나고,
+`git fast-import`가 파일 내용을 명령어로 해석해 `Unsupported command` 오류를 낼 수 있습니다.
+`TestRewritePreservesDataBlocks`가 이 회귀를 방지하는지 확인해 주세요.
+
+#### R5. rewrite import의 non-fast-forward target branch 처리 (`import_.py`)
+
+대상 브랜치가 이미 존재하고 새 import tip이 기존 tip을 포함하지 않으면 `git fast-import`는 ref 업데이트를 거부합니다.  
+현재 구현은 `--on-conflict force`일 때만 `git fast-import --force`를 전달해 명시적 덮어쓰기를 허용합니다.
+기본값(`skip`)에서는 다른 `--target-branch` 사용 또는 기존 로컬 브랜치 삭제를 안내합니다.
+
 ---
 
 ### 🟡 일반 검토
@@ -239,17 +261,17 @@ bundle에 named ref가 없으면 `"main"` 을 fallback으로 반환합니다.
 #### Y4. `author_map.json` 키 형식 (`rewrite.py:46~68`)
 
 매핑 키는 **이메일 주소 단독** (`"ltw070@naver.com"`)이어야 합니다.
-`"Name <email>"` 형식으로 입력하면 경고 없이 미매핑 처리됩니다.
+`"Name <email>"` 형식으로 입력하면 해당 이메일이 매칭되지 않아 미매핑 경고가 출력됩니다.
 입력 검증 로직 추가 또는 문서화 수준으로 처리할지 결정이 필요합니다.
 
 #### Y5. `config.py` — toml 우선순위 (`config.py:~260`)
 
 ```
-CLI --author-map 파일 경로  >  gitshuttle.toml [import.author_map]  >  없음
-CLI --timestamp 모드        >  gitshuttle.toml [import.timestamp]   >  "now"
+CLI --author-map 파일 경로  >  gitshuttle.toml [import].author_map  >  없음
+CLI --timestamp 모드        >  gitshuttle.toml [import].timestamp    >  "now"
 ```
 
-CLI와 toml이 동시에 설정된 경우 toml 인라인 매핑이 무시됩니다.
+CLI와 toml이 동시에 설정된 경우 CLI 옵션이 우선합니다.
 사용자에게 어떤 설정이 적용됐는지 verbose 출력으로 알려주는 것을 고려해 주세요.
 
 #### Y6. `sync_.py` / `github_auth.py` — Phase 2 노출 범위
@@ -261,13 +283,14 @@ Phase 2 승인 전 코드가 임의로 호출되지 않도록 `__all__` 제한�
 
 ### 🟢 확인 완료
 
-- **전체 테스트 134/134 PASS** — 회귀 없음
+- **테스트 141개 수집 확인** — 전체 suite는 환경에 따라 장시간 실행될 수 있음
 - **UTF-8 / 한글 처리** — 모든 파일 I/O, subprocess, TUI에 인코딩 명시
 - **망분리 제약** — 외부 네트워크 호출 코드 없음 (sync_.py는 명시적 Phase 2 API)
 - **Breaking Changes 없음** — 기존 `gitshuttle import --file <bundle>` 호환 유지
 - **SA4 규약 검증 PASS** — 인코딩, 네트워크 격리, Phase 1 범위 준수
 - **`[imported]` 태그** — TUI에서 이미 반입된 커밋 시각적 구분
 - **충돌 처리 3모드** — `skip`(기본) / `force` / `abort`
+- **fast-export data payload 보존** — 파일 내용 안의 `author`, `commit refs/...` 문자열은 rewrite하지 않음
 
 ---
 
@@ -321,3 +344,4 @@ powershell -ExecutionPolicy Bypass -File build.ps1
 | `MANUAL.md` | 전체 사용자 매뉴얼 (섹션 7-1 Rewrite 포함) |
 | `EXAMPLE.md` | 3가지 실전 시나리오 (최초 이전, 증분 업데이트, Import Rewrite) |
 | `REPORT.md` | 세션별 작업 기록 및 설계 결정 이유 |
+| `CRA_REPORT.md` | Agents / TDD / Clean Code / Refactoring / SOLID / Mock 관점 분석 |

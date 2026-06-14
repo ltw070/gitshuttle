@@ -8,6 +8,7 @@ from __future__ import annotations
 import os
 import subprocess
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -194,3 +195,100 @@ def test_import_force_overwrites(two_git_repos, tmp_path):
     # 두 번째 import force — 오류 없이 완료되어야 한다
     result = run_import(bundle_path, target, on_conflict="force")
     assert result is not None
+
+
+def test_rewrite_import_force_ref_update_uses_fast_import_force(tmp_path, monkeypatch):
+    """rewrite import에서 force_ref_update=True이면 fast-import --force를 사용한다."""
+    import gitshuttle.import_ as import_module
+
+    calls = []
+
+    def fake_run(args, **kwargs):
+        calls.append(args)
+        if args[:2] == ["git", "fast-export"]:
+            return SimpleNamespace(
+                returncode=0,
+                stdout=(
+                    "reset refs/heads/main\n"
+                    "commit refs/heads/main\n"
+                    "mark :1\n"
+                    "author A <a@example.com> 1 +0000\n"
+                    "committer A <a@example.com> 1 +0000\n"
+                    "data 4\n"
+                    "msg\n"
+                    "\n"
+                ),
+                stderr="",
+            )
+        if args[:2] == ["git", "fast-import"]:
+            return SimpleNamespace(returncode=0, stdout=b"", stderr=b"")
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(import_module.subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        import_module,
+        "_checkout_or_create_branch",
+        lambda repo_path, branch: ["e18" + "0" * 37],
+    )
+
+    import_module._rewrite_and_import(
+        bundle_path=tmp_path / "test.bundle",
+        repo_path=tmp_path,
+        author_map={},
+        target_branch="feat/gitshuttle",
+        timestamp_mode="original",
+        from_dt=None,
+        force_ref_update=True,
+    )
+
+    fast_import_args = next(args for args in calls if args[:2] == ["git", "fast-import"])
+    assert "--force" in fast_import_args
+
+
+def test_rewrite_import_non_ff_error_has_recovery_hint(tmp_path, monkeypatch):
+    """fast-import non-fast-forward 오류에는 target branch 해결 안내를 포함한다."""
+    import gitshuttle.import_ as import_module
+
+    def fake_run(args, **kwargs):
+        if args[:2] == ["git", "fast-export"]:
+            return SimpleNamespace(
+                returncode=0,
+                stdout=(
+                    "reset refs/heads/main\n"
+                    "commit refs/heads/main\n"
+                    "mark :1\n"
+                    "author A <a@example.com> 1 +0000\n"
+                    "committer A <a@example.com> 1 +0000\n"
+                    "data 4\n"
+                    "msg\n"
+                    "\n"
+                ),
+                stderr="",
+            )
+        if args[:2] == ["git", "fast-import"]:
+            return SimpleNamespace(
+                returncode=1,
+                stdout=b"",
+                stderr=(
+                    b"warning: Not updating refs/heads/feat/gitshuttle "
+                    b"(new tip e18 does not contain 72d3)\n"
+                ),
+            )
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(import_module.subprocess, "run", fake_run)
+
+    with pytest.raises(ValueError) as exc_info:
+        import_module._rewrite_and_import(
+            bundle_path=tmp_path / "test.bundle",
+            repo_path=tmp_path,
+            author_map={},
+            target_branch="feat/gitshuttle",
+            timestamp_mode="original",
+            from_dt=None,
+        )
+
+    error_message = str(exc_info.value)
+    assert "대상 브랜치 'feat/gitshuttle'가 이미 존재" in error_message
+    assert "--target-branch" in error_message
+    assert "--on-conflict force" in error_message

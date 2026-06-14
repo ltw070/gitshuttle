@@ -253,9 +253,21 @@ gitshuttle export --repo C:\projects\my-repo --branch main --output C:\transfer
 # CSV 방식으로 Excel에서 선택
 gitshuttle export --ui csv
 
-# 파일명을 직접 지정
-gitshuttle export --output 기능개선_패치.bundle
+# 출력 폴더를 직접 지정
+gitshuttle export --output C:\transfer
 ```
+
+### 모든 커밋을 선택하고 TUI를 건너뛰기
+
+TUI에서 하나씩 선택하지 않고 현재 브랜치의 모든 커밋을 export하려면 headless 모드를 사용합니다.
+
+```powershell
+$env:GITSHUTTLE_HEADLESS = "1"
+gitshuttle export --repo C:\projects\my-repo --branch main --ui tui --output C:\transfer
+Remove-Item Env:\GITSHUTTLE_HEADLESS
+```
+
+`GITSHUTTLE_HEADLESS=1`은 테스트·자동화용 우회 모드입니다. 설정되어 있는 동안 TUI 선택 없이 전체 커밋이 선택됩니다.
 
 ### 실행 결과
 
@@ -381,8 +393,14 @@ git merge imported/main            # 검토 완료 후 병합
 
 ```json
 {
-  "Jane Doe <jane@external.com>": "홍길동 <hong@internal.com>",
-  "Bob Smith <bob@external.com>": "이철수 <lee@internal.com>"
+  "jane@external.com": {
+    "name": "홍길동",
+    "email": "hong@internal.com"
+  },
+  "bob@external.com": {
+    "name": "이철수",
+    "email": "lee@internal.com"
+  }
 }
 ```
 
@@ -393,12 +411,12 @@ gitshuttle import --file shuttle_260508.bundle --author-map author_map.json
 ```
 
 - 매핑 테이블에 없는 작성자는 원본 그대로 유지되며 경고 메시지가 출력됩니다.
-- `gitshuttle.toml`에 기본값으로 저장할 수 있습니다:
+- 매핑 키는 `"Name <email>"` 형식이 아니라 **이메일 주소만** 써야 합니다.
+- `gitshuttle.toml`에는 매핑 파일 경로를 기본값으로 저장할 수 있습니다:
 
 ```toml
-[import.author_map]
-"Jane Doe <jane@external.com>" = "홍길동 <hong@internal.com>"
-"Bob Smith <bob@external.com>" = "이철수 <lee@internal.com>"
+[import]
+author_map = "C:\\transfer\\author_map.json"
 ```
 
 ---
@@ -424,6 +442,13 @@ gitshuttle import --file shuttle_260508.bundle --timestamp original
 gitshuttle import --file shuttle_260508.bundle --timestamp from=2024-01-01T09:00:00
 ```
 
+`from=` 값은 내부적으로 UTC 기준으로 해석됩니다. KST 오전 9시로 보이게 하려면 UTC로 9시간 빼서 입력합니다.
+
+```powershell
+# 2026-06-10 09:00 KST 기준으로 보이게 하려면
+gitshuttle import --file shuttle.bundle --timestamp from=2026-06-10T00:00:00
+```
+
 `from=` 모드 동작 예시:
 
 ```
@@ -438,6 +463,7 @@ from=2024-01-01T09:00:00 적용:
 ```toml
 [import]
 timestamp = "now"   # now | original | from=2024-01-01T09:00:00
+author_map = "C:\\transfer\\author_map.json"
 ```
 
 ---
@@ -691,13 +717,14 @@ set GS_TARGET_TOKEN=ghp_yyyyyyyyyyyyyyyyyyyy
 > 지금은 Python API로 직접 사용할 수 있습니다.
 
 ```python
+import os
 from gitshuttle.sync_ import run_sync
 
 result = run_sync(
     source_url="https://github.com/org1/repo",
     target_url="https://github.com/org2/repo",
-    source_token="ghp_xxxx",   # 또는 환경변수 GS_SOURCE_TOKEN
-    target_token="ghp_yyyy",   # 또는 환경변수 GS_TARGET_TOKEN
+    source_token=os.environ["GS_SOURCE_TOKEN"],
+    target_token=os.environ["GS_TARGET_TOKEN"],
 )
 print(f"동기화 완료: {result.synced}개 커밋")
 ```
@@ -774,7 +801,7 @@ c2d1e9f3  2026-05-01  Alice  docs: README 갱신          (1 file)
 | 옵션 | 동작 | 권장 상황 |
 |------|------|-----------|
 | `skip` (기본값) | 이미 있는 커밋은 건너뛰고 나머지를 계속 반입 | 증분 업데이트, 재전달 등 일반 상황 |
-| `force` | 이미 존재해도 오류 없이 계속 진행 | 히스토리를 확실히 덮어써야 할 때 |
+| `force` | 이미 존재해도 오류 없이 계속 진행. rewrite import에서는 기존 대상 브랜치 ref도 덮어씀 | 히스토리를 확실히 덮어써야 할 때 |
 | `abort` | 이미 있는 커밋이 하나라도 발견되면 즉시 전체 중단 | 완전히 새 히스토리만 허용할 때 |
 
 ```
@@ -927,6 +954,7 @@ gitshuttle import --file shuttle.bundle --timestamp original
 | `선택된 커밋이 없습니다.` | export 시 아무 커밋도 선택하지 않음 | UI에서 커밋을 하나 이상 선택 후 재시도 |
 | `현재 디렉터리에 Git 리포지토리가 없습니다.` | Git 리포지토리가 아닌 폴더에서 실행 | `cd` 로 올바른 폴더로 이동 후 재시도 |
 | `bundle unbundle 실패` | bundle 사전 조건(prerequisite)을 만족 못 함 | 전체 히스토리 포함한 bundle로 재export |
+| `Not updating refs/heads/... does not contain ...` | 대상 브랜치가 이미 있고 새 import 이력이 기존 tip을 포함하지 않음 | 다른 `--target-branch` 사용, 기존 로컬 브랜치 삭제, 또는 `--on-conflict force` 사용 |
 | `작성자 매핑 파일을 찾을 수 없습니다: ...` | `--author-map` 경로가 잘못됨 | JSON 파일 경로 확인 |
 | `타임스탬프 형식 오류: ...` | `from=` 모드에서 datetime 형식이 틀림 | `YYYY-MM-DDTHH:MM:SS` 형식으로 입력 |
 
@@ -975,6 +1003,12 @@ git clone https://github.com/NEW_OWNER/NEW_REPO.git C:\repos\target-repo
 git clone https://github.com/ltw070/new-gitshuttle.git C:\repos\target-gitshuttle
 ```
 
+사내 GitHub 예시:
+
+```powershell
+git clone https://github.samsungds.net/tw070-lim/gitshuttle.git C:\repos\target-gitshuttle
+```
+
 ### 3단계. GitShuttle로 원본 export
 
 현재 터미널 위치가 원본 리포지토리가 아니어도 `--repo`로 원본 경로를 지정할 수 있습니다.
@@ -985,8 +1019,20 @@ cd D:\cla\03_gitshuttle
 python -m gitshuttle export `
   --repo C:\repos\source-gitshuttle `
   --branch main `
-  --ui csv `
+  --ui tui `
   --output C:\transfer
+```
+
+전체 이력을 TUI 선택 없이 모두 export하려면 명령 전에 headless 환경변수를 켭니다.
+
+```powershell
+$env:GITSHUTTLE_HEADLESS = "1"
+python -m gitshuttle export `
+  --repo C:\repos\source-gitshuttle `
+  --branch main `
+  --ui tui `
+  --output C:\transfer
+Remove-Item Env:\GITSHUTTLE_HEADLESS
 ```
 
 생성 파일:
@@ -1038,12 +1084,13 @@ python -m gitshuttle import `
 날짜도 새 기준일로 바꾸려면 `--timestamp from=`을 사용합니다.
 
 ```powershell
+# 2026-06-10 09:00 KST 기준 → UTC 2026-06-10 00:00 입력
 python -m gitshuttle import `
   --repo C:\repos\target-gitshuttle `
   --file C:\transfer\shuttle_YYMMDD.bundle `
   --author-map C:\transfer\author_map.json `
   --target-branch imported/main `
-  --timestamp from=2026-06-10T09:00:00
+  --timestamp from=2026-06-10T00:00:00
 ```
 
 > `from=` 모드는 첫 커밋을 지정한 시각으로 맞추고, 이후 커밋은 원본 커밋 간 상대 간격을 유지합니다. 30분 고정 간격으로 재작성하는 기능은 현재 CLI 옵션에 포함되어 있지 않습니다.
@@ -1054,12 +1101,7 @@ python -m gitshuttle import `
 git -C C:\repos\target-gitshuttle log imported/main --format="%h %an <%ae> %cn <%ce> %ad %s" --date=iso
 ```
 
-현재 구현에서 author rewrite 경로를 사용할 때 `--target-branch imported/main` 대신 `refs/gitshuttle/tmp_*`로 들어가는 경우가 있습니다. 그때는 아래처럼 브랜치를 직접 만듭니다.
-
-```powershell
-git -C C:\repos\target-gitshuttle show-ref | findstr refs/gitshuttle
-git -C C:\repos\target-gitshuttle branch imported/main refs/gitshuttle/tmp_xxxxxxx
-```
+현재 구현은 GitShuttle bundle의 `refs/gitshuttle/tmp_*` ref도 `--target-branch`로 지정한 브랜치에 맞춰 rewrite합니다.
 
 ### 8단계. 새 GitHub로 push
 
