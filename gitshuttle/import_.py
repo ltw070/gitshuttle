@@ -16,7 +16,7 @@ from __future__ import annotations
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 from .checksum import _compute_sha256
 from .bundle import verify_bundle_detailed
@@ -59,6 +59,8 @@ def run_import(
     author_map_path: Optional[str] = None, # 작성자 매핑 JSON 경로
     target_branch: Optional[str] = None,   # 대상 브랜치 (None → "imported/<소스브랜치>")
     timestamp_mode: str = "now",           # "now" | "original" | "from=DATETIME"
+    import_mode: str = "auto",             # "auto" | "bundle" | "replay"
+    confirm_duplicate_message: Callable[[str, str], bool] | None = None,
 ) -> ImportResult:
     """bundle 파일을 target repo에 반입한다.
 
@@ -73,6 +75,10 @@ def run_import(
                           None 이면 "imported/<소스브랜치>" 형식 자동 생성.
         timestamp_mode:   타임스탬프 재작성 모드.
                           "now"(기본) | "original" | "from=YYYY-MM-DDTHH:MM:SS"
+        import_mode:      "auto"(확장자 자동) | "bundle" | "replay".
+        confirm_duplicate_message:
+                          replay 모드에서 target HEAD subject와 첫 replay subject가
+                          같을 때 계속할지 묻는 콜백.
 
     Returns:
         ImportResult (imported, skipped, total, warnings 포함).
@@ -96,6 +102,29 @@ def run_import(
     # Step 2. SHA-256 체크섬 검증
     # ------------------------------------------------------------------
     _verify_checksum(bundle_path, sha256_path)
+
+    if import_mode not in ("auto", "bundle", "replay"):
+        raise ValueError("import_mode는 auto, bundle, replay 중 하나여야 합니다.")
+
+    if import_mode == "replay" or (
+        import_mode == "auto" and bundle_path.suffix.lower() == ".patchset"
+    ):
+        from .patchset import run_replay_import
+
+        replay_result = run_replay_import(
+            patchset_path=bundle_path,
+            repo_path=repo_path,
+            author_map_path=author_map_path,
+            target_branch=target_branch,
+            timestamp_mode=timestamp_mode,
+            confirm_duplicate_message=confirm_duplicate_message,
+        )
+        return ImportResult(
+            imported=replay_result.imported,
+            skipped=replay_result.skipped,
+            total=replay_result.total,
+            warnings=replay_result.warnings,
+        )
 
     # ------------------------------------------------------------------
     # Step 3. git bundle verify

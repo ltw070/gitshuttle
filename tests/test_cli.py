@@ -95,10 +95,11 @@ def test_export_accepts_repo_option(tmp_path, monkeypatch):
     def fake_select_commits(commits):
         return commits
 
-    def fake_run_export(repo_path, commits, output_dir, branch):
+    def fake_run_export(repo_path, commits, output_dir, branch, package_format="bundle"):
         captured["run_export_repo"] = repo_path
         captured["output_dir"] = output_dir
         captured["export_branch"] = branch
+        captured["package_format"] = package_format
         return ExportResult(
             bundle=output_dir / "test.bundle",
             sha256=output_dir / "test.bundle.sha256",
@@ -128,6 +129,61 @@ def test_export_accepts_repo_option(tmp_path, monkeypatch):
     assert captured["run_export_repo"] == repo_dir.resolve()
     assert captured["branch"] == "main"
     assert captured["output_dir"] == output_dir
+    assert captured["package_format"] == "bundle"
+
+
+def test_export_accepts_patchset_format(tmp_path, monkeypatch):
+    """export --format patchset 은 run_export에 patchset 형식을 전달한다."""
+    from gitshuttle.cli import app
+    from gitshuttle.export_ import ExportResult
+    from gitshuttle.git_ops import Commit
+    import gitshuttle.export_ as export_module
+    import gitshuttle.git_ops as git_ops_module
+    import gitshuttle.ui.tui as tui_module
+
+    repo_dir = tmp_path / "source_repo"
+    repo_dir.mkdir()
+    output_dir = tmp_path / "out"
+    captured = {}
+    fake_commit = Commit(
+        hash="a" * 40,
+        short_hash="aaaaaaa",
+        date="2026-06-10 09:00:00 +0900",
+        author="ltw070",
+        message="test commit",
+        files_changed=1,
+    )
+
+    monkeypatch.setattr(git_ops_module, "get_commits", lambda repo_path, branch="HEAD": [fake_commit])
+    monkeypatch.setattr(tui_module, "select_commits_tui", lambda commits: commits)
+
+    def fake_run_export(repo_path, commits, output_dir, branch, package_format="bundle"):
+        captured["package_format"] = package_format
+        return ExportResult(
+            bundle=output_dir / "test.patchset",
+            sha256=output_dir / "test.patchset.sha256",
+            manifest=output_dir / "test_manifest.txt",
+        )
+
+    monkeypatch.setattr(export_module, "run_export", fake_run_export)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        app,
+        [
+            "export",
+            "--repo",
+            str(repo_dir),
+            "--output",
+            str(output_dir),
+            "--format",
+            "patchset",
+        ],
+    )
+
+    assert result.exit_code == 0, f"exit code {result.exit_code}: {result.output}"
+    assert captured["package_format"] == "patchset"
+    assert "patchset" in result.output
 
 
 def test_import_stub():
@@ -160,11 +216,14 @@ def test_import_accepts_repo_option(tmp_path, monkeypatch):
         author_map_path=None,
         target_branch=None,
         timestamp_mode="now",
+        import_mode="auto",
+        confirm_duplicate_message=None,
     ):
         captured["bundle_path"] = bundle_path
         captured["repo_path"] = repo_path
         captured["on_conflict"] = on_conflict
         captured["timestamp_mode"] = timestamp_mode
+        captured["import_mode"] = import_mode
         return import_module.ImportResult(imported=1, skipped=0, total=1)
 
     monkeypatch.setattr(import_module, "run_import", fake_run_import)
@@ -187,6 +246,54 @@ def test_import_accepts_repo_option(tmp_path, monkeypatch):
     assert captured["bundle_path"] == bundle_path
     assert captured["repo_path"] == repo_dir.resolve()
     assert captured["timestamp_mode"] == "original"
+    assert captured["import_mode"] == "auto"
+
+
+def test_import_accepts_replay_mode(tmp_path, monkeypatch):
+    """import --mode replay 는 run_import에 replay 모드를 전달한다."""
+    from gitshuttle.cli import app
+    import gitshuttle.import_ as import_module
+
+    patchset_path = tmp_path / "test.patchset"
+    patchset_path.write_bytes(b"fake patchset")
+    repo_dir = tmp_path / "target_repo"
+    repo_dir.mkdir()
+    captured = {}
+
+    def fake_run_import(
+        bundle_path,
+        repo_path,
+        on_conflict="skip",
+        sha256_path=None,
+        author_map_path=None,
+        target_branch=None,
+        timestamp_mode="now",
+        import_mode="auto",
+        confirm_duplicate_message=None,
+    ):
+        captured["import_mode"] = import_mode
+        captured["has_confirm_callback"] = confirm_duplicate_message is not None
+        return import_module.ImportResult(imported=1, skipped=0, total=1)
+
+    monkeypatch.setattr(import_module, "run_import", fake_run_import)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        app,
+        [
+            "import",
+            "--file",
+            str(patchset_path),
+            "--repo",
+            str(repo_dir),
+            "--mode",
+            "replay",
+        ],
+    )
+
+    assert result.exit_code == 0, f"exit code {result.exit_code}: {result.output}"
+    assert captured["import_mode"] == "replay"
+    assert captured["has_confirm_callback"] is True
 
 
 def test_config_stub():

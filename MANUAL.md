@@ -237,6 +237,7 @@ gitshuttle export [OPTIONS]
 | `--branch TEXT` | 특정 브랜치의 커밋만 추출 | `--branch feature/login` |
 | `--ui [tui\|csv\|html\|prompt]` | 커밋 선택 방식 | `--ui csv` |
 | `--output TEXT` | 출력 경로 지정 | `--output C:\transfer` |
+| `--format [bundle\|patchset]` | 패키지 형식. `patchset`은 replay/cherry-pick용 | `--format patchset` |
 
 ### 실행 예시
 
@@ -255,6 +256,9 @@ gitshuttle export --ui csv
 
 # 출력 폴더를 직접 지정
 gitshuttle export --output C:\transfer
+
+# 기준점 없이 cherry-pick처럼 붙일 patchset 생성
+gitshuttle export --format patchset --output C:\transfer
 ```
 
 ### 모든 커밋을 선택하고 TUI를 건너뛰기
@@ -304,12 +308,13 @@ gitshuttle import --file FILE [OPTIONS]
 
 | 옵션 | 설명 | 기본값 |
 |------|------|--------|
-| `--file TEXT` | bundle 파일 경로 **(필수)** | — |
+| `--file TEXT` | bundle 또는 patchset 파일 경로 **(필수)** | — |
 | `--repo PATH` | 대상 Git 리포지토리 경로 | 현재 디렉터리 |
 | `--on-conflict [skip\|force\|abort]` | 충돌 처리 방식 | `skip` |
 | `--author-map FILE` | 작성자 매핑 JSON 파일 경로 | 없음 (원본 유지) |
 | `--target-branch TEXT` | import 커밋을 담을 브랜치명 | `imported/<소스브랜치>` |
 | `--timestamp TEXT` | 커밋 타임스탬프 모드 | `now` |
+| `--mode [auto\|bundle\|replay]` | import 방식. `.patchset`은 `auto`에서 replay로 처리 | `auto` |
 
 ### 실행 예시
 
@@ -328,6 +333,9 @@ gitshuttle import --file shuttle_260508.bundle --on-conflict force
 
 # 중복 커밋 발견 즉시 전체 중단
 gitshuttle import --file shuttle_260508.bundle --on-conflict abort
+
+# patchset을 대상 브랜치 위에 cherry-pick처럼 재생
+gitshuttle import --file shuttle_260508.patchset --mode replay --target-branch main
 ```
 
 ### 실행 흐름
@@ -480,6 +488,30 @@ gitshuttle import \
   --target-branch ext-main \
   --timestamp from=2024-05-22T09:00:00
 ```
+
+---
+
+### Replay / Cherry-Pick 방식
+
+기준점 hidden ref 없이 작업자가 책임지고 변경분만 이어 붙이고 싶다면 `patchset` + `replay` 방식을 사용합니다.
+
+```
+gitshuttle export --repo C:\projects\source --branch main --format patchset --output C:\transfer
+
+gitshuttle import ^
+  --repo C:\projects\target ^
+  --file C:\transfer\shuttle_YYMMDD.patchset ^
+  --mode replay ^
+  --target-branch main ^
+  --author-map C:\transfer\author_map.json ^
+  --timestamp original
+```
+
+replay는 원본 커밋 객체를 옮기는 것이 아니라 각 커밋의 diff를 대상 브랜치 현재 HEAD 위에 새 커밋으로 적용합니다.
+따라서 기준점이 없어도 동작할 수 있지만, 커밋 SHA와 merge 구조는 원본과 달라질 수 있고 충돌이 나면 사용자가 직접 정리해야 합니다.
+
+대상 브랜치의 마지막 커밋 메시지와 새로 붙일 첫 replay 커밋 메시지가 같으면 GitShuttle이 한 번만 경고하고 계속 진행 여부를 묻습니다.
+메시지가 다르면 추가 확인 없이 replay를 진행합니다.
 
 ---
 
@@ -994,7 +1026,7 @@ python -m gitshuttle import `
 
 구버전 GitShuttle로 이미 rewrite import한 repo는 숨김 원본 ref가 없을 수 있습니다. 이 경우 한 번은 전체 또는 필요한 기준 범위를 최신 버전으로 다시 import해야 이후 부분 증분이 안정적으로 이어집니다.
 
-체리픽 형태로 변경분만 대상 브랜치 위에 재생하는 방식도 이론적으로 가능합니다. 다만 이 방식은 원본 Git bundle 이력 이전과 다르게 커밋 SHA와 merge 구조가 달라질 수 있어, GitShuttle의 기본 import 방식은 아닙니다.
+체리픽 형태로 변경분만 대상 브랜치 위에 재생하려면 `--format patchset`으로 export하고 `--mode replay`로 import하세요. 다만 이 방식은 원본 Git bundle 이력 이전과 다르게 커밋 SHA와 merge 구조가 달라질 수 있습니다.
 
 ---
 

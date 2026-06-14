@@ -78,12 +78,19 @@ Options:
   --branch TEXT                  대상 브랜치 (기본값: 현재 브랜치)
   --ui [tui|csv|html|prompt]     커밋 선택 UI 방식 (기본값: 설정 파일 또는 tui)
   --output TEXT                  출력 경로 (기본값: 원본 리포지토리 경로)
+  --format [bundle|patchset]     패키지 형식 (기본값: bundle)
 ```
 
 현재 위치가 원본 리포지토리가 아니어도 `--repo`로 대상 경로를 지정할 수 있습니다.
 
 ```
 gitshuttle export --repo C:\repos\external-repo --branch main --output C:\transfer
+```
+
+기준점 없이 대상 브랜치 위에 cherry-pick처럼 붙이고 싶다면 `patchset` 형식으로 export합니다.
+
+```
+gitshuttle export --repo C:\repos\external-repo --branch main --format patchset --output C:\transfer
 ```
 
 모든 커밋을 선택하고 싶고 TUI 선택 화면을 건너뛰려면 headless 모드를 사용할 수 있습니다.
@@ -111,12 +118,13 @@ Remove-Item Env:\GITSHUTTLE_HEADLESS
 gitshuttle import --file FILE [OPTIONS]
 
 Options:
-  --file TEXT                                .bundle 파일 경로 (필수)
+  --file TEXT                                .bundle 또는 .patchset 파일 경로 (필수)
   --repo PATH                                대상 Git 리포지토리 경로 (기본값: 현재 디렉터리)
   --on-conflict [skip|force|abort]           충돌 처리 방식 (기본값: skip)
   --author-map FILE                          작성자 매핑 JSON 파일 경로
   --target-branch TEXT                       import 커밋을 담을 브랜치명 (기본값: imported/<소스브랜치>)
   --timestamp [now|original|from=DATETIME]  커밋 타임스탬프 모드 (기본값: now)
+  --mode [auto|bundle|replay]                import 방식 (기본값: auto)
 ```
 
 현재 위치가 대상 리포지토리가 아니어도 `--repo`로 반입 대상 경로를 지정할 수 있습니다.
@@ -154,6 +162,18 @@ import 시 SHA-256 체크섬이 자동 검증됩니다. 불일치 시 작업이 
 
 체리픽처럼 변경분만 대상 브랜치 위에 재생하는 방식도 가능하지만, 이는 원본 Git 이력을 그대로 옮기는 bundle 방식과 다릅니다.
 커밋 SHA와 merge 구조가 달라질 수 있으므로 GitShuttle의 기본 흐름은 bundle 기반 이력 이전을 유지합니다.
+
+### Replay / Cherry-Pick 방식
+
+`patchset` + `replay`는 원본 기준점 없이 선택 커밋의 변경분을 대상 브랜치 현재 HEAD 위에 새 커밋으로 재생합니다.
+
+```
+gitshuttle export --repo C:\repos\source --branch main --format patchset --output C:\transfer
+gitshuttle import --repo C:\repos\target --file C:\transfer\shuttle_YYMMDD.patchset --mode replay
+```
+
+replay import는 대상 브랜치의 마지막 커밋 메시지와 새로 붙일 첫 커밋 메시지가 같을 때만 경고하고 계속 진행 여부를 확인합니다.
+이 방식은 내부 수정이 이미 들어간 브랜치 위에 작업자 책임으로 변경분만 붙일 때 유용하지만, 원본 SHA와 merge topology는 보존하지 않습니다.
 
 **작성자 매핑 JSON 형식:**
 

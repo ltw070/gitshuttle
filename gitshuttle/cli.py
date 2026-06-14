@@ -50,8 +50,13 @@ def export(
     ),
     ui: Optional[str] = typer.Option(None, "--ui", help="UI 모드 (tui|csv|html|prompt)"),
     output: Optional[str] = typer.Option(None, "--output", "-o", help="출력 경로"),
+    package_format: str = typer.Option(
+        "bundle",
+        "--format",
+        help="패키지 형식 (bundle|patchset). patchset은 cherry-pick/replay용입니다.",
+    ),
 ) -> None:
-    """선택한 커밋을 .bundle 파일로 추출합니다."""
+    """선택한 커밋을 shuttle 패키지로 추출합니다."""
     from gitshuttle.git_ops import get_commits
     from gitshuttle.export_ import run_export
     from gitshuttle.ui.tui import select_commits_tui
@@ -111,9 +116,11 @@ def export(
         commits=selected,
         output_dir=output_dir,
         branch=branch_name,
+        package_format=package_format,
     )
 
-    typer.echo(f"bundle   : {result.bundle}")
+    label = "patchset" if package_format == "patchset" else "bundle"
+    typer.echo(f"{label:<8}: {result.bundle}")
     typer.echo(f"sha256   : {result.sha256}")
     typer.echo(f"manifest : {result.manifest}")
     typer.echo("export 완료.")
@@ -121,7 +128,7 @@ def export(
 
 @app.command(name="import")
 def import_(
-    file: Optional[str] = typer.Option(None, "--file", "-f", help=".bundle 파일 경로"),
+    file: Optional[str] = typer.Option(None, "--file", "-f", help=".bundle 또는 .patchset 파일 경로"),
     repo: Optional[Path] = typer.Option(
         None,
         "--repo",
@@ -147,6 +154,11 @@ def import_(
         None,
         "--timestamp",
         help="타임스탬프 재작성 모드 (now|original|from=DATETIME). CLI > toml > 기본값(now).",
+    ),
+    mode: str = typer.Option(
+        "auto",
+        "--mode",
+        help="import 방식 (auto|bundle|replay). replay는 patchset을 cherry-pick처럼 적용합니다.",
     ),
 ) -> None:
     """shuttle 패키지를 대상 리포지토리에 반입합니다."""
@@ -175,12 +187,23 @@ def import_(
     typer.echo(f"bundle        : {bundle_path}")
     typer.echo(f"target        : {repo_path}")
     typer.echo(f"conflict      : {on_conflict}")
+    typer.echo(f"mode          : {mode}")
     if target_branch:
         typer.echo(f"target-branch : {target_branch}")
     if effective_author_map:
         typer.echo(f"author-map    : {effective_author_map}")
     typer.echo(f"timestamp     : {effective_timestamp}")
     typer.echo("반입을 시작합니다...")
+
+    def _confirm_duplicate_message(head_subject: str, first_subject: str) -> bool:
+        typer.echo(
+            "\n[경고] 대상 브랜치의 마지막 커밋 메시지와 "
+            "새로 붙일 첫 replay 커밋 메시지가 같습니다.",
+            err=True,
+        )
+        typer.echo(f"  이전 마지막 커밋: {head_subject}", err=True)
+        typer.echo(f"  새 replay 커밋   : {first_subject}", err=True)
+        return typer.confirm("이대로 계속 진행할까요?", default=False)
 
     try:
         result = run_import(
@@ -190,6 +213,8 @@ def import_(
             author_map_path=effective_author_map,
             target_branch=target_branch,
             timestamp_mode=effective_timestamp,
+            import_mode=mode,
+            confirm_duplicate_message=_confirm_duplicate_message,
         )
     except ChecksumError as e:
         typer.echo(f"\n[오류] {e}", err=True)

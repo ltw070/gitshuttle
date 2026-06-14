@@ -734,7 +734,65 @@ python -m gitshuttle import `
 
 부분 bundle은 직전 원본 부모 SHA가 필요합니다. 최신 버전은 최초 rewrite import 때 그 기준점을 숨김 ref로 보관하므로, 구버전으로 만든 대상 repo라면 한 번 전체 import를 다시 수행해 기준점을 만든 뒤 부분 import를 사용하세요.
 
-체리픽처럼 변경분만 대상 브랜치 위에 재생하는 방식은 별도 replay 모드가 필요한 대안입니다. 원본 bundle 이력 이전과 달리 merge 구조와 커밋 SHA가 달라질 수 있으므로, 이 예제에서는 bundle 기반 증분 import를 사용합니다.
+체리픽처럼 변경분만 대상 브랜치 위에 재생하려면 아래 예제 5의 `patchset` + `replay` 방식을 사용합니다. 원본 bundle 이력 이전과 달리 merge 구조와 커밋 SHA가 달라질 수 있으므로, 이 예제에서는 bundle 기반 증분 import를 사용합니다.
+
+---
+
+## 예제 5 — 기준점 없이 Cherry-Pick 방식으로 붙이기
+
+**시나리오:** 대상 repo에 hidden 기준점이 없고 내부 수정도 이미 들어가 있습니다.
+작업자가 책임지고 선택 커밋의 변경분만 대상 브랜치 현재 HEAD 위에 새 커밋으로 붙입니다.
+
+### Step 1 — patchset export
+
+```powershell
+python -m gitshuttle export `
+  --repo C:\repos\source-gitshuttle `
+  --branch main `
+  --ui tui `
+  --format patchset `
+  --output C:\transfer
+```
+
+생성 파일:
+
+```text
+C:\transfer\shuttle_YYMMDD.patchset
+C:\transfer\shuttle_YYMMDD.patchset.sha256
+C:\transfer\shuttle_YYMMDD_manifest.txt
+```
+
+### Step 2 — replay import
+
+```powershell
+python -m gitshuttle import `
+  --repo C:\repos\target-gitshuttle `
+  --file C:\transfer\shuttle_YYMMDD.patchset `
+  --mode replay `
+  --target-branch main `
+  --author-map C:\transfer\author_map.json `
+  --timestamp original
+```
+
+대상 브랜치의 마지막 커밋 메시지와 새로 붙일 첫 replay 커밋 메시지가 같으면 아래처럼 확인을 받습니다.
+
+```text
+[경고] 대상 브랜치의 마지막 커밋 메시지와 새로 붙일 첫 replay 커밋 메시지가 같습니다.
+  이전 마지막 커밋: feat: add login
+  새 replay 커밋   : feat: add login
+이대로 계속 진행할까요? [y/N]:
+```
+
+메시지가 다르면 별도 확인 없이 replay를 진행합니다.
+
+### 이 방식의 의미
+
+| 항목 | 내용 |
+|------|------|
+| 장점 | hidden 기준점 없이 대상 브랜치 위에 변경분을 이어 붙일 수 있음 |
+| 단점 | 원본 commit SHA와 merge 구조는 보존하지 않음 |
+| 충돌 | patch 적용 실패 시 사용자가 직접 정리 후 다시 시도 |
+| 용도 | 내부 브랜치가 이미 달라졌고, 작업자 판단으로 일부 변경만 붙이는 경우 |
 
 ---
 
