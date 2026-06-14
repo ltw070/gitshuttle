@@ -23,13 +23,15 @@ if _TEXTUAL_AVAILABLE:
         사용법:
           - 방향키로 이동
           - Space 로 선택/해제
-          - Shift+방향키 로 범위 선택
-          - Enter 로 확정
-          - q / Ctrl+C 로 취소
+          - A 로 전체 선택/해제
+          - E 또는 Enter 로 확정
+          - Q 로 취소
         """
 
         BINDINGS = [
             Binding("q", "quit", "취소"),
+            Binding("a", "toggle_all", "전체 선택/해제"),
+            Binding("e", "confirm", "Export"),
             Binding("enter", "confirm", "확정"),
             Binding("space", "toggle_select", "선택"),
         ]
@@ -80,6 +82,18 @@ if _TEXTUAL_AVAILABLE:
             else:
                 self._selected.add(row_key)
                 table.update_cell_at((row_key, 0), "[x]")
+
+        def action_toggle_all(self) -> None:
+            table = self.query_one(DataTable)
+            if len(self._selected) == len(self._commits):
+                self._selected.clear()
+                marker = "[ ]"
+            else:
+                self._selected = set(range(len(self._commits)))
+                marker = "[x]"
+
+            for row_index in range(len(self._commits)):
+                table.update_cell_at((row_index, 0), marker)
 
         def action_confirm(self) -> None:
             self._result = [

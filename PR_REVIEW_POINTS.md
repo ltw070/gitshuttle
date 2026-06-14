@@ -64,7 +64,7 @@ gitshuttle/                   17개 모듈, 2,724 라인
     ├── html_ui.py            단일 HTML (인터넷 불필요), selection.json 파싱
     └── prompt_ui.py          InquirerPy 방향키 멀티셀렉트
 
-tests/                        14개 테스트 파일, 143개 테스트
+tests/                        15개 테스트 파일, 145개 테스트
 ├── conftest.py               임시 git repo 픽스처
 ├── test_git_ops.py
 ├── test_bundle.py
@@ -79,7 +79,8 @@ tests/                        14개 테스트 파일, 143개 테스트
 └── ui/
     ├── test_csv_ui.py
     ├── test_html_ui.py
-    └── test_prompt_ui.py
+    ├── test_prompt_ui.py
+    └── test_tui.py             TUI A/E 키 바인딩 검증
 ```
 
 ---
@@ -147,7 +148,7 @@ gitshuttle sync     (Phase 2 — Python API 단계)
 ### 테스트 현황
 
 ```
-현재 수집 테스트: 143개
+현재 수집 테스트: 145개
 커버리지 대상 모듈: git_ops, bundle, checksum, manifest, export_, import_,
                    rewrite, config, sync, ui(csv/html/prompt), build
 ```
@@ -289,7 +290,7 @@ Phase 2 승인 전 코드가 임의로 호출되지 않도록 `__all__` 제한�
 
 ### 🟢 확인 완료
 
-- **테스트 143개 수집 확인** — 전체 suite는 환경에 따라 장시간 실행될 수 있음
+- **테스트 145개 수집 확인** — 전체 suite는 환경에 따라 장시간 실행될 수 있음
 - **UTF-8 / 한글 처리** — 모든 파일 I/O, subprocess, TUI에 인코딩 명시
 - **망분리 제약** — 외부 네트워크 호출 코드 없음 (sync_.py는 명시적 Phase 2 API)
 - **Breaking Changes 없음** — 기존 `gitshuttle import --file <bundle>` 호환 유지
