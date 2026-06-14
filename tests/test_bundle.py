@@ -77,6 +77,29 @@ def test_verify_bundle_valid(tmp_git_repo, tmp_path):
     assert verify_bundle(bundle_path) is True
 
 
+def test_verify_bundle_uses_repo_path(tmp_path, monkeypatch):
+    """verify_bundle(repo_path=...)는 지정 repo를 기준으로 git bundle verify를 실행한다."""
+    import gitshuttle.bundle as bundle_module
+    from gitshuttle.bundle import verify_bundle
+
+    bundle_path = tmp_path / "test.bundle"
+    bundle_path.write_bytes(b"fake bundle content")
+    repo_path = tmp_path / "target_repo"
+    repo_path.mkdir()
+    captured = {}
+
+    def fake_run(args, cwd=None, capture_output=True, encoding="utf-8", env=None):
+        captured["args"] = args
+        captured["cwd"] = cwd
+        return subprocess.CompletedProcess(args=args, returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(bundle_module.subprocess, "run", fake_run)
+
+    assert verify_bundle(bundle_path, repo_path=repo_path) is True
+    assert captured["args"] == ["git", "bundle", "verify", str(bundle_path)]
+    assert captured["cwd"] == repo_path
+
+
 def test_verify_bundle_invalid(tmp_path):
     """존재하지 않는 파일 → verify_bundle → False를 반환해야 한다."""
     from gitshuttle.bundle import verify_bundle

@@ -194,8 +194,16 @@ def merge_bundles(parts: list[Path | str], output: Path | str) -> Path:
     return output
 
 
-def verify_bundle(bundle_path: Path | str) -> bool:
+def verify_bundle(
+    bundle_path: Path | str,
+    repo_path: Path | str | None = None,
+) -> bool:
     """git bundle verify 로 bundle 파일의 무결성을 검증한다.
+
+    Args:
+        bundle_path: 검증할 bundle 파일 경로.
+        repo_path:   prerequisite 검증 기준이 되는 Git 리포지토리 경로.
+                     None 이면 현재 작업 디렉터리 기준.
 
     Returns:
         True  — bundle이 유효함.
@@ -209,6 +217,7 @@ def verify_bundle(bundle_path: Path | str) -> bool:
     try:
         result = subprocess.run(
             ["git", "bundle", "verify", str(bundle_path)],
+            cwd=repo_path,
             capture_output=True,
             encoding='utf-8',
             env=_git_env(),

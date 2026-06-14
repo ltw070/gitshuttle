@@ -100,7 +100,7 @@ def run_import(
     # ------------------------------------------------------------------
     # Step 3. git bundle verify
     # ------------------------------------------------------------------
-    if not verify_bundle(bundle_path):
+    if not verify_bundle(bundle_path, repo_path=repo_path):
         raise ValueError(f"bundle 검증 실패: {bundle_path}")
 
     # ------------------------------------------------------------------
