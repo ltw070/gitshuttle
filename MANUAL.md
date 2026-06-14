@@ -22,6 +22,7 @@
 13. [충돌 처리 옵션 상세](#13-충돌-처리-옵션-상세)
 14. [자주 묻는 질문 (FAQ)](#14-자주-묻는-질문-faq)
 15. [오류 메시지 해설](#15-오류-메시지-해설)
+16. [기존 GitHub에서 새 GitHub로 이전하기](#16-기존-github에서-새-github로-이전하기)
 
 ---
 
@@ -928,6 +929,164 @@ gitshuttle import --file shuttle.bundle --timestamp original
 | `bundle unbundle 실패` | bundle 사전 조건(prerequisite)을 만족 못 함 | 전체 히스토리 포함한 bundle로 재export |
 | `작성자 매핑 파일을 찾을 수 없습니다: ...` | `--author-map` 경로가 잘못됨 | JSON 파일 경로 확인 |
 | `타임스탬프 형식 오류: ...` | `from=` 모드에서 datetime 형식이 틀림 | `YYYY-MM-DDTHH:MM:SS` 형식으로 입력 |
+
+---
+
+## 16. 기존 GitHub에서 새 GitHub로 이전하기
+
+하나의 GitHub 리포지토리에 있는 내용을 새로운 GitHub 리포지토리로 옮기면서, 커밋 작성자를 새 사용자로 바꾸는 절차입니다.
+
+> **주의:** 커밋 사용자 변경은 Git 히스토리 재작성입니다. author/committer가 바뀌면 커밋 SHA도 바뀝니다.
+
+### 목표 흐름
+
+```
+기존 GitHub repo
+  → 로컬 source repo
+  → GitShuttle export bundle
+  → 로컬 target repo
+  → author/committer rewrite import
+  → 새 GitHub repo push
+```
+
+### 1단계. 원본 GitHub 리포지토리 clone
+
+```powershell
+git clone https://github.com/OLD_OWNER/OLD_REPO.git C:\repos\source-repo
+```
+
+예시:
+
+```powershell
+git clone https://github.com/ltw070/gitshuttle.git C:\repos\source-gitshuttle
+```
+
+### 2단계. 새 GitHub 리포지토리 clone
+
+GitHub에서 빈 리포지토리를 먼저 만든 뒤 clone합니다.
+
+```powershell
+git clone https://github.com/NEW_OWNER/NEW_REPO.git C:\repos\target-repo
+```
+
+예시:
+
+```powershell
+git clone https://github.com/ltw070/new-gitshuttle.git C:\repos\target-gitshuttle
+```
+
+### 3단계. GitShuttle로 원본 export
+
+현재 터미널 위치가 원본 리포지토리가 아니어도 `--repo`로 원본 경로를 지정할 수 있습니다.
+
+```powershell
+cd D:\cla\03_gitshuttle
+
+python -m gitshuttle export `
+  --repo C:\repos\source-gitshuttle `
+  --branch main `
+  --ui csv `
+  --output C:\transfer
+```
+
+생성 파일:
+
+```text
+C:\transfer\shuttle_YYMMDD.bundle
+C:\transfer\shuttle_YYMMDD.bundle.sha256
+C:\transfer\shuttle_YYMMDD_manifest.txt
+```
+
+### 4단계. 기존 작성자 목록 확인
+
+원본 리포지토리에서 기존 커밋 작성자 이메일을 확인합니다.
+
+```powershell
+git -C C:\repos\source-gitshuttle log --all --format="%an <%ae>" | Sort-Object -Unique
+```
+
+### 5단계. 사용자 변경 매핑 파일 작성
+
+`C:\transfer\author_map.json` 파일을 만듭니다.
+
+```json
+{
+  "old@example.com": {
+    "name": "ltw070",
+    "email": "ltw070@naver.com"
+  },
+  "another-old@example.com": {
+    "name": "ltw070",
+    "email": "ltw070@naver.com"
+  }
+}
+```
+
+매핑 파일의 키는 `"Name <email>"` 형식이 아니라 **이메일 주소만** 써야 합니다.
+
+### 6단계. 새 로컬 리포지토리에 import
+
+```powershell
+python -m gitshuttle import `
+  --repo C:\repos\target-gitshuttle `
+  --file C:\transfer\shuttle_YYMMDD.bundle `
+  --author-map C:\transfer\author_map.json `
+  --target-branch imported/main `
+  --timestamp original
+```
+
+날짜도 새 기준일로 바꾸려면 `--timestamp from=`을 사용합니다.
+
+```powershell
+python -m gitshuttle import `
+  --repo C:\repos\target-gitshuttle `
+  --file C:\transfer\shuttle_YYMMDD.bundle `
+  --author-map C:\transfer\author_map.json `
+  --target-branch imported/main `
+  --timestamp from=2026-06-10T09:00:00
+```
+
+> `from=` 모드는 첫 커밋을 지정한 시각으로 맞추고, 이후 커밋은 원본 커밋 간 상대 간격을 유지합니다. 30분 고정 간격으로 재작성하는 기능은 현재 CLI 옵션에 포함되어 있지 않습니다.
+
+### 7단계. import된 브랜치 확인
+
+```powershell
+git -C C:\repos\target-gitshuttle log imported/main --format="%h %an <%ae> %cn <%ce> %ad %s" --date=iso
+```
+
+현재 구현에서 author rewrite 경로를 사용할 때 `--target-branch imported/main` 대신 `refs/gitshuttle/tmp_*`로 들어가는 경우가 있습니다. 그때는 아래처럼 브랜치를 직접 만듭니다.
+
+```powershell
+git -C C:\repos\target-gitshuttle show-ref | findstr refs/gitshuttle
+git -C C:\repos\target-gitshuttle branch imported/main refs/gitshuttle/tmp_xxxxxxx
+```
+
+### 8단계. 새 GitHub로 push
+
+새 GitHub 리포지토리의 `main` 브랜치로 올립니다.
+
+```powershell
+cd C:\repos\target-gitshuttle
+git push origin imported/main:main
+```
+
+새 GitHub 리포지토리가 비어 있지 않고 기존 이력이 있다면, 바로 `main`에 올리기보다 별도 브랜치로 먼저 올려 검토하는 것을 권장합니다.
+
+```powershell
+git push origin imported/main:gitshuttle-import
+```
+
+### 핵심 요약
+
+| 목적 | 명령 |
+|------|------|
+| 원본 경로 지정 export | `gitshuttle export --repo C:\repos\source` |
+| 대상 경로 지정 import | `gitshuttle import --repo C:\repos\target --file shuttle.bundle` |
+| 사용자 변경 | `--author-map author_map.json` |
+| 날짜 원본 유지 | `--timestamp original` |
+| 날짜 기준점 변경 | `--timestamp from=YYYY-MM-DDTHH:MM:SS` |
+
+커밋 author/committer 변경과 GitHub의 push actor는 별개입니다. GitHub 화면에서 push한 계정을 바꾸려면 실제 push 인증 계정 또는 PAT도 해당 사용자여야 합니다.
 
 ---
 
