@@ -134,6 +134,7 @@ gitshuttle import --file C:\transfer\shuttle_260612.bundle --repo C:\repos\inter
 | `abort` | 충돌 발견 즉시 전체 작업 중단 |
 
 **브랜치 격리:** 소스의 `main`/`master`는 타겟의 기존 기본 브랜치에 직접 병합되지 않고, 별도 브랜치(`imported/main` 등)로 격리됩니다.
+rewrite import 후에는 대상 브랜치로 checkout/reset 되어 작업 폴더의 실제 파일도 import 결과와 맞춰집니다.
 
 **커밋 타임스탬프 옵션:**
 

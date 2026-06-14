@@ -482,7 +482,7 @@ def _rewrite_and_import(
     2. git fast-export로 스트림 추출
     3. apply_rewrites로 재작성
     4. git fast-import로 target repo에 반영
-    5. target repo에서 target_branch를 fetch
+    5. target_branch로 checkout/reset 하여 worktree 갱신
 
     Returns:
         (tip_hashes, warnings)
@@ -536,6 +536,8 @@ def _rewrite_and_import(
             from_dt=from_dt,
         )
 
+        _ensure_clean_worktree(repo_path)
+
         # target repo에 git fast-import로 반영
         # 바이너리 모드로 전달해야 Windows에서 \r\n 변환을 방지할 수 있음
         fi_env = {
@@ -580,9 +582,12 @@ def _rewrite_and_import(
 
 
 def _checkout_or_create_branch(repo_path: Path, branch: str) -> list[str]:
-    """target_branch의 tip 해시를 반환한다.
+    """target_branch로 checkout/reset 한 뒤 tip 해시를 반환한다.
 
-    브랜치가 이미 존재하면 tip 해시만 반환.
+    fast-import는 ref와 object DB를 갱신하지만 worktree/index는 자동 갱신하지 않는다.
+    일반 repo에서는 checkout + reset --hard로 작업 폴더를 import 결과와 맞춘다.
+    bare repo에서는 worktree가 없으므로 tip 해시만 반환한다.
+
     브랜치가 없으면 빈 리스트 반환.
     """
     try:
@@ -590,6 +595,41 @@ def _checkout_or_create_branch(repo_path: Path, branch: str) -> list[str]:
             ["rev-parse", f"refs/heads/{branch}"],
             cwd=repo_path,
         ).strip()
-        return [tip] if tip else []
     except RuntimeError:
         return []
+
+    if not tip:
+        return []
+
+    if _is_bare_repo(repo_path):
+        return [tip]
+
+    run_git(["checkout", branch], cwd=repo_path)
+    run_git(["reset", "--hard", tip], cwd=repo_path)
+    return [tip]
+
+
+def _is_bare_repo(repo_path: Path) -> bool:
+    """repo_path가 bare repository인지 반환한다."""
+    try:
+        return run_git(["rev-parse", "--is-bare-repository"], cwd=repo_path).strip() == "true"
+    except RuntimeError:
+        return False
+
+
+def _ensure_clean_worktree(repo_path: Path) -> None:
+    """fast-import 후 reset 전에 사용자 변경이 덮이지 않도록 사전 확인한다."""
+    if _is_bare_repo(repo_path):
+        return
+
+    try:
+        status = run_git(["status", "--porcelain"], cwd=repo_path)
+    except RuntimeError:
+        return
+
+    if status.strip():
+        raise ValueError(
+            "대상 repo 작업 폴더에 커밋되지 않은 변경 사항이 있습니다.\n"
+            "import 후 target branch로 checkout/reset 해야 하므로, 먼저 변경 사항을 "
+            "commit/stash 하거나 정리한 뒤 다시 실행하세요."
+        )

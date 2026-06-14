@@ -225,6 +225,7 @@ def test_rewrite_import_force_ref_update_uses_fast_import_force(tmp_path, monkey
         return SimpleNamespace(returncode=0, stdout="", stderr="")
 
     monkeypatch.setattr(import_module.subprocess, "run", fake_run)
+    monkeypatch.setattr(import_module, "_ensure_clean_worktree", lambda repo_path: None)
     monkeypatch.setattr(
         import_module,
         "_checkout_or_create_branch",
@@ -277,6 +278,7 @@ def test_rewrite_import_non_ff_error_has_recovery_hint(tmp_path, monkeypatch):
         return SimpleNamespace(returncode=0, stdout="", stderr="")
 
     monkeypatch.setattr(import_module.subprocess, "run", fake_run)
+    monkeypatch.setattr(import_module, "_ensure_clean_worktree", lambda repo_path: None)
 
     with pytest.raises(ValueError) as exc_info:
         import_module._rewrite_and_import(
@@ -292,3 +294,47 @@ def test_rewrite_import_non_ff_error_has_recovery_hint(tmp_path, monkeypatch):
     assert "대상 브랜치 'feat/gitshuttle'가 이미 존재" in error_message
     assert "--target-branch" in error_message
     assert "--on-conflict force" in error_message
+
+
+def test_checkout_or_create_branch_updates_worktree(tmp_path, monkeypatch):
+    """fast-import 후 target branch checkout/reset으로 작업 폴더를 갱신한다."""
+    import gitshuttle.import_ as import_module
+
+    tip = "e18" + "0" * 37
+    calls = []
+
+    def fake_run_git(args, cwd):
+        calls.append(args)
+        if args == ["rev-parse", "refs/heads/feat/gitshuttle"]:
+            return f"{tip}\n"
+        if args == ["rev-parse", "--is-bare-repository"]:
+            return "false\n"
+        return ""
+
+    monkeypatch.setattr(import_module, "run_git", fake_run_git)
+
+    result = import_module._checkout_or_create_branch(tmp_path, "feat/gitshuttle")
+
+    assert result == [tip]
+    assert ["checkout", "feat/gitshuttle"] in calls
+    assert ["reset", "--hard", tip] in calls
+
+
+def test_ensure_clean_worktree_raises_on_dirty_repo(tmp_path, monkeypatch):
+    """사용자 변경이 있으면 fast-import 전에 중단해 reset 손실을 막는다."""
+    import gitshuttle.import_ as import_module
+
+    def fake_run_git(args, cwd):
+        if args == ["rev-parse", "--is-bare-repository"]:
+            return "false\n"
+        if args == ["status", "--porcelain"]:
+            return " M README.md\n"
+        return ""
+
+    monkeypatch.setattr(import_module, "run_git", fake_run_git)
+
+    with pytest.raises(ValueError) as exc_info:
+        import_module._ensure_clean_worktree(tmp_path)
+
+    assert "커밋되지 않은 변경 사항" in str(exc_info.value)
+    assert "commit/stash" in str(exc_info.value)

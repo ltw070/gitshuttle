@@ -383,6 +383,9 @@ git log imported/main --oneline    # 반입된 커밋 확인
 git merge imported/main            # 검토 완료 후 병합
 ```
 
+rewrite import가 완료되면 GitShuttle은 대상 브랜치로 checkout한 뒤 `reset --hard <브랜치 tip>`을 실행해 작업 폴더의 실제 파일도 import 결과와 맞춥니다.  
+따라서 import 전 대상 repo에 커밋되지 않은 변경 사항이 있으면 먼저 commit/stash 하거나 정리해야 합니다.
+
 ---
 
 ### 작성자 매핑 (Author Mapping)
@@ -942,6 +945,21 @@ gitshuttle import --file shuttle.bundle --timestamp original
 
 ---
 
+**Q. import 이력은 있는데 실제 파일이 폴더에 안 보입니다.**
+
+rewrite import는 `git fast-import`로 먼저 ref와 object DB를 갱신합니다. 구버전에서는 이 단계 뒤 작업 폴더 checkout/reset이 자동으로 되지 않아, `git log <브랜치>`에는 이력이 보이지만 파일 탐색기에는 이전 상태가 보일 수 있었습니다.
+
+최신 버전은 import 후 대상 브랜치로 checkout/reset 하여 파일까지 자동 갱신합니다. 이미 이 현상이 발생했다면 아래처럼 수동으로 맞출 수 있습니다:
+
+```powershell
+git -C C:\repos\target-gitshuttle switch migration/gitshuttle-20260610
+git -C C:\repos\target-gitshuttle reset --hard migration/gitshuttle-20260610
+```
+
+작업 중인 변경 사항이 있다면 `reset --hard` 전에 반드시 commit 또는 stash 하세요.
+
+---
+
 ## 15. 오류 메시지 해설
 
 | 오류 메시지 | 원인 | 해결 방법 |
@@ -955,6 +973,7 @@ gitshuttle import --file shuttle.bundle --timestamp original
 | `현재 디렉터리에 Git 리포지토리가 없습니다.` | Git 리포지토리가 아닌 폴더에서 실행 | `cd` 로 올바른 폴더로 이동 후 재시도 |
 | `bundle unbundle 실패` | bundle 사전 조건(prerequisite)을 만족 못 함 | 전체 히스토리 포함한 bundle로 재export |
 | `Not updating refs/heads/... does not contain ...` | 대상 브랜치가 이미 있고 새 import 이력이 기존 tip을 포함하지 않음 | 다른 `--target-branch` 사용, 기존 로컬 브랜치 삭제, 또는 `--on-conflict force` 사용 |
+| 이력은 있는데 파일이 안 보임 | ref/object는 갱신됐지만 작업 폴더가 target branch tip으로 갱신되지 않음 | 최신 버전 사용. 이미 발생했다면 `git switch <브랜치>` 후 `git reset --hard <브랜치>` |
 | `작성자 매핑 파일을 찾을 수 없습니다: ...` | `--author-map` 경로가 잘못됨 | JSON 파일 경로 확인 |
 | `타임스탬프 형식 오류: ...` | `from=` 모드에서 datetime 형식이 틀림 | `YYYY-MM-DDTHH:MM:SS` 형식으로 입력 |
 
