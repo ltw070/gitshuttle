@@ -31,6 +31,7 @@
 커밋 메시지, 작성자, AI가 제안한 변경 이유, 리뷰 코멘트 — 모두 사라진다.
 
 **GitShuttle이 해결하는 것:** git bundle 포맷으로 커밋 히스토리 전체를 압축·검증·이전한다.
+또한 hidden 기준점을 만들 수 없는 운영 상황에서는 patchset/replay 방식으로 선택 커밋의 변경분을 대상 브랜치 위에 새 커밋으로 재생할 수 있다.
 
 ---
 
@@ -58,6 +59,10 @@
 4. **망분리 GitHub 양방향 구조 지원**
    - 외부망 GitHub(Public/External) → USB → 내부망 GitHub(On-prem/Private)
    - Phase 2 Direct Sync: 네트워크가 허용될 때 API로 직접 동기화
+
+5. **운영 방식 이원화**
+   - `bundle`: 전체 이력·부모 관계·Git object 중심 이전. 원본 구조 보존에 적합하다.
+   - `patchset/replay`: 기준점 없이 일부 변경분만 대상 HEAD 위에 재생. 내부 브랜치가 이미 달라진 상황에서 작업자 책임으로 적용하기 쉽다.
 
 ---
 
@@ -164,7 +169,37 @@ Sprint 5  →  79 passed
 Sprint 6  →  85 passed
 Sprint 7  → 102 passed
 최종 정리 → 106 passed  (0 failed)
+기능 보강 → 158 collected  (hidden refs, patchset/replay, TUI 단축키 포함)
 ```
+
+**최근 TDD 사례 — patchset/replay:**
+
+```python
+def test_run_replay_import_applies_patchset_with_author_map(tmp_path):
+    """patchset을 대상 HEAD 위에 replay하고 author_map을 적용한다."""
+    patchset = create_patchset(source, [commits[0]], tmp_path, "feature.patchset")
+
+    result = run_replay_import(
+        patchset_path=patchset,
+        repo_path=target,
+        author_map_path=str(author_map),
+        target_branch="main",
+        timestamp_mode="original",
+    )
+
+    assert result.imported == 1
+    assert latest == "feat: replay feature|ltw070 <ltw070@naver.com>"
+
+
+def test_replay_import_duplicate_head_message_requires_confirmation(tmp_path):
+    """대상 HEAD subject와 첫 replay subject가 같으면 확인을 요구한다."""
+    with pytest.raises(ValueError):
+        run_replay_import(..., confirm_duplicate_message=lambda head, first: False)
+```
+
+**의미:**
+사용자 요구인 "기준점 없이 작업자 책임으로 cherry-pick 형태로 붙이기"를 구현하기 전에,
+patchset 생성·replay 적용·중복 커밋 메시지 확인 조건을 테스트로 먼저 고정했다.
 
 ---
 
@@ -314,6 +349,42 @@ After refactoring:
   (전체 7/7 PASSED)
 ```
 
+#### 추가 Refactoring — bundle 이력 이전과 patchset replay 분리
+
+**배경:**
+작성자·날짜 rewrite 후 최근 일부 커밋만 bundle로 가져오려면 대상 repo에 원본 부모 SHA가 있어야 한다.
+최신 구현은 `refs/gitshuttle/original/...` hidden 기준점으로 이를 해결하지만, 이미 내부 브랜치가 독자적으로 수정된 경우에는 "원본 이력 mirror"보다 "변경분만 적용"이 더 자연스러운 요구가 생겼다.
+
+**설계 선택:**
+
+```
+bundle import
+  - 원본 Git object와 부모 관계 중심
+  - hidden 기준점으로 부분 bundle prerequisite 해결
+  - 이력 구조 보존에 적합
+
+patchset replay
+  - 커밋별 binary diff + metadata 저장
+  - 대상 HEAD 위에 새 커밋으로 재생
+  - 기준점 없이 일부 변경 적용에 적합
+```
+
+**왜 기존 bundle 경로에 억지로 넣지 않았나:**
+bundle은 Git object graph를 다루고, patchset은 diff replay를 다룬다.
+두 방식을 하나의 흐름에 섞으면 "원본 이력 보존"과 "작업자 책임 적용"의 의미가 흐려진다.
+그래서 `--format patchset`, `--mode replay`로 별도 모드화했다.
+
+**성능 관점:**
+patchset import는 일부 커밋 적용 시 가볍지만, patchset export는 커밋마다 metadata 조회와 `git diff --binary`를 수행하므로 많은 커밋에서는 bundle보다 느릴 수 있다.
+따라서 현재 권장 기준은 다음과 같다.
+
+| 상황 | 권장 방식 |
+|------|-----------|
+| 전체 이력 이전, 원본 구조 보존 | `bundle` |
+| hidden 기준점 기반의 증분 이전 | `bundle` |
+| 기준점 없이 내부 브랜치 위에 일부 변경만 적용 | `patchset/replay` |
+| 많은 커밋을 한 번에 이동 | 대체로 `bundle` 우선 검토 |
+
 ---
 
 ### 5. SOLID 원칙 관점
@@ -368,6 +439,18 @@ def apply_rewrites(
 새로운 rewrite 규칙이 필요해도 기존 `rewrite_authors()`나 `rewrite_branch_ref()`를 직접 깨뜨릴 필요가 적다.  
 예를 들어 커밋 메시지 prefix 추가, 특정 파일 경로 rewrite 같은 요구가 생기면 새 함수를 만들고 `apply_rewrites()`에 한 단계로 추가할 수 있다.
 
+**확장 사례:**
+patchset/replay는 기존 bundle import 의미를 바꾸지 않고, `patchset.py`와 `import_mode` 분기로 추가했다.
+
+```python
+if import_mode == "replay" or (
+    import_mode == "auto" and bundle_path.suffix.lower() == ".patchset"
+):
+    replay_result = run_replay_import(...)
+```
+
+기존 bundle import는 그대로 닫혀 있고, replay 기능은 새 모듈로 열려 있다.
+
 #### ISP — Interface Segregation Principle
 
 **사례:** CLI는 복잡한 내부 구현을 직접 알지 않고, 좁은 API와 결과 객체만 사용한다.
@@ -390,6 +473,20 @@ typer.echo(f"  total    : {result.total}개")
 **분석:**  
 CLI 레이어는 `git bundle`, `fast-export`, `fast-import`, SHA-256 계산 방식까지 알 필요가 없다.  
 `ImportResult`의 `imported`, `skipped`, `total`, `warnings`만 사용하므로 호출자 관점의 인터페이스가 작고 명확하다.
+
+**최근 사례 — replay 결과도 같은 호출자 인터페이스로 흡수:**
+
+```python
+replay_result = run_replay_import(...)
+return ImportResult(
+    imported=replay_result.imported,
+    skipped=replay_result.skipped,
+    total=replay_result.total,
+    warnings=replay_result.warnings,
+)
+```
+
+CLI는 bundle import인지 patchset replay인지 세부 구현을 몰라도 동일한 결과 출력 로직을 사용할 수 있다.
 
 #### DIP — Dependency Inversion Principle 관점
 
@@ -516,6 +613,33 @@ monkeypatch.setattr(import_module, "run_import", fake_run_import)
 CLI 테스트가 실제 bundle 검증이나 fast-import에 의존하지 않는다.  
 `--repo`, `--timestamp` 같은 옵션이 내부 API로 정확히 전달되는지 빠르게 확인할 수 있다.
 
+#### 사례 5 — replay CLI 옵션 전달 검증
+
+`tests/test_cli.py`는 실제 patch 적용 없이 `run_import()`를 monkeypatch해서 `--mode replay`와 확인 콜백이 내부 API로 전달되는지 검증한다.
+
+```python
+def fake_run_import(..., import_mode="auto", confirm_duplicate_message=None):
+    captured["import_mode"] = import_mode
+    captured["has_confirm_callback"] = confirm_duplicate_message is not None
+    return ImportResult(imported=1, skipped=0, total=1)
+
+monkeypatch.setattr(import_module, "run_import", fake_run_import)
+
+result = runner.invoke(app, [
+    "import",
+    "--file", str(patchset_path),
+    "--repo", str(repo_dir),
+    "--mode", "replay",
+])
+
+assert captured["import_mode"] == "replay"
+assert captured["has_confirm_callback"] is True
+```
+
+**효과:**
+느린 patch 생성·적용 없이 CLI 계약만 빠르게 확인한다.
+실제 patchset 생성과 replay 적용은 `tests/test_patchset.py`가 임시 Git repo로 보완한다.
+
 #### Mock 사용 시 주의점
 
 Mock은 외부 의존성을 빠르고 안정적으로 격리하지만, 실제 Git 동작과 완전히 같지는 않다.  
@@ -526,4 +650,4 @@ Mock 테스트는 "명령 호출 방식", "오류 처리", "토큰 마스킹", "
 
 ---
 
-*GitShuttle · Sprint 0~7 완료 · 106 tests PASSED · 0 failures*
+*GitShuttle · Sprint 0~7 완료 + 기능 보강 · 158 tests collected · patchset/replay 포함*
