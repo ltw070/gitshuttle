@@ -33,6 +33,14 @@ class ReplayResult:
     warnings: list[str] = field(default_factory=list)
 
 
+@dataclass(frozen=True)
+class ReplayCommitResult:
+    """Result of replaying a single patchset commit."""
+
+    imported: int = 0
+    skipped: int = 0
+
+
 def create_patchset(
     repo_path: Path | str,
     commits: list[Commit],
@@ -156,75 +164,19 @@ def run_replay_import(
     imported = 0
     skipped = 0
     for index, commit_meta in enumerate(commits):
-        patch_bytes = _read_patch_bytes(patchset_path, commit_meta["patch"])
-        patch_applied = bool(patch_bytes.strip())
-        forced = False
-        if patch_applied:
-            try:
-                applied = _apply_patch(repo_path, patch_bytes)
-            except ValueError as exc:
-                if on_conflict == "force":
-                    try:
-                        applied = _force_apply_commit_snapshot(
-                            patchset_path,
-                            repo_path,
-                            commit_meta,
-                        )
-                        forced = applied
-                    except ValueError as force_exc:
-                        raise ValueError(
-                            _format_replay_commit_failure(
-                                commit_meta,
-                                index + 1,
-                                len(commits),
-                                f"{exc}\n\nforce 적용 실패:\n{force_exc}",
-                            )
-                        ) from force_exc
-                else:
-                    raise ValueError(
-                        _format_replay_commit_failure(
-                            commit_meta,
-                            index + 1,
-                            len(commits),
-                            str(exc),
-                        )
-                    ) from exc
-            if not applied:
-                skipped += 1
-                warnings.append(
-                    f"이미 적용된 replay patch 건너뜀: {commit_meta.get('subject', '')}"
-                )
-                continue
-            if forced:
-                warnings.append(
-                    f"force replay 적용: {commit_meta.get('subject', '')}"
-                )
-
-        author = _mapped_identity(
-            commit_meta["author_name"],
-            commit_meta["author_email"],
-            author_map,
-            warnings,
-        )
-        committer = _mapped_identity(
-            commit_meta["committer_name"],
-            commit_meta["committer_email"],
-            author_map,
-            warnings,
-        )
-        author_date, committer_date = timestamp_plan[index]
-        _commit_index(
+        result = _replay_commit(
+            patchset_path=patchset_path,
             repo_path=repo_path,
-            message=commit_meta["message"],
-            author_name=author[0],
-            author_email=author[1],
-            author_date=author_date,
-            committer_name=committer[0],
-            committer_email=committer[1],
-            committer_date=committer_date,
-            allow_empty=not patch_applied,
+            commit_meta=commit_meta,
+            commit_number=index + 1,
+            commit_total=len(commits),
+            author_map=author_map,
+            timestamp=timestamp_plan[index],
+            on_conflict=on_conflict,
+            warnings=warnings,
         )
-        imported += 1
+        imported += result.imported
+        skipped += result.skipped
 
     return ReplayResult(
         imported=imported,
@@ -232,6 +184,107 @@ def run_replay_import(
         total=len(commits),
         warnings=warnings,
     )
+
+
+def _replay_commit(
+    *,
+    patchset_path: Path,
+    repo_path: Path,
+    commit_meta: dict,
+    commit_number: int,
+    commit_total: int,
+    author_map: dict,
+    timestamp: tuple[str, str],
+    on_conflict: str,
+    warnings: list[str],
+) -> ReplayCommitResult:
+    patch_bytes = _read_patch_bytes(patchset_path, commit_meta["patch"])
+    patch_applied = bool(patch_bytes.strip())
+
+    if patch_applied:
+        applied, forced = _apply_patch_with_conflict_policy(
+            patchset_path=patchset_path,
+            repo_path=repo_path,
+            commit_meta=commit_meta,
+            commit_number=commit_number,
+            commit_total=commit_total,
+            patch_bytes=patch_bytes,
+            on_conflict=on_conflict,
+        )
+        if not applied:
+            warnings.append(
+                f"이미 적용된 replay patch 건너뜀: {commit_meta.get('subject', '')}"
+            )
+            return ReplayCommitResult(skipped=1)
+        if forced:
+            warnings.append(f"force replay 적용: {commit_meta.get('subject', '')}")
+
+    author = _mapped_identity(
+        commit_meta["author_name"],
+        commit_meta["author_email"],
+        author_map,
+        warnings,
+    )
+    committer = _mapped_identity(
+        commit_meta["committer_name"],
+        commit_meta["committer_email"],
+        author_map,
+        warnings,
+    )
+    author_date, committer_date = timestamp
+    _commit_index(
+        repo_path=repo_path,
+        message=commit_meta["message"],
+        author_name=author[0],
+        author_email=author[1],
+        author_date=author_date,
+        committer_name=committer[0],
+        committer_email=committer[1],
+        committer_date=committer_date,
+        allow_empty=not patch_applied,
+    )
+    return ReplayCommitResult(imported=1)
+
+
+def _apply_patch_with_conflict_policy(
+    *,
+    patchset_path: Path,
+    repo_path: Path,
+    commit_meta: dict,
+    commit_number: int,
+    commit_total: int,
+    patch_bytes: bytes,
+    on_conflict: str,
+) -> tuple[bool, bool]:
+    try:
+        return _apply_patch(repo_path, patch_bytes), False
+    except ValueError as exc:
+        if on_conflict != "force":
+            raise ValueError(
+                _format_replay_commit_failure(
+                    commit_meta,
+                    commit_number,
+                    commit_total,
+                    str(exc),
+                )
+            ) from exc
+
+        try:
+            applied = _force_apply_commit_snapshot(
+                patchset_path,
+                repo_path,
+                commit_meta,
+            )
+        except ValueError as force_exc:
+            raise ValueError(
+                _format_replay_commit_failure(
+                    commit_meta,
+                    commit_number,
+                    commit_total,
+                    f"{exc}\n\nforce 적용 실패:\n{force_exc}",
+                )
+            ) from force_exc
+        return applied, applied
 
 
 def _read_commit_metadata(repo_path: Path, commit_hash: str) -> dict:
