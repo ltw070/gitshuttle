@@ -239,6 +239,7 @@ gitshuttle export [OPTIONS]
 | `--output TEXT` | 출력 경로 지정 | `--output C:\transfer` |
 | `--format [bundle\|patchset]` | 패키지 형식. `patchset`은 replay/cherry-pick용 | `--format patchset` |
 | `--patchset-compression [fast\|stored\|deflated]` | patchset 압축 방식. `stored`는 무압축이라 빠르지만 파일이 큼 | `--patchset-compression stored` |
+| `--bundle-scope [range\|full]` | bundle 범위 방식. `full`은 선택 tip까지 전체 이력을 포함 | `--bundle-scope full` |
 | `--recent INTEGER` | UI 없이 최신 N개 커밋만 바로 선택 | `--recent 2` |
 
 ### 실행 예시
@@ -267,6 +268,9 @@ gitshuttle export --repo C:\projects\my-repo --branch main --format patchset --r
 
 # patchset 생성 속도 우선: zip 무압축 저장
 gitshuttle export --format patchset --patchset-compression stored --output C:\transfer
+
+# 부분 bundle prerequisite 없이 강제 연결 가능한 self-contained bundle 생성
+gitshuttle export --format bundle --recent 2 --bundle-scope full --output C:\transfer
 ```
 
 ### 모든 커밋을 선택하고 TUI를 건너뛰기
@@ -526,6 +530,8 @@ replay는 원본 커밋 객체를 옮기는 것이 아니라 각 커밋의 diff�
 비어 있지 않은 브랜치에 원본 변경 파일을 강제로 덮어쓰려면 `--on-conflict force`를 사용합니다.
 이 모드는 최신 patchset에 포함된 변경 파일 스냅샷을 사용해 해당 커밋의 변경 파일만 source-wins 방식으로 적용합니다.
 기존 patchset에 스냅샷 metadata가 없으면 최신 GitShuttle로 다시 export해야 합니다.
+patchset export는 선택 커밋을 Git topo order로 정렬해 서브브랜치 merge 이력이 날짜순으로 뒤섞여 replay되는 문제를 줄입니다.
+서로 다른 브랜치에서 같은 파일을 바꾼 merge 충돌형 이력은 `--on-conflict force`를 사용해 merge commit의 최종 파일 상태를 반영하세요.
 
 대상 브랜치의 마지막 커밋 메시지와 새로 붙일 첫 replay 커밋 메시지가 같으면 GitShuttle이 한 번만 경고하고 계속 진행 여부를 묻습니다.
 메시지가 다르면 추가 확인 없이 replay를 진행합니다.
@@ -1025,6 +1031,9 @@ git -C C:\repos\target-gitshuttle reset --hard migration/gitshuttle-20260610
 
 최신 GitShuttle은 rewrite import가 끝난 뒤 원본 bundle refs를 `refs/gitshuttle/original/...` 숨김 영역에 보관합니다.
 이 숨김 ref는 일반 브랜치처럼 작업하지 않지만, 다음 부분 bundle의 prerequisite 검증에 필요한 원본 부모 SHA를 대상 repo 안에 남겨 둡니다.
+
+대상 repo의 기준점과 무관하게 강제로 이어붙이고 싶다면 `--bundle-scope full`로 self-contained bundle을 export한 뒤 `--on-conflict force --target-branch <브랜치>`로 import하세요.
+이 방식은 bundle 파일이 커질 수 있지만 prerequisite 실패를 피합니다.
 
 해결 방법:
 

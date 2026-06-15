@@ -30,6 +30,7 @@ def run_export(
     filename: str | None = None,
     package_format: str = "bundle",
     patchset_compression: str = "fast",
+    bundle_scope: str = "range",
 ) -> ExportResult:
     """선택된 커밋으로 bundle + sha256 + manifest 를 생성한다.
 
@@ -41,6 +42,7 @@ def run_export(
         filename:    패키지 파일명 (확장자 제외). 미지정 시 shuttle_YYMMDD.
         package_format: "bundle" 또는 "patchset".
         patchset_compression: patchset zip 압축 방식 ("fast", "stored", "deflated").
+        bundle_scope: bundle 범위 방식 ("range", "full").
 
     Returns:
         ExportResult (bundle, sha256, manifest 경로 포함).
@@ -87,6 +89,7 @@ def run_export(
             commits=commits,
             output_dir=output_dir,
             filename=package_filename,
+            scope=bundle_scope,
         )
 
     # 2. SHA-256 체크섬 생성

@@ -80,6 +80,7 @@ Options:
   --output TEXT                  출력 경로 (기본값: 원본 리포지토리 경로)
   --format [bundle|patchset]     패키지 형식 (기본값: bundle)
   --patchset-compression TEXT    patchset 압축 방식 (fast|stored|deflated)
+  --bundle-scope TEXT            bundle 범위 방식 (range|full)
   --recent INTEGER               UI 없이 최신 N개 커밋 선택
 ```
 
@@ -174,6 +175,15 @@ import 시 SHA-256 체크섬이 자동 검증됩니다. 불일치 시 작업이 
 따라서 이 버전으로 한 번 전체 또는 필요한 기준 범위를 import한 뒤에는 이후 최신 커밋 몇 개만 export/import하는 증분 흐름을 사용할 수 있습니다.
 구버전으로 이미 이전한 대상 repo는 한 번 전체 범위를 다시 import해 기준점을 만든 뒤 부분 증분을 이어가세요.
 
+대상 repo의 기준점 상태와 관계없이 bundle을 강제로 이어붙여야 한다면 export 단계에서 self-contained bundle을 만듭니다.
+
+```
+gitshuttle export --repo C:\repos\source --branch main --format bundle --recent 2 --bundle-scope full --output C:\transfer
+gitshuttle import --repo C:\repos\target --file C:\transfer\shuttle_YYMMDD.bundle --target-branch main --on-conflict force
+```
+
+`--bundle-scope full`은 선택한 최신 tip까지 전체 이력을 포함하므로 파일은 커질 수 있지만, 부분 bundle prerequisite 실패를 피할 수 있습니다.
+
 체리픽처럼 변경분만 대상 브랜치 위에 재생하는 방식도 가능하지만, 이는 원본 Git 이력을 그대로 옮기는 bundle 방식과 다릅니다.
 커밋 SHA와 merge 구조가 달라질 수 있으므로 GitShuttle의 기본 흐름은 bundle 기반 이력 이전을 유지합니다.
 
@@ -197,6 +207,7 @@ replay import는 대상 브랜치의 마지막 커밋 메시지와 새로 붙일
 실패 시에는 몇 번째 replay 커밋인지, 원본 커밋 hash와 제목, `git apply`가 출력한 상세 메시지를 함께 보여줍니다.
 
 patchset export는 커밋 metadata를 batch 조회하고 parent 정보를 재사용하도록 최적화되어 있습니다. 연속 선형 first-parent 범위는 `git format-patch --stdout` 기반으로 patch를 만들고, merge나 비연속 선택은 기존 커밋별 diff 방식으로 자동 fallback합니다.
+선택 커밋은 replay 전에 Git topo order로 정렬되어 서브브랜치 merge 이력이 날짜순 뒤섞임 때문에 누락되는 일을 줄입니다. 서로 다른 브랜치에서 같은 파일을 수정한 merge 충돌형 이력은 `--on-conflict force`로 파일 스냅샷을 사용해 최종 상태를 반영할 수 있습니다.
 
 **작성자 매핑 JSON 형식:**
 

@@ -58,7 +58,7 @@ def create_patchset(
         filename = f"shuttle_{date_str}.patchset"
 
     patchset_path = output_dir / filename
-    replay_commits = list(reversed(commits))
+    replay_commits = _order_commits_for_replay(repo_path, commits)
     metadata_by_hash = _read_commits_metadata(repo_path, replay_commits)
     patches_by_hash, patch_source = _read_commit_patches(
         repo_path,
@@ -75,6 +75,7 @@ def create_patchset(
                 replay_commits,
                 metadata_by_hash,
             ),
+            "order": "topo",
             "patch_source": patch_source,
         },
         "commits": [],
@@ -242,6 +243,34 @@ def _read_commit_metadata(repo_path: Path, commit_hash: str) -> dict:
         message="",
         files_changed=0,
     )])[commit_hash]
+
+
+def _order_commits_for_replay(repo_path: Path, commits: list[Commit]) -> list[Commit]:
+    """Return selected commits oldest-first in topological order."""
+    selected = {commit.hash: commit for commit in commits}
+    result = subprocess.run(
+        ["git", "rev-list", "--topo-order", "--reverse", *selected.keys()],
+        cwd=repo_path,
+        capture_output=True,
+        encoding="utf-8",
+        errors="replace",
+        env=_git_env(),
+    )
+    if result.returncode != 0:
+        return list(reversed(commits))
+
+    ordered: list[Commit] = []
+    seen: set[str] = set()
+    for commit_hash in result.stdout.splitlines():
+        commit = selected.get(commit_hash.strip())
+        if commit is not None and commit.hash not in seen:
+            ordered.append(commit)
+            seen.add(commit.hash)
+
+    for commit in reversed(commits):
+        if commit.hash not in seen:
+            ordered.append(commit)
+    return ordered
 
 
 def _read_commits_metadata(repo_path: Path, commits: list[Commit]) -> dict[str, dict]:

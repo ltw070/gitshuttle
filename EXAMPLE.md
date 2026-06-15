@@ -197,6 +197,7 @@ bundle 파일을 `C:\shuttle_transfer\`에 저장해 두었다가 내부망에�
 > 증분 bundle은 대상 repo에 직전 원본 부모 커밋 SHA가 있어야 검증됩니다.  
 > 작성자/날짜 rewrite를 적용해 커밋 SHA가 바뀐 대상 repo에서는 최신 GitShuttle이 보관한 `refs/gitshuttle/original/...` 기준점이 있어야 최근 몇 개 커밋만 담은 증분 bundle이 검증됩니다.
 > 구버전으로 이전한 repo라면 최신 버전으로 전체 또는 필요한 기준 범위를 한 번 다시 import한 뒤 증분을 이어가세요.
+> 기준점과 무관하게 강제로 이어붙일 bundle이 필요하면 `--bundle-scope full`로 self-contained bundle을 만들고 import에서 `--on-conflict force`를 사용하세요. 파일은 커질 수 있지만 prerequisite 실패를 피합니다.
 
 ### 사전 준비
 
@@ -733,6 +734,28 @@ python -m gitshuttle import `
 ```
 
 부분 bundle은 직전 원본 부모 SHA가 필요합니다. 최신 버전은 최초 rewrite import 때 그 기준점을 숨김 ref로 보관하므로, 구버전으로 만든 대상 repo라면 한 번 전체 import를 다시 수행해 기준점을 만든 뒤 부분 import를 사용하세요.
+
+대상 repo의 기준점 상태가 애매하지만 bundle 방식으로 강제로 이어붙이고 싶다면 self-contained bundle을 만들 수 있습니다.
+
+```powershell
+python -m gitshuttle export `
+  --repo C:\repos\source-gitshuttle `
+  --branch main `
+  --format bundle `
+  --recent 2 `
+  --bundle-scope full `
+  --output C:\transfer
+
+python -m gitshuttle import `
+  --repo C:\repos\target-gitshuttle `
+  --file C:\transfer\shuttle_YYMMDD.bundle `
+  --author-map C:\transfer\author_map.json `
+  --target-branch migration/gitshuttle-20260610 `
+  --timestamp original `
+  --on-conflict force
+```
+
+`--bundle-scope full`은 선택한 최신 tip까지 전체 이력을 담기 때문에 일반 부분 bundle보다 커질 수 있지만, prerequisite 실패를 피할 수 있습니다.
 
 체리픽처럼 변경분만 대상 브랜치 위에 재생하려면 아래 예제 5의 `patchset` + `replay` 방식을 사용합니다. 원본 bundle 이력 이전과 달리 merge 구조와 커밋 SHA가 달라질 수 있으므로, 이 예제에서는 bundle 기반 증분 import를 사용합니다.
 

@@ -35,6 +35,7 @@ def create_bundle(
     commits: list[Commit],
     output_dir: Path | str,
     filename: str | None = None,
+    scope: str = "range",
 ) -> Path:
     """선택한 커밋들을 .bundle 파일로 생성한다.
 
@@ -43,6 +44,7 @@ def create_bundle(
         commits:    bundle에 포함할 Commit 객체 목록 (최신순, get_commits 반환 순서).
         output_dir: bundle 파일을 저장할 디렉토리.
         filename:   출력 파일명. 미지정 시 shuttle_YYMMDD.bundle.
+        scope:      "range"는 선택 범위만, "full"은 tip까지 전체 이력을 포함.
 
     Returns:
         생성된 bundle 파일의 절대 Path.
@@ -52,6 +54,8 @@ def create_bundle(
     """
     if not commits:
         raise ValueError("commits 목록이 비어있습니다. 최소 1개의 커밋이 필요합니다.")
+    if scope not in ("range", "full"):
+        raise ValueError("bundle scope는 range 또는 full 이어야 합니다.")
 
     repo_path = Path(repo_path)
     output_dir = Path(output_dir)
@@ -75,7 +79,7 @@ def create_bundle(
 
     try:
         # bundle 범위 인자 계산
-        bundle_args = _build_bundle_args(repo_path, oldest.hash, tmp_ref)
+        bundle_args = _build_bundle_args(repo_path, oldest.hash, tmp_ref, scope=scope)
 
         run_git(
             ["bundle", "create", str(bundle_path)] + bundle_args,
@@ -95,6 +99,7 @@ def _build_bundle_args(
     repo_path: Path,
     oldest_hash: str,
     tmp_ref: str,
+    scope: str = "range",
 ) -> list[str]:
     """git bundle create 에 전달할 인자 목록을 반환한다.
 
@@ -103,6 +108,9 @@ def _build_bundle_args(
     일반 경우:
       → [^<oldest_parent>, tmp_ref]  (범위 지정)
     """
+    if scope == "full":
+        return [tmp_ref]
+
     # 가장 오래된 커밋의 부모 확인
     try:
         parent_out = run_git(

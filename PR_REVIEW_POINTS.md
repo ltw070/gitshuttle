@@ -65,7 +65,7 @@ gitshuttle/                   18개 모듈
     ├── html_ui.py            단일 HTML (인터넷 불필요), selection.json 파싱
     └── prompt_ui.py          InquirerPy 방향키 멀티셀렉트
 
-tests/                        16개 테스트 파일, 168개 테스트
+tests/                        16개 테스트 파일, 171개 테스트
 ├── conftest.py               임시 git repo 픽스처
 ├── test_git_ops.py
 ├── test_bundle.py
@@ -137,6 +137,7 @@ import 시 자동 검증 — 불일치 시 `ChecksumError`를 raise해 손상·�
 gitshuttle export   [--repo <path>] [--branch] [--ui tui|csv|html|prompt] [--output]
                     [--format bundle|patchset]
                     [--patchset-compression fast|stored|deflated]
+                    [--bundle-scope range|full]
                     [--recent <N>]
 gitshuttle import   --file <path>
                     [--repo <path>]
@@ -154,7 +155,7 @@ gitshuttle sync     (Phase 2 — Python API 단계)
 ### 테스트 현황
 
 ```
-현재 수집 테스트: 168개
+현재 수집 테스트: 171개
 커버리지 대상 모듈: git_ops, bundle, checksum, manifest, export_, import_,
                    rewrite, config, sync, ui(csv/html/prompt), build
 ```
@@ -279,6 +280,7 @@ author/timestamp rewrite를 하면 target branch의 커밋 SHA가 원본과 달�
 - 원본 첫 커밋부터 포함한 patchset을 새 target branch에 replay할 때 기존 HEAD가 섞이지 않는지
 - 같은 파일을 여러 번 수정한 전체 순차 replay가 중간 커밋 누락 없이 적용되는지
 - `--on-conflict force` replay가 최신 patchset의 파일 스냅샷으로 비어 있지 않은 브랜치에도 source-wins 적용되는지
+- 서브브랜치 merge 충돌 해결 결과가 force replay에서 최종 파일 상태로 반영되는지
 - patchset export가 metadata를 일괄 조회하고 parent 정보를 재사용해 커밋별 중복 Git 호출을 줄이는지
 - 연속 선형 first-parent 범위에서는 `git format-patch --stdout` 경로를 사용하고, merge/비연속 선택에서는 per-commit diff로 fallback하는지
 - `--recent N`이 TUI를 열지 않고 최신 N개만 조회·선택하는지
@@ -303,6 +305,7 @@ author/timestamp rewrite를 하면 target branch의 커밋 SHA가 원본과 달�
 최근 1~2개 커밋만 선택한 bundle은 직전 부모 커밋을 prerequisite로 가집니다.  
 대상 repo가 원본 부모 SHA를 갖고 있지 않거나, author/timestamp rewrite로 SHA가 바뀐 경우 `git bundle verify`가 실패합니다.
 `verify_bundle_detailed()`와 import 오류 메시지가 이 원인 및 `refs/gitshuttle/original/...` 기준점 생성 필요성을 사용자에게 설명하는지 확인해 주세요.
+`--bundle-scope full`은 선택 tip까지 전체 이력을 포함해 prerequisite 없는 self-contained bundle을 만들며, `--on-conflict force --target-branch ...` 조합으로 강제 이어붙이기에 사용할 수 있습니다.
 
 체리픽/replay 방식은 선택 커밋을 대상 브랜치 위에 새 커밋으로 재생할 수 있는 대안입니다.
 현재 `patchset.py`로 별도 포맷/모드가 추가되었으며, 원본 bundle 이력 이전과 달리 커밋 SHA와 merge 구조가 달라질 수 있습니다.
@@ -338,7 +341,7 @@ Phase 2 승인 전 코드가 임의로 호출되지 않도록 `__all__` 제한�
 
 ### 🟢 확인 완료
 
-- **테스트 168개 수집 확인** — 전체 suite는 환경에 따라 장시간 실행될 수 있음
+- **테스트 171개 수집 확인** — 전체 suite는 환경에 따라 장시간 실행될 수 있음
 - **UTF-8 / 한글 처리** — 모든 파일 I/O, subprocess, TUI에 인코딩 명시
 - **망분리 제약** — 외부 네트워크 호출 코드 없음 (sync_.py는 명시적 Phase 2 API)
 - **Breaking Changes 없음** — 기존 `gitshuttle import --file <bundle>` 호환 유지

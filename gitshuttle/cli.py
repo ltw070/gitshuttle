@@ -60,6 +60,11 @@ def export(
         "--patchset-compression",
         help="patchset 압축 방식 (fast|stored|deflated). stored가 가장 빠르지만 파일이 큽니다.",
     ),
+    bundle_scope: str = typer.Option(
+        "range",
+        "--bundle-scope",
+        help="bundle 범위 방식 (range|full). full은 선택 tip까지 전체 이력을 포함합니다.",
+    ),
     recent: Optional[int] = typer.Option(
         None,
         "--recent",
@@ -136,6 +141,7 @@ def export(
         branch=branch_name,
         package_format=package_format,
         patchset_compression=patchset_compression,
+        bundle_scope=bundle_scope,
     )
 
     label = "patchset" if package_format == "patchset" else "bundle"

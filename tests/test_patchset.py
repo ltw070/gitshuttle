@@ -176,6 +176,14 @@ def test_run_replay_import_applies_patchset_with_author_map(tmp_path):
     target = tmp_path / "target"
     _init_repo(source, "init source")
     _init_repo(target, "init target")
+    base_branch = subprocess.run(
+        ["git", "branch", "--show-current"],
+        cwd=source,
+        check=True,
+        capture_output=True,
+        encoding="utf-8",
+        env=_git_env(),
+    ).stdout.strip()
     _add_commit(source, "feature.txt", "feature", "feat: replay feature")
 
     commits = get_commits(source)
@@ -315,6 +323,86 @@ def test_replay_import_force_overwrites_conflicting_existing_branch(tmp_path):
     assert any("force replay 적용" in warning for warning in result.warnings)
     assert (target / "README.md").read_text(encoding="utf-8") == "# Test"
     assert (target / "feature.txt").read_text(encoding="utf-8") == "v2"
+
+
+def test_replay_import_force_reflects_merged_sub_branch_resolution(tmp_path):
+    """서브브랜치 merge 결과는 force replay에서 최종 파일 상태로 반영된다."""
+    from gitshuttle.git_ops import get_commits
+    from gitshuttle.patchset import create_patchset, run_replay_import
+
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    _init_repo(source, "init source")
+    _init_repo(target, "init target")
+    base_branch = subprocess.run(
+        ["git", "branch", "--show-current"],
+        cwd=source,
+        check=True,
+        capture_output=True,
+        encoding="utf-8",
+        env=_git_env(),
+    ).stdout.strip()
+
+    (source / "shared.txt").write_text("base", encoding="utf-8")
+    subprocess.run(["git", "add", "."], cwd=source, check=True, env=_git_env())
+    subprocess.run(
+        ["git", "commit", "-m", "feat: add shared"],
+        cwd=source,
+        check=True,
+        env=_git_env(),
+    )
+    subprocess.run(["git", "checkout", "-b", "feature"], cwd=source, check=True, env=_git_env())
+    (source / "shared.txt").write_text("feature", encoding="utf-8")
+    subprocess.run(["git", "add", "."], cwd=source, check=True, env=_git_env())
+    subprocess.run(
+        ["git", "commit", "-m", "feat: feature change"],
+        cwd=source,
+        check=True,
+        env=_git_env(),
+    )
+    subprocess.run(["git", "checkout", base_branch], cwd=source, check=True, env=_git_env())
+    (source / "shared.txt").write_text("main", encoding="utf-8")
+    subprocess.run(["git", "add", "."], cwd=source, check=True, env=_git_env())
+    subprocess.run(
+        ["git", "commit", "-m", "feat: main change"],
+        cwd=source,
+        check=True,
+        env=_git_env(),
+    )
+    subprocess.run(
+        ["git", "merge", "feature", "--no-ff", "-m", "merge feature"],
+        cwd=source,
+        capture_output=True,
+        env=_git_env(),
+    )
+    (source / "shared.txt").write_text("resolved", encoding="utf-8")
+    subprocess.run(["git", "add", "."], cwd=source, check=True, env=_git_env())
+    subprocess.run(
+        ["git", "commit", "-m", "merge feature"],
+        cwd=source,
+        check=True,
+        env=_git_env(),
+    )
+
+    commits = get_commits(source)
+    patchset = create_patchset(
+        repo_path=source,
+        commits=commits,
+        output_dir=tmp_path,
+        filename="merge.patchset",
+        branch=base_branch,
+    )
+
+    result = run_replay_import(
+        patchset_path=patchset,
+        repo_path=target,
+        target_branch="imported-merge",
+        timestamp_mode="original",
+        on_conflict="force",
+    )
+
+    assert result.imported == len(commits)
+    assert (target / "shared.txt").read_text(encoding="utf-8") == "resolved"
 
 
 def test_replay_import_duplicate_head_message_requires_confirmation(tmp_path):

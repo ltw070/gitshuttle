@@ -66,6 +66,42 @@ def test_create_bundle_empty_commits_raises(tmp_git_repo, tmp_path):
         create_bundle(tmp_git_repo, [], tmp_path)
 
 
+def test_create_bundle_full_scope_is_self_contained(tmp_git_repo, tmp_path):
+    """scope=full 은 최신 일부 커밋만 선택해도 prerequisite 없는 bundle을 만든다."""
+    from gitshuttle.git_ops import get_commits
+    from gitshuttle.bundle import create_bundle, verify_bundle_detailed
+
+    env = {**os.environ, "PYTHONIOENCODING": "utf-8", "GIT_TERMINAL_PROMPT": "0"}
+    (tmp_git_repo / "feature.txt").write_text("feature", encoding="utf-8")
+    subprocess.run(["git", "add", "."], cwd=tmp_git_repo, check=True, env=env)
+    subprocess.run(
+        ["git", "commit", "-m", "feat: feature"],
+        cwd=tmp_git_repo,
+        check=True,
+        env=env,
+    )
+    empty_repo = tmp_path / "empty"
+    subprocess.run(["git", "init", str(empty_repo)], check=True, env=env)
+
+    commits = get_commits(tmp_git_repo, branch="HEAD")
+    range_bundle = create_bundle(
+        tmp_git_repo,
+        [commits[0]],
+        tmp_path,
+        filename="range.bundle",
+    )
+    full_bundle = create_bundle(
+        tmp_git_repo,
+        [commits[0]],
+        tmp_path,
+        filename="full.bundle",
+        scope="full",
+    )
+
+    assert verify_bundle_detailed(range_bundle, repo_path=empty_repo).valid is False
+    assert verify_bundle_detailed(full_bundle, repo_path=empty_repo).valid is True
+
+
 def test_verify_bundle_valid(tmp_git_repo, tmp_path):
     """올바른 bundle은 verify_bundle → True를 반환해야 한다."""
     from gitshuttle.git_ops import get_commits

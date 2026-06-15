@@ -103,12 +103,14 @@ def test_export_accepts_repo_option(tmp_path, monkeypatch):
         branch,
         package_format="bundle",
         patchset_compression="fast",
+        bundle_scope="range",
     ):
         captured["run_export_repo"] = repo_path
         captured["output_dir"] = output_dir
         captured["export_branch"] = branch
         captured["package_format"] = package_format
         captured["patchset_compression"] = patchset_compression
+        captured["bundle_scope"] = bundle_scope
         return ExportResult(
             bundle=output_dir / "test.bundle",
             sha256=output_dir / "test.bundle.sha256",
@@ -141,6 +143,7 @@ def test_export_accepts_repo_option(tmp_path, monkeypatch):
     assert captured["output_dir"] == output_dir
     assert captured["package_format"] == "bundle"
     assert captured["patchset_compression"] == "fast"
+    assert captured["bundle_scope"] == "range"
 
 
 def test_export_accepts_patchset_format(tmp_path, monkeypatch):
@@ -179,9 +182,11 @@ def test_export_accepts_patchset_format(tmp_path, monkeypatch):
         branch,
         package_format="bundle",
         patchset_compression="fast",
+        bundle_scope="range",
     ):
         captured["package_format"] = package_format
         captured["patchset_compression"] = patchset_compression
+        captured["bundle_scope"] = bundle_scope
         return ExportResult(
             bundle=output_dir / "test.patchset",
             sha256=output_dir / "test.patchset.sha256",
@@ -209,6 +214,7 @@ def test_export_accepts_patchset_format(tmp_path, monkeypatch):
     assert result.exit_code == 0, f"exit code {result.exit_code}: {result.output}"
     assert captured["package_format"] == "patchset"
     assert captured["patchset_compression"] == "stored"
+    assert captured["bundle_scope"] == "range"
     assert "patchset" in result.output
 
 
@@ -251,8 +257,10 @@ def test_export_recent_selects_latest_without_ui(tmp_path, monkeypatch):
         branch,
         package_format="bundle",
         patchset_compression="fast",
+        bundle_scope="range",
     ):
         captured["selected"] = commits
+        captured["bundle_scope"] = bundle_scope
         return ExportResult(
             bundle=output_dir / "test.bundle",
             sha256=output_dir / "test.bundle.sha256",
@@ -280,7 +288,73 @@ def test_export_recent_selects_latest_without_ui(tmp_path, monkeypatch):
     assert result.exit_code == 0, f"exit code {result.exit_code}: {result.output}"
     assert captured["limit"] == 2
     assert captured["selected"] == commits
+    assert captured["bundle_scope"] == "range"
     assert "UI 없이 선택" in result.output
+
+
+def test_export_accepts_bundle_scope_full(tmp_path, monkeypatch):
+    """export --bundle-scope full 은 run_export에 self-contained bundle 범위를 전달한다."""
+    from gitshuttle.cli import app
+    from gitshuttle.export_ import ExportResult
+    from gitshuttle.git_ops import Commit
+    import gitshuttle.export_ as export_module
+    import gitshuttle.git_ops as git_ops_module
+    import gitshuttle.ui.tui as tui_module
+
+    repo_dir = tmp_path / "source_repo"
+    repo_dir.mkdir()
+    output_dir = tmp_path / "out"
+    captured = {}
+    fake_commit = Commit(
+        hash="a" * 40,
+        short_hash="aaaaaaa",
+        date="2026-06-10 09:00:00 +0900",
+        author="ltw070",
+        message="test commit",
+        files_changed=1,
+    )
+
+    monkeypatch.setattr(
+        git_ops_module,
+        "get_commits",
+        lambda repo_path, branch="HEAD", limit=None: [fake_commit],
+    )
+    monkeypatch.setattr(tui_module, "select_commits_tui", lambda commits: commits)
+
+    def fake_run_export(
+        repo_path,
+        commits,
+        output_dir,
+        branch,
+        package_format="bundle",
+        patchset_compression="fast",
+        bundle_scope="range",
+    ):
+        captured["bundle_scope"] = bundle_scope
+        return ExportResult(
+            bundle=output_dir / "test.bundle",
+            sha256=output_dir / "test.bundle.sha256",
+            manifest=output_dir / "test_manifest.txt",
+        )
+
+    monkeypatch.setattr(export_module, "run_export", fake_run_export)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        app,
+        [
+            "export",
+            "--repo",
+            str(repo_dir),
+            "--output",
+            str(output_dir),
+            "--bundle-scope",
+            "full",
+        ],
+    )
+
+    assert result.exit_code == 0, f"exit code {result.exit_code}: {result.output}"
+    assert captured["bundle_scope"] == "full"
 
 
 def test_import_stub():

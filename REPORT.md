@@ -39,7 +39,7 @@
   - `--recent N`이 UI를 열지 않고 limit 조회로 이어지는지 검증
   - patchset metadata/parent 재사용과 `stored` 압축 옵션 검증
 
-**현재 기준 테스트:** 168개 테스트 수집 확인. 신규 속도 개선 관련 테스트 통과.
+**현재 기준 테스트:** 171개 테스트 수집 확인. 신규 속도 개선 관련 테스트 통과.
 
 ---
 
@@ -49,6 +49,7 @@
 - `gitshuttle/patchset.py`
   - `--format patchset`에서 사용할 `.patchset` zip 포맷 추가
   - 선택 커밋의 metadata와 binary diff를 old → new 순서로 저장
+  - replay 순서를 Git topo order로 정렬해 서브브랜치/merge 이력 반영 안정성 개선
   - `--mode replay`에서 대상 브랜치 현재 HEAD 위에 새 커밋으로 재생
   - author/committer 매핑과 `timestamp original/now/from=` 적용
   - 대상 HEAD 마지막 커밋 메시지와 첫 replay 커밋 메시지가 같을 때만 확인 콜백 요구
@@ -65,12 +66,13 @@
   - 원본 첫 커밋부터 새 target branch에 replay할 때 빈 orphan branch에서 시작하는 테스트 추가
   - 같은 파일 반복 변경 전체 순차 replay 테스트 추가
   - `--on-conflict force`가 파일 스냅샷으로 비어 있지 않은 브랜치에 source-wins 적용되는 테스트 추가
+  - 서브브랜치 merge 충돌 해결 결과가 force replay에서 최종 파일 상태로 반영되는 테스트 추가
   - CLI `--format patchset`, `--mode replay` 전달 테스트 추가
 - `README.md`, `MANUAL.md`, `EXAMPLE.md`, `PR_REVIEW_POINTS.md`
   - 기준점 hidden ref 없이 작업자 책임으로 변경분을 붙이는 replay/cherry-pick 사용법 추가
   - replay는 원본 SHA와 merge topology를 보존하지 않는다는 제약 문서화
 
-**현재 기준 테스트:** 168개 테스트 수집 확인. patchset/CLI 관련 테스트 통과.
+**현재 기준 테스트:** 171개 테스트 수집 확인. patchset/CLI 관련 테스트 통과.
 
 ---
 
@@ -81,7 +83,7 @@
   - 5번 항목: SOLID 원칙 관점 추가
   - 6번 항목: Mock 테스트 관점 추가
 - `PR_REVIEW_POINTS.md`
-  - 현재 테스트 수를 168개 기준으로 업데이트
+  - 현재 테스트 수를 171개 기준으로 업데이트
   - `--repo` 옵션, fast-import 바이너리 입력, fast-export `data N` payload 보존 포인트 반영
   - `author_map.json` 형식을 이메일 키 + `{name,email}` dict 형식으로 정리
 - `README.md`
@@ -111,6 +113,8 @@
 - `gitshuttle/bundle.py`, `gitshuttle/import_.py`
   - `git bundle verify` 실패 상세 메시지 보존
   - 최근 일부 커밋 bundle의 prerequisite 실패와 rewrite SHA 변경 가능성을 import 오류 메시지에 안내
+  - export `--bundle-scope full` 추가: 선택 tip까지 전체 이력을 포함하는 self-contained bundle 생성
+  - full-scope bundle은 prerequisite 없는 검증이 가능해 `--on-conflict force --target-branch ...` 조합의 강제 이어붙이기에 사용 가능
 - `gitshuttle/import_.py`
   - rewrite import 성공 후 원본 bundle refs를 `refs/gitshuttle/original/<target-branch>/...`에 보관
   - 후속 부분 bundle import 시 숨김 원본 refs를 임시 repo로 가져와 prerequisite 객체를 채움
@@ -119,13 +123,15 @@
 - `tests/test_bundle.py`, `tests/test_import.py`
   - bundle verify 상세 메시지 보존 테스트 추가
   - 부분 bundle prerequisite 실패 안내 테스트 추가
+  - `scope=full` bundle이 빈 repo에서도 verify되는 테스트 추가
   - rewrite import 후 최신 1개 커밋만 담은 부분 bundle이 숨김 원본 refs를 기준으로 이어지는 통합 테스트 추가
 - `README.md`, `MANUAL.md`, `EXAMPLE.md`
   - 최근 1~2개 커밋만 export할 때의 bundle prerequisite 제약 문서화
+  - `--bundle-scope full` self-contained bundle과 강제 이어붙이기 예시 추가
   - 최신 버전의 `refs/gitshuttle/original/...` 기준점 보관 방식과 구버전 repo의 1회 전체 import 필요성 문서화
   - cherry-pick/replay 방식은 가능하지만 원본 bundle 이력 이전과 달리 SHA/merge 구조가 달라질 수 있음을 안내
 
-**현재 기준 테스트:** 168개 테스트 수집 확인. 관련 단위/통합 테스트 통과.
+**현재 기준 테스트:** 171개 테스트 수집 확인. 관련 단위/통합 테스트 통과.
 
 ---
 
@@ -142,7 +148,7 @@
   - 🟡 일반 검토 6개 (split archive, checksum 강제화, branch fallback, author_map 키 검증, toml 우선순위, Phase 2 노출)
   - 🟢 확인 완료 항목, exe 빌드 방법 및 제약 명시
 
-**최종 테스트 확인:** 당시 `134/134 PASS` (2026-06-15 현재 문서 기준: 168개 테스트)
+**최종 테스트 확인:** 당시 `134/134 PASS` (2026-06-15 현재 문서 기준: 171개 테스트)
 
 **현재 상태 요약:**
 
@@ -150,7 +156,7 @@
 |------|------|
 | Phase 1 구현 | ✅ 완료 (Sprint 0~6, 4b 포함) |
 | Phase 2 (Direct Sync) | ✅ Python API 구현 완료, CLI 노출 예정 |
-| 전체 테스트 | ✅ 168개 수집 확인 (2026-06-15 기준) |
+| 전체 테스트 | ✅ 171개 수집 확인 (2026-06-15 기준) |
 | gitshuttle.exe | ⚠️ 미빌드 (사내 PyInstaller 설치 불가, spec/build.ps1 준비 완료) |
 | GitHub push | ✅ main 브랜치 최신 |
 | PR #1 | ✅ Sprint 4b feat/PR 병합 완료 |
@@ -774,7 +780,7 @@ GitHub: https://github.com/ltw070/gitshuttle (private)
 
 ## Phase 1 완료 (2026-05-08)
 
-모든 Sprint(0~7)가 완료되었습니다. 당시 최종 테스트는 **106 passed**, 0 failed였고, 이후 기능 보강을 포함한 2026-06-15 기준 테스트 수는 168개입니다.
+모든 Sprint(0~7)가 완료되었습니다. 당시 최종 테스트는 **106 passed**, 0 failed였고, 이후 기능 보강을 포함한 2026-06-15 기준 테스트 수는 171개입니다.
 
 ### 남은 작업 (Phase 2 이후)
 
