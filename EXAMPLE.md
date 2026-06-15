@@ -778,6 +778,22 @@ python -m gitshuttle import `
   --timestamp original
 ```
 
+대상 브랜치가 비어 있지 않거나 같은 파일이 이미 다르게 수정되어 있어도 원본 변경 파일을 우선하려면 `--on-conflict force`를 추가합니다.
+
+```powershell
+python -m gitshuttle import `
+  --repo C:\repos\target-gitshuttle `
+  --file C:\transfer\shuttle_YYMMDD.patchset `
+  --mode replay `
+  --target-branch main `
+  --on-conflict force `
+  --author-map C:\transfer\author_map.json `
+  --timestamp original
+```
+
+`--on-conflict force`는 최신 patchset에 포함된 변경 파일 스냅샷으로 해당 커밋의 변경 파일만 source-wins 방식으로 덮어씁니다.
+기존에 만들어 둔 patchset에 스냅샷 metadata가 없다면 최신 GitShuttle로 다시 export한 뒤 import하세요.
+
 대상 브랜치의 마지막 커밋 메시지와 새로 붙일 첫 replay 커밋 메시지가 같으면 아래처럼 확인을 받습니다.
 
 ```text
@@ -796,7 +812,7 @@ python -m gitshuttle import `
 | 장점 | hidden 기준점 없이 대상 브랜치 위에 변경분을 이어 붙일 수 있음 |
 | 단점 | 원본 commit SHA와 merge 구조는 보존하지 않음 |
 | 중복 | 같은 변경분이 이미 적용되어 있으면 해당 patch는 자동 skip |
-| 충돌 | 같은 경로의 파일이 다른 내용으로 이미 있으면 patch 적용 실패. 이미 반영된 커밋 이후만 다시 선택하거나 사용자가 직접 정리 후 재시도 |
+| 충돌 | 기본값은 같은 경로의 다른 내용에서 중단. 원본 변경 파일을 우선하려면 `--on-conflict force` 사용 |
 | 용도 | 내부 브랜치가 이미 달라졌고, 작업자 판단으로 일부 변경만 붙이는 경우 |
 | 속도 | 최신 N개는 `--recent N`, patchset 압축 비용은 `--patchset-compression stored`로 줄일 수 있음 |
 
