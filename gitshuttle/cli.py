@@ -21,7 +21,6 @@ class ExportCliOptions:
     """CLI 입력값을 실제 export 실행 옵션으로 정규화한 값."""
 
     commit_limit: Optional[int]
-    package_format: str
     bundle_scope: str
     auto_select_message: Optional[str] = None
 
@@ -50,26 +49,21 @@ def _resolve_export_cli_options(
     *,
     full_branch: bool,
     recent: Optional[int],
-    package_format: str,
     bundle_scope: str,
 ) -> ExportCliOptions:
     if not full_branch:
         message = f"최근 {recent}개 커밋을 UI 없이 선택했습니다." if recent is not None else None
         return ExportCliOptions(
             commit_limit=recent,
-            package_format=package_format,
             bundle_scope=bundle_scope,
             auto_select_message=message,
         )
 
-    if package_format != "bundle":
-        raise ValueError("--full-branch 옵션은 --format bundle에서만 사용할 수 있습니다.")
     if recent is not None:
         raise ValueError("--full-branch 옵션은 --recent와 함께 사용할 수 없습니다.")
 
     return ExportCliOptions(
         commit_limit=1,
-        package_format="bundle",
         bundle_scope="full",
         auto_select_message="현재 브랜치 tip 기준 전체 이력을 UI 없이 선택했습니다.",
     )
@@ -139,9 +133,8 @@ def _select_commits_by_ui(ui_mode: str, commits, output_dir: Path) -> list:
     return select_commits_tui(commits)
 
 
-def _print_export_result(result, package_format: str) -> None:
-    label = "patchset" if package_format == "patchset" else "bundle"
-    typer.echo(f"{label:<8}: {result.bundle}")
+def _print_export_result(result) -> None:
+    typer.echo(f"{'bundle':<8}: {result.bundle}")
     typer.echo(f"sha256   : {result.sha256}")
     typer.echo(f"manifest : {result.manifest}")
     typer.echo("export 완료.")
@@ -183,29 +176,16 @@ def _print_import_start(
     inputs: ImportCliInputs,
     on_conflict: str,
     target_branch: Optional[str],
-    mode: str,
 ) -> None:
     typer.echo(f"bundle        : {inputs.bundle_path}")
     typer.echo(f"target        : {inputs.repo_path}")
     typer.echo(f"conflict      : {on_conflict}")
-    typer.echo(f"mode          : {mode}")
     if target_branch:
         typer.echo(f"target-branch : {target_branch}")
     if inputs.author_map:
         typer.echo(f"author-map    : {inputs.author_map}")
     typer.echo(f"timestamp     : {inputs.timestamp}")
     typer.echo("반입을 시작합니다...")
-
-
-def _confirm_duplicate_replay_message(head_subject: str, first_subject: str) -> bool:
-    typer.echo(
-        "\n[경고] 대상 브랜치의 마지막 커밋 메시지와 "
-        "새로 붙일 첫 replay 커밋 메시지가 같습니다.",
-        err=True,
-    )
-    typer.echo(f"  이전 마지막 커밋: {head_subject}", err=True)
-    typer.echo(f"  새 replay 커밋   : {first_subject}", err=True)
-    return typer.confirm("이대로 계속 진행할까요?", default=False)
 
 
 def _print_import_result(result) -> None:
@@ -255,16 +235,6 @@ def export(
     ),
     ui: Optional[str] = typer.Option(None, "--ui", help="UI 모드 (tui|csv|html|prompt)"),
     output: Optional[str] = typer.Option(None, "--output", "-o", help="출력 경로"),
-    package_format: str = typer.Option(
-        "bundle",
-        "--format",
-        help="패키지 형식 (bundle|patchset). patchset은 cherry-pick/replay용입니다.",
-    ),
-    patchset_compression: str = typer.Option(
-        "fast",
-        "--patchset-compression",
-        help="patchset 압축 방식 (fast|stored|deflated). stored가 가장 빠르지만 파일이 큽니다.",
-    ),
     bundle_scope: str = typer.Option(
         "range",
         "--bundle-scope",
@@ -291,7 +261,6 @@ def export(
         export_options = _resolve_export_cli_options(
             full_branch=full_branch,
             recent=recent,
-            package_format=package_format,
             bundle_scope=bundle_scope,
         )
     except ValueError as e:
@@ -329,17 +298,15 @@ def export(
         commits=selected,
         output_dir=paths.output_dir,
         branch=paths.branch_name,
-        package_format=export_options.package_format,
-        patchset_compression=patchset_compression,
         bundle_scope=export_options.bundle_scope,
     )
 
-    _print_export_result(result, export_options.package_format)
+    _print_export_result(result)
 
 
 @app.command(name="import")
 def import_(
-    file: Optional[str] = typer.Option(None, "--file", "-f", help=".bundle 또는 .patchset 파일 경로"),
+    file: Optional[str] = typer.Option(None, "--file", "-f", help=".bundle 파일 경로"),
     repo: Optional[Path] = typer.Option(
         None,
         "--repo",
@@ -366,11 +333,6 @@ def import_(
         "--timestamp",
         help="타임스탬프 재작성 모드 (now|original|from=DATETIME). CLI > toml > 기본값(now).",
     ),
-    mode: str = typer.Option(
-        "auto",
-        "--mode",
-        help="import 방식 (auto|bundle|replay). replay는 patchset을 cherry-pick처럼 적용합니다.",
-    ),
 ) -> None:
     """shuttle 패키지를 대상 리포지토리에 반입합니다."""
     from gitshuttle.import_ import run_import, ChecksumError, ImportConflictError
@@ -385,7 +347,6 @@ def import_(
         inputs=inputs,
         on_conflict=on_conflict,
         target_branch=target_branch,
-        mode=mode,
     )
 
     try:
@@ -396,8 +357,6 @@ def import_(
             author_map_path=inputs.author_map,
             target_branch=target_branch,
             timestamp_mode=inputs.timestamp,
-            import_mode=mode,
-            confirm_duplicate_message=_confirm_duplicate_replay_message,
         )
     except ChecksumError as e:
         typer.echo(f"\n[오류] {e}", err=True)

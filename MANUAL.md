@@ -237,8 +237,6 @@ gitshuttle export [OPTIONS]
 | `--branch TEXT` | 특정 브랜치의 커밋만 추출 | `--branch feature/login` |
 | `--ui [tui\|csv\|html\|prompt]` | 커밋 선택 방식 | `--ui csv` |
 | `--output TEXT` | 출력 경로 지정 | `--output C:\transfer` |
-| `--format [bundle\|patchset]` | 패키지 형식. `patchset`은 replay/cherry-pick용 | `--format patchset` |
-| `--patchset-compression [fast\|stored\|deflated]` | patchset 압축 방식. `stored`는 무압축이라 빠르지만 파일이 큼 | `--patchset-compression stored` |
 | `--bundle-scope [range\|full]` | bundle 범위 방식. `full`은 선택 tip까지 전체 이력을 포함 | `--bundle-scope full` |
 | `--full-branch` | 현재/지정 브랜치 tip 기준 전체 이력을 TUI 없이 bundle로 추출 | `--full-branch` |
 | `--recent INTEGER` | UI 없이 최신 N개 커밋만 바로 선택 | `--recent 2` |
@@ -264,17 +262,8 @@ gitshuttle export --ui csv
 # 출력 폴더를 직접 지정
 gitshuttle export --output C:\transfer
 
-# 기준점 없이 cherry-pick처럼 붙일 patchset 생성
-gitshuttle export --format patchset --output C:\transfer
-
-# 최신 2개 커밋만 TUI 없이 빠르게 patchset 생성
-gitshuttle export --repo C:\projects\my-repo --branch main --format patchset --recent 2 --output C:\transfer
-
-# patchset 생성 속도 우선: zip 무압축 저장
-gitshuttle export --format patchset --patchset-compression stored --output C:\transfer
-
 # 선택 tip 기준으로 부분 bundle prerequisite 없이 강제 연결 가능한 self-contained bundle 생성
-gitshuttle export --format bundle --recent 2 --bundle-scope full --output C:\transfer
+gitshuttle export --recent 2 --bundle-scope full --output C:\transfer
 ```
 
 `--full-branch`는 브랜치 tip까지 도달 가능한 전체 이력을 포함합니다. merge된 서브브랜치 커밋은 포함되지만, 현재 브랜치에 merge되지 않은 독립 브랜치의 커밋은 포함되지 않습니다.
@@ -328,13 +317,12 @@ gitshuttle import --file FILE [OPTIONS]
 
 | 옵션 | 설명 | 기본값 |
 |------|------|--------|
-| `--file TEXT` | bundle 또는 patchset 파일 경로 **(필수)** | — |
+| `--file TEXT` | bundle 파일 경로 **(필수)** | — |
 | `--repo PATH` | 대상 Git 리포지토리 경로 | 현재 디렉터리 |
 | `--on-conflict [skip\|force\|abort]` | 충돌 처리 방식 | `skip` |
 | `--author-map FILE` | 작성자 매핑 JSON 파일 경로 | 없음 (원본 유지) |
 | `--target-branch TEXT` | import 커밋을 담을 브랜치명 | `imported/<소스브랜치>` |
 | `--timestamp TEXT` | 커밋 타임스탬프 모드 | `now` |
-| `--mode [auto\|bundle\|replay]` | import 방식. `.patchset`은 `auto`에서 replay로 처리 | `auto` |
 
 ### 실행 예시
 
@@ -353,9 +341,6 @@ gitshuttle import --file shuttle_260508.bundle --on-conflict force
 
 # 중복 커밋 발견 즉시 전체 중단
 gitshuttle import --file shuttle_260508.bundle --on-conflict abort
-
-# patchset을 대상 브랜치 위에 cherry-pick처럼 재생
-gitshuttle import --file shuttle_260508.patchset --mode replay --target-branch main
 ```
 
 ### 실행 흐름
@@ -532,46 +517,6 @@ gitshuttle import \
   --target-branch ext-main \
   --timestamp from=2024-05-22T09:00:00
 ```
-
----
-
-### Replay / Cherry-Pick 방식
-
-기준점 hidden ref 없이 작업자가 책임지고 변경분만 이어 붙이고 싶다면 `patchset` + `replay` 방식을 사용합니다.
-
-```
-gitshuttle export --repo C:\projects\source --branch main --format patchset --recent 2 --output C:\transfer
-
-gitshuttle import ^
-  --repo C:\projects\target ^
-  --file C:\transfer\shuttle_YYMMDD.patchset ^
-  --mode replay ^
-  --target-branch main ^
-  --author-map C:\transfer\author_map.json ^
-  --timestamp original
-```
-
-replay는 원본 커밋 객체를 옮기는 것이 아니라 각 커밋의 diff를 대상 브랜치 현재 HEAD 위에 새 커밋으로 적용합니다.
-따라서 기준점이 없어도 동작할 수 있지만, 커밋 SHA와 merge 구조는 원본과 달라질 수 있고 충돌이 나면 사용자가 직접 정리해야 합니다.
-
-원본 첫 커밋부터 포함된 patchset을 아직 존재하지 않는 `--target-branch`로 replay하면 GitShuttle은 빈 orphan branch에서 시작합니다.
-이 경우 대상 repo에 기존 README/license가 있어도 새 target branch에는 섞이지 않으며, 같은 파일을 여러 커밋에서 반복 수정한 전체 순차 replay도 중간 커밋을 빠뜨리지 않으면 적용됩니다.
-반대로 이미 존재하는 대상 브랜치에 replay하면 그 브랜치의 현재 파일 상태가 patch의 기준 상태와 맞아야 합니다.
-비어 있지 않은 브랜치에 원본 변경 파일을 강제로 덮어쓰려면 `--on-conflict force`를 사용합니다.
-이 모드는 최신 patchset에 포함된 변경 파일 스냅샷을 사용해 해당 커밋의 변경 파일만 source-wins 방식으로 적용합니다.
-기존 patchset에 스냅샷 metadata가 없으면 최신 GitShuttle로 다시 export해야 합니다.
-patchset export는 선택 커밋을 Git topo order로 정렬해 서브브랜치 merge 이력이 날짜순으로 뒤섞여 replay되는 문제를 줄입니다.
-서로 다른 브랜치에서 같은 파일을 바꾼 merge 충돌형 이력은 `--on-conflict force`를 사용해 merge commit의 최종 파일 상태를 반영하세요.
-
-대상 브랜치의 마지막 커밋 메시지와 새로 붙일 첫 replay 커밋 메시지가 같으면 GitShuttle이 한 번만 경고하고 계속 진행 여부를 묻습니다.
-메시지가 다르면 추가 확인 없이 replay를 진행합니다.
-
-이미 같은 변경분이 대상 브랜치에 적용되어 있으면 해당 patch는 자동으로 건너뜁니다.
-하지만 같은 경로의 파일이 이미 있고 내용이 다르면 `patch failed`, `patch does not apply`, `already exists in index` 계열 오류가 날 수 있습니다.
-이 경우 오류 메시지에 실패한 replay 순번, 원본 커밋 hash, 제목, `git apply` 상세 출력이 함께 표시됩니다.
-이미 반영된 커밋은 선택하지 말고 그 이후 커밋만 다시 patchset으로 만들거나, 대상 브랜치에서 충돌 파일을 직접 정리한 뒤 다시 실행하세요. 원본 변경 파일을 우선하려면 `--on-conflict force`로 재실행할 수 있습니다.
-
-patchset export는 metadata를 커밋별로 반복 조회하지 않고 batch로 읽고, parent 정보도 patch 생성에 재사용합니다. 압축은 기본 `fast`이며, CPU 시간이 더 중요하면 `--patchset-compression stored`로 무압축 저장을 선택할 수 있습니다. 연속 선형 first-parent 범위는 `git format-patch --stdout` 기반으로 빠르게 생성하고, merge나 비연속 선택은 기존 커밋별 diff 방식으로 자동 fallback합니다.
 
 ---
 
@@ -1089,7 +1034,7 @@ python -m gitshuttle import `
 
 구버전 GitShuttle로 이미 rewrite import한 repo는 숨김 원본 ref가 없을 수 있습니다. 이 경우 한 번은 전체 또는 필요한 기준 범위를 최신 버전으로 다시 import해야 이후 부분 증분이 안정적으로 이어집니다.
 
-체리픽 형태로 변경분만 대상 브랜치 위에 재생하려면 `--format patchset`으로 export하고 `--mode replay`로 import하세요. 다만 이 방식은 원본 Git bundle 이력 이전과 다르게 커밋 SHA와 merge 구조가 달라질 수 있습니다.
+기존 main을 보존한 채 가져온 이력을 검토하려면 별도 migration 브랜치로 import한 뒤 Git merge로 합치세요. 이 방식은 GitShuttle의 bundle 이력 이전 흐름을 유지하면서, 기존 코드와 새 이력을 Git의 표준 merge 절차로 비교·해결할 수 있습니다.
 
 ---
 
@@ -1107,7 +1052,6 @@ python -m gitshuttle import `
 | `bundle unbundle 실패` | bundle 사전 조건(prerequisite)을 만족 못 함 | 전체 히스토리 포함한 bundle로 재export |
 | `Not updating refs/heads/... does not contain ...` | 대상 브랜치가 이미 있고 새 import 이력이 기존 tip을 포함하지 않음 | 다른 `--target-branch` 사용, 기존 로컬 브랜치 삭제, 또는 `--on-conflict force` 사용 |
 | 이력은 있는데 파일이 안 보임 | ref/object는 갱신됐지만 작업 폴더가 target branch tip으로 갱신되지 않음 | 최신 버전 사용. 이미 발생했다면 `git switch <브랜치>` 후 `git reset --hard <브랜치>` |
-| `replay patch 적용 실패`, `patch failed`, `already exists in index` | replay patch가 대상 브랜치의 현재 파일 상태와 충돌함 | 메시지의 실패 순번/원본 커밋/제목/git apply 상세를 확인. 이미 같은 변경분이면 자동 skip. 내용이 다르면 충돌 파일을 정리하거나 원본 변경 파일 우선 시 `--on-conflict force`로 재실행 |
 | `작성자 매핑 파일을 찾을 수 없습니다: ...` | `--author-map` 경로가 잘못됨 | JSON 파일 경로 확인 |
 | `타임스탬프 형식 오류: ...` | `from=` 모드에서 datetime 형식이 틀림 | `YYYY-MM-DDTHH:MM:SS` 형식으로 입력 |
 

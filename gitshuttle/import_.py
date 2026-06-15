@@ -16,7 +16,7 @@ from __future__ import annotations
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Optional
 
 from .checksum import _compute_sha256
 from .bundle import verify_bundle_detailed
@@ -69,8 +69,6 @@ def run_import(
     author_map_path: Optional[str] = None, # 작성자 매핑 JSON 경로
     target_branch: Optional[str] = None,   # 대상 브랜치 (None → "imported/<소스브랜치>")
     timestamp_mode: str = "now",           # "now" | "original" | "from=DATETIME"
-    import_mode: str = "auto",             # "auto" | "bundle" | "replay"
-    confirm_duplicate_message: Callable[[str, str], bool] | None = None,
 ) -> ImportResult:
     """bundle 파일을 target repo에 반입한다.
 
@@ -85,10 +83,6 @@ def run_import(
                           None 이면 "imported/<소스브랜치>" 형식 자동 생성.
         timestamp_mode:   타임스탬프 재작성 모드.
                           "now"(기본) | "original" | "from=YYYY-MM-DDTHH:MM:SS"
-        import_mode:      "auto"(확장자 자동) | "bundle" | "replay".
-        confirm_duplicate_message:
-                          replay 모드에서 target HEAD subject와 첫 replay subject가
-                          같을 때 계속할지 묻는 콜백.
 
     Returns:
         ImportResult (imported, skipped, total, warnings 포함).
@@ -106,18 +100,6 @@ def run_import(
         raise FileNotFoundError(f"bundle 파일을 찾을 수 없습니다: {bundle_path}")
 
     _verify_checksum(bundle_path, sha256_path)
-    _validate_import_mode(import_mode)
-
-    if _should_import_as_replay(bundle_path, import_mode):
-        return _run_replay_import(
-            patchset_path=bundle_path,
-            repo_path=repo_path,
-            author_map_path=author_map_path,
-            target_branch=target_branch,
-            timestamp_mode=timestamp_mode,
-            on_conflict=on_conflict,
-            confirm_duplicate_message=confirm_duplicate_message,
-        )
 
     verify_result = verify_bundle_detailed(bundle_path, repo_path=repo_path)
     if not verify_result.valid:
@@ -165,45 +147,6 @@ def run_import(
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
-
-def _validate_import_mode(import_mode: str) -> None:
-    if import_mode not in ("auto", "bundle", "replay"):
-        raise ValueError("import_mode는 auto, bundle, replay 중 하나여야 합니다.")
-
-
-def _should_import_as_replay(bundle_path: Path, import_mode: str) -> bool:
-    return import_mode == "replay" or (
-        import_mode == "auto" and bundle_path.suffix.lower() == ".patchset"
-    )
-
-
-def _run_replay_import(
-    *,
-    patchset_path: Path,
-    repo_path: Path,
-    author_map_path: Optional[str],
-    target_branch: Optional[str],
-    timestamp_mode: str,
-    on_conflict: str,
-    confirm_duplicate_message: Callable[[str, str], bool] | None,
-) -> ImportResult:
-    from .patchset import run_replay_import
-
-    replay_result = run_replay_import(
-        patchset_path=patchset_path,
-        repo_path=repo_path,
-        author_map_path=author_map_path,
-        target_branch=target_branch,
-        timestamp_mode=timestamp_mode,
-        on_conflict=on_conflict,
-        confirm_duplicate_message=confirm_duplicate_message,
-    )
-    return ImportResult(
-        imported=replay_result.imported,
-        skipped=replay_result.skipped,
-        total=replay_result.total,
-        warnings=replay_result.warnings,
-    )
 
 
 def _find_duplicates(bundle_tips: list[str], existing_hashes: set[str]) -> list[str]:

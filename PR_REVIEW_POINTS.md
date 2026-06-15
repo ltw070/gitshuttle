@@ -44,7 +44,7 @@ gitshuttle export                  USB →       gitshuttle import
 ### 파일 구조 및 역할
 
 ```
-gitshuttle/                   18개 모듈
+gitshuttle/                   17개 모듈
 ├── __init__.py               버전 상수
 ├── __main__.py               엔트리포인트 (UTF-8 강제)
 ├── cli.py                    Typer app (export/import/config/sync 커맨드)
@@ -54,7 +54,6 @@ gitshuttle/                   18개 모듈
 ├── manifest.py               커밋 목록 요약 파일 생성
 ├── export_.py                export 오케스트레이션
 ├── import_.py                import 오케스트레이션 + Rewrite 파이프라인
-├── patchset.py               replay/cherry-pick용 patchset 생성·반입
 ├── rewrite.py                fast-export 스트림 치환 (작성자·브랜치·타임스탬프)
 ├── sync_.py                  Direct Sync API (Phase 2)
 ├── github_auth.py            HTTPS Token / SSH 인증 (Phase 2)
@@ -65,7 +64,7 @@ gitshuttle/                   18개 모듈
     ├── html_ui.py            단일 HTML (인터넷 불필요), selection.json 파싱
     └── prompt_ui.py          InquirerPy 방향키 멀티셀렉트
 
-tests/                        16개 테스트 파일, 174개 테스트
+tests/                        15개 테스트 파일, 161개 테스트
 ├── conftest.py               임시 git repo 픽스처
 ├── test_git_ops.py
 ├── test_bundle.py
@@ -73,7 +72,6 @@ tests/                        16개 테스트 파일, 174개 테스트
 ├── test_manifest.py
 ├── test_export.py
 ├── test_import.py
-├── test_patchset.py          replay patchset 생성·반입 테스트
 ├── test_rewrite.py           30개 (Sprint 4b + data payload 보존)
 ├── test_config.py
 ├── test_build.py
@@ -135,8 +133,6 @@ import 시 자동 검증 — 불일치 시 `ChecksumError`를 raise해 손상·�
 
 ```
 gitshuttle export   [--repo <path>] [--branch] [--ui tui|csv|html|prompt] [--output]
-                    [--format bundle|patchset]
-                    [--patchset-compression fast|stored|deflated]
                     [--bundle-scope range|full]
                     [--full-branch]
                     [--recent <N>]
@@ -146,7 +142,6 @@ gitshuttle import   --file <path>
                     [--author-map <json>]
                     [--target-branch <name>]
                     [--timestamp now|original|from=<UTC_ISO>]
-                    [--mode auto|bundle|replay]
 gitshuttle config   (대화형 마법사)
 gitshuttle sync     (Phase 2 — Python API 단계)
 ```
@@ -156,7 +151,7 @@ gitshuttle sync     (Phase 2 — Python API 단계)
 ### 테스트 현황
 
 ```
-현재 수집 테스트: 174개
+현재 수집 테스트: 161개
 커버리지 대상 모듈: git_ops, bundle, checksum, manifest, export_, import_,
                    rewrite, config, sync, ui(csv/html/prompt), build
 ```
@@ -266,28 +261,17 @@ author/timestamp rewrite를 하면 target branch의 커밋 SHA가 원본과 달�
 - `fast-export --all`에 `refs/gitshuttle/original/...` reset/commit 라인이 포함되지 않는지
 - reported `imported` 수가 보관용 원본 객체를 세지 않고 target branch의 새 커밋만 세는지
 
-#### R8. replay/cherry-pick patchset 모드 (`patchset.py`, `cli.py`)
+#### R8. bundle-only CLI 단순화 (`cli.py`, `export_.py`, `import_.py`)
 
-`--format patchset`은 선택 커밋의 메타데이터와 binary diff를 `.patchset` zip에 저장합니다.
-`--mode replay` 또는 `.patchset` 자동 감지는 대상 브랜치 현재 HEAD 위에 새 커밋을 생성합니다.
+별도 diff 재생 모드를 제거하고 GitShuttle의 전송 경로를 bundle 기반 이력 이전으로 단순화했습니다.
 
 검토 포인트:
-- replay는 원본 SHA와 merge topology를 보존하지 않는다는 문서/출력 표현이 충분히 명확한지
-- 대상 HEAD 마지막 subject와 첫 replay subject가 같을 때만 확인 프롬프트가 뜨는지
-- `author_map`, `timestamp original/now/from=`이 replay 커밋의 author/committer에 일관되게 적용되는지
-- 이미 적용된 patch는 skip하고, 같은 경로의 다른 내용 충돌은 복구 안내와 함께 중단되는지
-- patch 적용 실패 시 사용자 변경 손실 없이 중단되는지
-- patch 적용 실패 시 실패한 replay 순번, 원본 커밋 hash/제목, git apply stdout/stderr가 보존되는지
-- 원본 첫 커밋부터 포함한 patchset을 새 target branch에 replay할 때 기존 HEAD가 섞이지 않는지
-- 같은 파일을 여러 번 수정한 전체 순차 replay가 중간 커밋 누락 없이 적용되는지
-- `--on-conflict force` replay가 최신 patchset의 파일 스냅샷으로 비어 있지 않은 브랜치에도 source-wins 적용되는지
-- 서브브랜치 merge 충돌 해결 결과가 force replay에서 최종 파일 상태로 반영되는지
-- patchset export가 metadata를 일괄 조회하고 parent 정보를 재사용해 커밋별 중복 Git 호출을 줄이는지
-- 연속 선형 first-parent 범위에서는 `git format-patch --stdout` 경로를 사용하고, merge/비연속 선택에서는 per-commit diff로 fallback하는지
+- `--format`, 별도 압축 모드, `--mode` 옵션이 CLI 도움말과 문서에서 제거되었는지
+- export가 항상 `.bundle`을 만들고 checksum/manifest 생성 흐름을 유지하는지
+- import가 bundle 검증, rewrite, target branch checkout/reset 흐름만 유지하는지
+- 기존 코드가 있는 repo에서는 migration 브랜치 import 후 merge하는 가이드가 README/MANUAL/EXAMPLE/PRD에 일관되게 설명되는지
 - `--recent N`이 TUI를 열지 않고 최신 N개만 조회·선택하는지
 - `--full-branch`가 TUI 없이 브랜치 tip만 조회하고 `bundle_scope=full`로 self-contained bundle을 만드는지
-- `--full-branch`가 `--recent`, `--format patchset` 같은 충돌 옵션 조합을 명확히 거부하는지
-- `--patchset-compression stored` 사용 시 무압축 저장으로 CPU 시간을 줄이는 대신 파일 크기 증가를 감수하는 동작이 문서와 일치하는지
 
 ---
 
@@ -310,8 +294,7 @@ author/timestamp rewrite를 하면 target branch의 커밋 SHA가 원본과 달�
 `verify_bundle_detailed()`와 import 오류 메시지가 이 원인 및 `refs/gitshuttle/original/...` 기준점 생성 필요성을 사용자에게 설명하는지 확인해 주세요.
 `--full-branch`는 현재/지정 브랜치 tip 기준 전체 이력을 TUI 없이 self-contained bundle로 만들며, merge된 서브브랜치 이력까지 포함합니다. 고급 선택 흐름에서는 `--bundle-scope full`이 선택 tip까지 전체 이력을 포함해 prerequisite 없는 bundle을 만들고, `--on-conflict force --target-branch ...` 조합으로 강제 이어붙이기에 사용할 수 있습니다.
 
-체리픽/replay 방식은 선택 커밋을 대상 브랜치 위에 새 커밋으로 재생할 수 있는 대안입니다.
-현재 `patchset.py`로 별도 포맷/모드가 추가되었으며, 원본 bundle 이력 이전과 달리 커밋 SHA와 merge 구조가 달라질 수 있습니다.
+GitShuttle은 bundle 이력 이전에 집중합니다. 기존 코드 위에 변경분을 직선형으로 재생하는 별도 diff 재생 모드는 제거했고, 기존 main 보존이 필요하면 migration 브랜치 import 후 Git merge로 합칩니다.
 
 #### Y3. `_detect_source_branch` fallback (`import_.py:~390`)
 
@@ -344,7 +327,7 @@ Phase 2 승인 전 코드가 임의로 호출되지 않도록 `__all__` 제한�
 
 ### 🟢 확인 완료
 
-- **테스트 174개 수집 확인** — 전체 suite는 환경에 따라 장시간 실행될 수 있음
+- **테스트 161개 수집 확인** — 전체 suite는 환경에 따라 장시간 실행될 수 있음
 - **UTF-8 / 한글 처리** — 모든 파일 I/O, subprocess, TUI에 인코딩 명시
 - **망분리 제약** — 외부 네트워크 호출 코드 없음 (sync_.py는 명시적 Phase 2 API)
 - **Breaking Changes 없음** — 기존 `gitshuttle import --file <bundle>` 호환 유지
