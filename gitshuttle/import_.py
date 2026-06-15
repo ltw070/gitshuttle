@@ -117,6 +117,7 @@ def run_import(
             author_map_path=author_map_path,
             target_branch=target_branch,
             timestamp_mode=timestamp_mode,
+            on_conflict=on_conflict,
             confirm_duplicate_message=confirm_duplicate_message,
         )
         return ImportResult(

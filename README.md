@@ -190,6 +190,7 @@ replay import는 대상 브랜치의 마지막 커밋 메시지와 새로 붙일
 이 방식은 내부 수정이 이미 들어간 브랜치 위에 작업자 책임으로 변경분만 붙일 때 유용하지만, 원본 SHA와 merge topology는 보존하지 않습니다.
 원본 첫 커밋부터 들어 있는 patchset을 존재하지 않는 `--target-branch`로 replay하면, GitShuttle은 기존 HEAD에서 브랜치를 따지 않고 빈 orphan branch에서 시작합니다. 따라서 같은 파일을 여러 커밋에서 반복 수정한 전체 순차 replay도 중간 커밋을 빠뜨리지 않으면 적용됩니다.
 이미 존재하는 대상 브랜치에 replay하는 경우에는 그 브랜치의 현재 파일 상태가 patch의 기준 상태와 맞아야 합니다.
+대상 브랜치가 비어 있지 않거나 같은 파일이 이미 다르게 수정되어 있어도 원본 변경 파일을 강제로 덮어쓰려면 `--on-conflict force`를 사용합니다. 이 모드는 최신 patchset에 포함된 파일 스냅샷으로 해당 커밋의 변경 파일을 source-wins 방식으로 적용합니다.
 
 이미 같은 변경분이 대상 브랜치에 적용되어 있으면 해당 replay patch는 건너뜁니다.
 같은 경로의 파일이 이미 있지만 내용이 달라 `patch failed`, `patch does not apply`, `already exists in index`가 나는 경우에는 충돌로 보고 중단하며, 이미 반영된 커밋 이후만 다시 선택해 patchset을 만드는 것이 안전합니다.

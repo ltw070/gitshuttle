@@ -85,6 +85,14 @@ def create_patchset(
             patch_name = f"patches/{index:04d}-{commit.short_hash}.patch"
             commit_meta = metadata_by_hash[commit.hash]
             commit_meta["patch"] = patch_name
+            commit_meta["files"] = _write_commit_snapshots(
+                zf,
+                repo_path,
+                commit.hash,
+                commit.short_hash,
+                commit_meta["parents"],
+                index,
+            )
             metadata["commits"].append(commit_meta)
             zf.writestr(patch_name, patches_by_hash[commit.hash])
 
@@ -102,6 +110,7 @@ def run_replay_import(
     author_map_path: str | None = None,
     target_branch: str | None = None,
     timestamp_mode: str = "now",
+    on_conflict: str = "skip",
     confirm_duplicate_message: Callable[[str, str], bool] | None = None,
 ) -> ReplayResult:
     """Replay a patchset onto the target repository's current HEAD.
@@ -111,6 +120,9 @@ def run_replay_import(
     """
     patchset_path = Path(patchset_path)
     repo_path = Path(repo_path)
+    if on_conflict not in ("skip", "force", "abort"):
+        raise ValueError("on_conflict는 skip, force, abort 중 하나여야 합니다.")
+
     metadata = _load_patchset_metadata(patchset_path)
     commits = metadata["commits"]
     if not commits:
@@ -145,24 +157,47 @@ def run_replay_import(
     for index, commit_meta in enumerate(commits):
         patch_bytes = _read_patch_bytes(patchset_path, commit_meta["patch"])
         patch_applied = bool(patch_bytes.strip())
+        forced = False
         if patch_applied:
             try:
                 applied = _apply_patch(repo_path, patch_bytes)
             except ValueError as exc:
-                raise ValueError(
-                    _format_replay_commit_failure(
-                        commit_meta,
-                        index + 1,
-                        len(commits),
-                        str(exc),
-                    )
-                ) from exc
+                if on_conflict == "force":
+                    try:
+                        applied = _force_apply_commit_snapshot(
+                            patchset_path,
+                            repo_path,
+                            commit_meta,
+                        )
+                        forced = applied
+                    except ValueError as force_exc:
+                        raise ValueError(
+                            _format_replay_commit_failure(
+                                commit_meta,
+                                index + 1,
+                                len(commits),
+                                f"{exc}\n\nforce 적용 실패:\n{force_exc}",
+                            )
+                        ) from force_exc
+                else:
+                    raise ValueError(
+                        _format_replay_commit_failure(
+                            commit_meta,
+                            index + 1,
+                            len(commits),
+                            str(exc),
+                        )
+                    ) from exc
             if not applied:
                 skipped += 1
                 warnings.append(
                     f"이미 적용된 replay patch 건너뜀: {commit_meta.get('subject', '')}"
                 )
                 continue
+            if forced:
+                warnings.append(
+                    f"force replay 적용: {commit_meta.get('subject', '')}"
+                )
 
         author = _mapped_identity(
             commit_meta["author_name"],
@@ -360,6 +395,74 @@ def _read_commit_patch(repo_path: Path, commit_hash: str, parents: list[str]) ->
     if result.returncode != 0:
         stderr = result.stderr.decode("utf-8", errors="replace")
         raise ValueError(f"patch 생성 실패 ({commit_hash}):\n{stderr}")
+    return result.stdout
+
+
+def _write_commit_snapshots(
+    zf: zipfile.ZipFile,
+    repo_path: Path,
+    commit_hash: str,
+    short_hash: str,
+    parents: list[str],
+    index: int,
+) -> list[dict]:
+    files = _read_changed_files(repo_path, commit_hash, parents)
+    for file_index, file_meta in enumerate(files, start=1):
+        if file_meta["status"].startswith("D"):
+            continue
+
+        snapshot_name = f"snapshots/{index:04d}-{short_hash}/{file_index:04d}.bin"
+        file_meta["snapshot"] = snapshot_name
+        zf.writestr(snapshot_name, _read_file_at_commit(repo_path, commit_hash, file_meta["path"]))
+    return files
+
+
+def _read_changed_files(repo_path: Path, commit_hash: str, parents: list[str]) -> list[dict]:
+    base = parents[0] if parents else EMPTY_TREE
+    result = subprocess.run(
+        ["git", "diff", "--name-status", "-z", "-M", base, commit_hash],
+        cwd=repo_path,
+        capture_output=True,
+        env=_git_env(),
+    )
+    if result.returncode != 0:
+        stderr = result.stderr.decode("utf-8", errors="replace")
+        raise ValueError(f"변경 파일 목록 생성 실패 ({commit_hash}):\n{stderr}")
+
+    tokens = [token for token in result.stdout.split(b"\0") if token]
+    files: list[dict] = []
+    cursor = 0
+    while cursor < len(tokens):
+        status = tokens[cursor].decode("utf-8", errors="surrogateescape")
+        cursor += 1
+        status_type = status[:1]
+        if status_type in ("R", "C"):
+            old_path = _decode_git_path(tokens[cursor])
+            new_path = _decode_git_path(tokens[cursor + 1])
+            cursor += 2
+            file_meta = {"status": status, "path": new_path, "old_path": old_path}
+        else:
+            path = _decode_git_path(tokens[cursor])
+            cursor += 1
+            file_meta = {"status": status, "path": path}
+        files.append(file_meta)
+    return files
+
+
+def _decode_git_path(value: bytes) -> str:
+    return value.decode("utf-8", errors="surrogateescape")
+
+
+def _read_file_at_commit(repo_path: Path, commit_hash: str, path: str) -> bytes:
+    result = subprocess.run(
+        ["git", "show", f"{commit_hash}:{path}"],
+        cwd=repo_path,
+        capture_output=True,
+        env=_git_env(),
+    )
+    if result.returncode != 0:
+        stderr = result.stderr.decode("utf-8", errors="replace")
+        raise ValueError(f"커밋 파일 내용을 읽을 수 없습니다 ({commit_hash}:{path}):\n{stderr}")
     return result.stdout
 
 
@@ -581,6 +684,92 @@ def _apply_patch(repo_path: Path, patch_bytes: bytes) -> bool:
         return False
 
     raise ValueError(_format_patch_apply_failure(output))
+
+
+def _force_apply_commit_snapshot(
+    patchset_path: Path,
+    repo_path: Path,
+    commit_meta: dict,
+) -> bool:
+    files = commit_meta.get("files")
+    if files is None:
+        raise ValueError(
+            "force replay에 필요한 파일 스냅샷이 patchset에 없습니다.\n"
+            "최신 GitShuttle로 patchset을 다시 export한 뒤 재시도하세요."
+        )
+
+    for file_meta in files:
+        status = file_meta.get("status", "")
+        path = file_meta.get("path")
+        if not path:
+            raise ValueError("patchset 파일 스냅샷 metadata에 path가 없습니다.")
+
+        if status.startswith("R") and file_meta.get("old_path"):
+            _remove_path(repo_path, file_meta["old_path"])
+
+        if status.startswith("D"):
+            _remove_path(repo_path, path)
+            continue
+
+        snapshot = file_meta.get("snapshot")
+        if not snapshot:
+            raise ValueError(f"파일 스냅샷을 찾을 수 없습니다: {path}")
+        _write_snapshot_file(patchset_path, repo_path, path, snapshot)
+
+    return _has_staged_changes(repo_path)
+
+
+def _write_snapshot_file(
+    patchset_path: Path,
+    repo_path: Path,
+    path: str,
+    snapshot: str,
+) -> None:
+    _remove_path(repo_path, path)
+    target_path = _safe_repo_path(repo_path, path)
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    target_path.write_bytes(_read_patch_bytes(patchset_path, snapshot))
+    _git_add_path(repo_path, path)
+
+
+def _remove_path(repo_path: Path, path: str) -> None:
+    result = subprocess.run(
+        ["git", "rm", "-rf", "--ignore-unmatch", "--", path],
+        cwd=repo_path,
+        capture_output=True,
+        encoding="utf-8",
+        env=_git_env(),
+    )
+    if result.returncode != 0:
+        detail = "\n".join(
+            part.strip() for part in (result.stdout, result.stderr) if part.strip()
+        )
+        raise ValueError(f"파일 제거 실패 ({path}):\n{detail}")
+
+
+def _git_add_path(repo_path: Path, path: str) -> None:
+    result = subprocess.run(
+        ["git", "add", "--", path],
+        cwd=repo_path,
+        capture_output=True,
+        encoding="utf-8",
+        env=_git_env(),
+    )
+    if result.returncode != 0:
+        detail = "\n".join(
+            part.strip() for part in (result.stdout, result.stderr) if part.strip()
+        )
+        raise ValueError(f"파일 추가 실패 ({path}):\n{detail}")
+
+
+def _safe_repo_path(repo_path: Path, git_path: str) -> Path:
+    root = repo_path.resolve()
+    target = (root / Path(*git_path.split("/"))).resolve()
+    try:
+        target.relative_to(root)
+    except ValueError as exc:
+        raise ValueError(f"repo 밖의 경로는 적용할 수 없습니다: {git_path}") from exc
+    return target
 
 
 def _reset_hard(repo_path: Path) -> None:

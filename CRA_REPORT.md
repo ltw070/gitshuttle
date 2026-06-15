@@ -169,7 +169,7 @@ Sprint 5  →  79 passed
 Sprint 6  →  85 passed
 Sprint 7  → 102 passed
 최종 정리 → 106 passed  (0 failed)
-기능 보강 → 167 collected  (hidden refs, patchset/replay, TUI 단축키, patchset export 속도 개선 포함)
+기능 보강 → 168 collected  (hidden refs, patchset/replay, TUI 단축키, patchset export 속도 개선 포함)
 ```
 
 **최근 TDD 사례 — patchset/replay:**
@@ -655,4 +655,4 @@ Mock 테스트는 "명령 호출 방식", "오류 처리", "토큰 마스킹", "
 
 ---
 
-*GitShuttle · Sprint 0~7 완료 + 기능 보강 · 167 tests collected · patchset/replay 및 patchset export 속도 개선 포함*
+*GitShuttle · Sprint 0~7 완료 + 기능 보강 · 168 tests collected · patchset/replay 및 patchset export 속도 개선 포함*

@@ -65,7 +65,7 @@ gitshuttle/                   18개 모듈
     ├── html_ui.py            단일 HTML (인터넷 불필요), selection.json 파싱
     └── prompt_ui.py          InquirerPy 방향키 멀티셀렉트
 
-tests/                        16개 테스트 파일, 167개 테스트
+tests/                        16개 테스트 파일, 168개 테스트
 ├── conftest.py               임시 git repo 픽스처
 ├── test_git_ops.py
 ├── test_bundle.py
@@ -154,7 +154,7 @@ gitshuttle sync     (Phase 2 — Python API 단계)
 ### 테스트 현황
 
 ```
-현재 수집 테스트: 167개
+현재 수집 테스트: 168개
 커버리지 대상 모듈: git_ops, bundle, checksum, manifest, export_, import_,
                    rewrite, config, sync, ui(csv/html/prompt), build
 ```
@@ -278,6 +278,7 @@ author/timestamp rewrite를 하면 target branch의 커밋 SHA가 원본과 달�
 - patch 적용 실패 시 실패한 replay 순번, 원본 커밋 hash/제목, git apply stdout/stderr가 보존되는지
 - 원본 첫 커밋부터 포함한 patchset을 새 target branch에 replay할 때 기존 HEAD가 섞이지 않는지
 - 같은 파일을 여러 번 수정한 전체 순차 replay가 중간 커밋 누락 없이 적용되는지
+- `--on-conflict force` replay가 최신 patchset의 파일 스냅샷으로 비어 있지 않은 브랜치에도 source-wins 적용되는지
 - patchset export가 metadata를 일괄 조회하고 parent 정보를 재사용해 커밋별 중복 Git 호출을 줄이는지
 - 연속 선형 first-parent 범위에서는 `git format-patch --stdout` 경로를 사용하고, merge/비연속 선택에서는 per-commit diff로 fallback하는지
 - `--recent N`이 TUI를 열지 않고 최신 N개만 조회·선택하는지
@@ -337,7 +338,7 @@ Phase 2 승인 전 코드가 임의로 호출되지 않도록 `__all__` 제한�
 
 ### 🟢 확인 완료
 
-- **테스트 167개 수집 확인** — 전체 suite는 환경에 따라 장시간 실행될 수 있음
+- **테스트 168개 수집 확인** — 전체 suite는 환경에 따라 장시간 실행될 수 있음
 - **UTF-8 / 한글 처리** — 모든 파일 I/O, subprocess, TUI에 인코딩 명시
 - **망분리 제약** — 외부 네트워크 호출 코드 없음 (sync_.py는 명시적 Phase 2 API)
 - **Breaking Changes 없음** — 기존 `gitshuttle import --file <bundle>` 호환 유지

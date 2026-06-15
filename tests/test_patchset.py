@@ -90,8 +90,13 @@ def test_create_patchset_reuses_batch_metadata_and_parent_cache(tmp_path, monkey
         calls["patch_parents"] = parents
         return b"diff --git a/a.txt b/a.txt\n"
 
+    def fake_write_commit_snapshots(zf, repo_path, commit_hash, short_hash, parents, index):
+        calls["snapshot_parents"] = parents
+        return [{"status": "M", "path": "a.txt", "snapshot": "snapshots/0001.bin"}]
+
     monkeypatch.setattr(patchset_module, "_read_commits_metadata", fake_read_commits_metadata)
     monkeypatch.setattr(patchset_module, "_read_commit_patch", fake_read_commit_patch)
+    monkeypatch.setattr(patchset_module, "_write_commit_snapshots", fake_write_commit_snapshots)
 
     patchset = patchset_module.create_patchset(
         repo_path=tmp_path,
@@ -103,6 +108,7 @@ def test_create_patchset_reuses_batch_metadata_and_parent_cache(tmp_path, monkey
     assert patchset.exists()
     assert calls["metadata_commits"] == [commit]
     assert calls["patch_parents"] == ["a" * 40]
+    assert calls["snapshot_parents"] == ["a" * 40]
 
 
 def test_read_commits_metadata_chunks_large_selection(monkeypatch):
@@ -264,6 +270,51 @@ def test_replay_import_full_history_repeated_file_changes_starts_empty_branch(tm
         "feat: update feature",
         "feat: finalize feature",
     ]
+
+
+def test_replay_import_force_overwrites_conflicting_existing_branch(tmp_path):
+    """--on-conflict force는 비어 있지 않은 브랜치에서도 source-wins로 적용한다."""
+    from gitshuttle.git_ops import get_commits
+    from gitshuttle.patchset import create_patchset, run_replay_import
+
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    _init_repo(source, "init source")
+    _init_repo(target, "init target")
+    _add_commit(source, "feature.txt", "v1", "feat: add feature")
+    _add_commit(source, "feature.txt", "v2", "feat: update feature")
+    _add_commit(target, "README.md", "# Target", "chore: target readme")
+    _add_commit(target, "feature.txt", "internal", "chore: internal feature")
+
+    target_branch = subprocess.run(
+        ["git", "branch", "--show-current"],
+        cwd=target,
+        check=True,
+        capture_output=True,
+        encoding="utf-8",
+        env=_git_env(),
+    ).stdout.strip()
+    commits = get_commits(source)
+    patchset = create_patchset(
+        repo_path=source,
+        commits=commits,
+        output_dir=tmp_path,
+        filename="force.patchset",
+        branch="HEAD",
+    )
+
+    result = run_replay_import(
+        patchset_path=patchset,
+        repo_path=target,
+        target_branch=target_branch,
+        timestamp_mode="original",
+        on_conflict="force",
+    )
+
+    assert result.imported == len(commits)
+    assert any("force replay 적용" in warning for warning in result.warnings)
+    assert (target / "README.md").read_text(encoding="utf-8") == "# Test"
+    assert (target / "feature.txt").read_text(encoding="utf-8") == "v2"
 
 
 def test_replay_import_duplicate_head_message_requires_confirmation(tmp_path):
