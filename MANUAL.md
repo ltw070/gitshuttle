@@ -413,6 +413,14 @@ git merge imported/main            # 검토 완료 후 병합
 
 대상 repo의 `main`에 이미 코드가 있다면, 바로 `main`에 import하지 말고 별도 브랜치로 먼저 가져오는 방식을 권장합니다.
 
+```text
+기존 main:        X -> Y
+import 브랜치:    A -> B -> C  또는  X/Y와 무관한 별도 이력
+나중에 merge:     X -> Y ---- M
+                         \   /
+                          A-B-C
+```
+
 ```powershell
 gitshuttle import `
   --repo C:\repos\target `

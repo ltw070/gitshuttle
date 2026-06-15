@@ -710,6 +710,14 @@ git -C C:\repos\target-gitshuttle push origin migration/gitshuttle-20260610:main
 
 사내 리포지토리의 `main`에 이미 코드가 있다면, 먼저 migration 브랜치를 올린 뒤 사내 GitHub에서 PR을 만들거나 로컬에서 merge합니다.
 
+```text
+기존 main:        X -> Y
+import 브랜치:    A -> B -> C  또는  X/Y와 무관한 별도 이력
+나중에 merge:     X -> Y ---- M
+                         \   /
+                          A-B-C
+```
+
 ```powershell
 git -C C:\repos\target-gitshuttle push origin migration/gitshuttle-20260610
 

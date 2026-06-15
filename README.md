@@ -168,6 +168,14 @@ rewrite import 후에는 대상 브랜치로 checkout/reset 되어 작업 폴더
 
 기존 코드가 있는 대상 repo에 bundle을 가져올 때는 바로 `main`에 반영하지 말고, 먼저 `migration/...` 같은 별도 브랜치에 import하는 흐름을 권장합니다. 이 경우 기존 `main` 이력은 그대로 두고, bundle 이력은 별도 브랜치에 들어갑니다. 이후 검토가 끝나면 Git merge로 두 이력을 합칩니다. 같은 파일을 양쪽에서 다르게 수정했다면 merge conflict가 발생할 수 있으며, 이때 사람이 최종 내용을 결정합니다.
 
+```text
+기존 main:        X -> Y
+import 브랜치:    A -> B -> C  또는  X/Y와 무관한 별도 이력
+나중에 merge:     X -> Y ---- M
+                         \   /
+                          A-B-C
+```
+
 ```
 gitshuttle import --repo C:\repos\target --file C:\transfer\shuttle_YYMMDD.bundle --target-branch migration/source-main
 

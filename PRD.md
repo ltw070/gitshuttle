@@ -112,6 +112,14 @@ Phase 1에서 커밋 선택은 아래 방식 중 하나(또는 조합)로 구현
   - 해당 브랜치가 타겟에 이미 존재하면 `--on-conflict` 옵션 정책을 따름.
   - 기존 기본 브랜치에 코드가 있는 경우, `migration/<소스브랜치>` 같은 별도 브랜치에 먼저 import하고 사용자가 검토 후 직접 merge할 수 있어야 함.
   - 별도 브랜치 import는 기존 기본 브랜치 ref를 이동시키지 않아야 하며, merge 시 동일 파일 충돌은 Git conflict로 드러나 사용자가 해결할 수 있어야 함.
+  - 권장 사용 구조:
+    ```
+    기존 main:        X -> Y
+    import 브랜치:    A -> B -> C  또는  X/Y와 무관한 별도 이력
+    나중에 merge:     X -> Y ---- M
+                             \   /
+                              A-B-C
+    ```
 - **CLI 예시:**
   ```
   gitshuttle import --file shuttle.bundle
