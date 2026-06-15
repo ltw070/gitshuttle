@@ -39,7 +39,7 @@
   - `--recent N`이 UI를 열지 않고 limit 조회로 이어지는지 검증
   - patchset metadata/parent 재사용과 `stored` 압축 옵션 검증
 
-**현재 기준 테스트:** 165개 테스트 수집 확인. 신규 속도 개선 관련 테스트 통과.
+**현재 기준 테스트:** 167개 테스트 수집 확인. 신규 속도 개선 관련 테스트 통과.
 
 ---
 
@@ -62,12 +62,14 @@
   - patchset 생성, replay import author_map 적용, 중복 메시지 확인 중단 테스트 추가
   - 이미 적용된 patch 자동 skip 테스트 추가
   - 같은 경로의 다른 내용 충돌 시 복구 안내 테스트 추가
+  - 원본 첫 커밋부터 새 target branch에 replay할 때 빈 orphan branch에서 시작하는 테스트 추가
+  - 같은 파일 반복 변경 전체 순차 replay 테스트 추가
   - CLI `--format patchset`, `--mode replay` 전달 테스트 추가
 - `README.md`, `MANUAL.md`, `EXAMPLE.md`, `PR_REVIEW_POINTS.md`
   - 기준점 hidden ref 없이 작업자 책임으로 변경분을 붙이는 replay/cherry-pick 사용법 추가
   - replay는 원본 SHA와 merge topology를 보존하지 않는다는 제약 문서화
 
-**현재 기준 테스트:** 165개 테스트 수집 확인. patchset/CLI 관련 테스트 통과.
+**현재 기준 테스트:** 167개 테스트 수집 확인. patchset/CLI 관련 테스트 통과.
 
 ---
 
@@ -78,7 +80,7 @@
   - 5번 항목: SOLID 원칙 관점 추가
   - 6번 항목: Mock 테스트 관점 추가
 - `PR_REVIEW_POINTS.md`
-  - 현재 테스트 수를 165개 기준으로 업데이트
+  - 현재 테스트 수를 167개 기준으로 업데이트
   - `--repo` 옵션, fast-import 바이너리 입력, fast-export `data N` payload 보존 포인트 반영
   - `author_map.json` 형식을 이메일 키 + `{name,email}` dict 형식으로 정리
 - `README.md`
@@ -122,7 +124,7 @@
   - 최신 버전의 `refs/gitshuttle/original/...` 기준점 보관 방식과 구버전 repo의 1회 전체 import 필요성 문서화
   - cherry-pick/replay 방식은 가능하지만 원본 bundle 이력 이전과 달리 SHA/merge 구조가 달라질 수 있음을 안내
 
-**현재 기준 테스트:** 165개 테스트 수집 확인. 관련 단위/통합 테스트 통과.
+**현재 기준 테스트:** 167개 테스트 수집 확인. 관련 단위/통합 테스트 통과.
 
 ---
 
@@ -139,7 +141,7 @@
   - 🟡 일반 검토 6개 (split archive, checksum 강제화, branch fallback, author_map 키 검증, toml 우선순위, Phase 2 노출)
   - 🟢 확인 완료 항목, exe 빌드 방법 및 제약 명시
 
-**최종 테스트 확인:** 당시 `134/134 PASS` (2026-06-14 현재 문서 기준: 165개 테스트)
+**최종 테스트 확인:** 당시 `134/134 PASS` (2026-06-15 현재 문서 기준: 167개 테스트)
 
 **현재 상태 요약:**
 
@@ -147,7 +149,7 @@
 |------|------|
 | Phase 1 구현 | ✅ 완료 (Sprint 0~6, 4b 포함) |
 | Phase 2 (Direct Sync) | ✅ Python API 구현 완료, CLI 노출 예정 |
-| 전체 테스트 | ✅ 165개 수집 확인 (2026-06-14 기준) |
+| 전체 테스트 | ✅ 167개 수집 확인 (2026-06-15 기준) |
 | gitshuttle.exe | ⚠️ 미빌드 (사내 PyInstaller 설치 불가, spec/build.ps1 준비 완료) |
 | GitHub push | ✅ main 브랜치 최신 |
 | PR #1 | ✅ Sprint 4b feat/PR 병합 완료 |
@@ -771,7 +773,7 @@ GitHub: https://github.com/ltw070/gitshuttle (private)
 
 ## Phase 1 완료 (2026-05-08)
 
-모든 Sprint(0~7)가 완료되었습니다. 당시 최종 테스트는 **106 passed**, 0 failed였고, 이후 기능 보강을 포함한 2026-06-14 기준 테스트 수는 165개입니다.
+모든 Sprint(0~7)가 완료되었습니다. 당시 최종 테스트는 **106 passed**, 0 failed였고, 이후 기능 보강을 포함한 2026-06-15 기준 테스트 수는 167개입니다.
 
 ### 남은 작업 (Phase 2 이후)
 

@@ -118,7 +118,11 @@ def run_replay_import(
 
     _ensure_worktree_repo(repo_path)
     _ensure_clean_worktree(repo_path)
-    _checkout_target_branch(repo_path, target_branch)
+    _checkout_target_branch(
+        repo_path,
+        target_branch,
+        start_empty=_starts_with_root_commit(commits),
+    )
     _ensure_clean_worktree(repo_path)
 
     head_subject = _get_head_subject(repo_path)
@@ -142,7 +146,17 @@ def run_replay_import(
         patch_bytes = _read_patch_bytes(patchset_path, commit_meta["patch"])
         patch_applied = bool(patch_bytes.strip())
         if patch_applied:
-            applied = _apply_patch(repo_path, patch_bytes)
+            try:
+                applied = _apply_patch(repo_path, patch_bytes)
+            except ValueError as exc:
+                raise ValueError(
+                    _format_replay_commit_failure(
+                        commit_meta,
+                        index + 1,
+                        len(commits),
+                        str(exc),
+                    )
+                ) from exc
             if not applied:
                 skipped += 1
                 warnings.append(
@@ -424,7 +438,11 @@ def _ensure_clean_worktree(repo_path: Path) -> None:
         )
 
 
-def _checkout_target_branch(repo_path: Path, target_branch: str | None) -> None:
+def _checkout_target_branch(
+    repo_path: Path,
+    target_branch: str | None,
+    start_empty: bool = False,
+) -> None:
     if not target_branch:
         return
 
@@ -437,9 +455,33 @@ def _checkout_target_branch(repo_path: Path, target_branch: str | None) -> None:
 
     try:
         run_git(["rev-parse", "--verify", "HEAD"], cwd=repo_path)
-        run_git(["checkout", "-b", target_branch], cwd=repo_path)
+        if start_empty:
+            run_git(["checkout", "--orphan", target_branch], cwd=repo_path)
+            _clear_orphan_worktree(repo_path)
+        else:
+            run_git(["checkout", "-b", target_branch], cwd=repo_path)
     except RuntimeError:
         run_git(["checkout", "--orphan", target_branch], cwd=repo_path)
+        _clear_orphan_worktree(repo_path)
+
+
+def _starts_with_root_commit(commits: list[dict]) -> bool:
+    return bool(commits) and commits[0].get("parent_count", 0) == 0
+
+
+def _clear_orphan_worktree(repo_path: Path) -> None:
+    result = subprocess.run(
+        ["git", "rm", "-rf", "--ignore-unmatch", "."],
+        cwd=repo_path,
+        capture_output=True,
+        encoding="utf-8",
+        env=_git_env(),
+    )
+    if result.returncode != 0:
+        detail = "\n".join(
+            part.strip() for part in (result.stdout, result.stderr) if part.strip()
+        )
+        raise ValueError(f"orphan 브랜치 초기화 실패:\n{detail}")
 
 
 def _get_head_subject(repo_path: Path) -> str | None:
@@ -525,7 +567,7 @@ def _apply_patch(repo_path: Path, patch_bytes: bytes) -> bool:
     if result.returncode == 0:
         return _has_staged_changes(repo_path)
 
-    stderr = result.stderr.decode("utf-8", errors="replace")
+    output = _process_output(result)
     _reset_hard(repo_path)
 
     reverse_check = subprocess.run(
@@ -538,7 +580,7 @@ def _apply_patch(repo_path: Path, patch_bytes: bytes) -> bool:
     if reverse_check.returncode == 0:
         return False
 
-    raise ValueError(_format_patch_apply_failure(stderr))
+    raise ValueError(_format_patch_apply_failure(output))
 
 
 def _reset_hard(repo_path: Path) -> None:
@@ -560,8 +602,32 @@ def _has_staged_changes(repo_path: Path) -> bool:
     return result.returncode == 1
 
 
-def _format_patch_apply_failure(stderr: str) -> str:
-    detail = stderr.strip()
+def _process_output(result: subprocess.CompletedProcess) -> str:
+    stdout = result.stdout.decode("utf-8", errors="replace") if result.stdout else ""
+    stderr = result.stderr.decode("utf-8", errors="replace") if result.stderr else ""
+    return "\n".join(part.strip() for part in (stdout, stderr) if part.strip())
+
+
+def _format_replay_commit_failure(
+    commit_meta: dict,
+    index: int,
+    total: int,
+    detail: str,
+) -> str:
+    subject = commit_meta.get("subject") or "(no subject)"
+    commit_hash = commit_meta.get("hash") or "unknown"
+    lines = [
+        f"replay patch 적용 실패 ({index}/{total}):",
+        f"- 원본 커밋: {commit_hash}",
+        f"- 제목: {subject}",
+        "",
+        detail,
+    ]
+    return "\n".join(lines).rstrip()
+
+
+def _format_patch_apply_failure(output: str) -> str:
+    detail = output.strip()
     lines = ["replay patch 적용 실패:"]
     if detail:
         lines.extend(["", detail])

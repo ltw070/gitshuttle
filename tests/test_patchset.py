@@ -207,6 +207,65 @@ def test_run_replay_import_applies_patchset_with_author_map(tmp_path):
     assert latest == "feat: replay feature|ltw070 <ltw070@naver.com>"
 
 
+def test_replay_import_full_history_repeated_file_changes_starts_empty_branch(tmp_path):
+    """원본 첫 커밋부터 순서대로 replay하면 같은 파일 반복 변경도 적용된다."""
+    from gitshuttle.git_ops import get_commits
+    from gitshuttle.patchset import create_patchset, run_replay_import
+
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    _init_repo(source, "init source")
+    _init_repo(target, "init target")
+
+    _add_commit(source, "feature.txt", "v1", "feat: add feature")
+    _add_commit(source, "feature.txt", "v2", "feat: update feature")
+    _add_commit(source, "feature.txt", "v3", "feat: finalize feature")
+
+    commits = get_commits(source)
+    patchset = create_patchset(
+        repo_path=source,
+        commits=commits,
+        output_dir=tmp_path,
+        filename="full.patchset",
+        branch="HEAD",
+    )
+
+    result = run_replay_import(
+        patchset_path=patchset,
+        repo_path=target,
+        target_branch="imported-source",
+        timestamp_mode="original",
+    )
+
+    branch = subprocess.run(
+        ["git", "branch", "--show-current"],
+        cwd=target,
+        check=True,
+        capture_output=True,
+        encoding="utf-8",
+        env=_git_env(),
+    ).stdout.strip()
+    messages = subprocess.run(
+        ["git", "log", "--reverse", "--format=%s"],
+        cwd=target,
+        check=True,
+        capture_output=True,
+        encoding="utf-8",
+        env=_git_env(),
+    ).stdout.splitlines()
+
+    assert branch == "imported-source"
+    assert result.imported == len(commits)
+    assert (target / "README.md").read_text(encoding="utf-8") == "# Test"
+    assert (target / "feature.txt").read_text(encoding="utf-8") == "v3"
+    assert messages == [
+        "init source",
+        "feat: add feature",
+        "feat: update feature",
+        "feat: finalize feature",
+    ]
+
+
 def test_replay_import_duplicate_head_message_requires_confirmation(tmp_path):
     """대상 HEAD 제목과 첫 replay 제목이 같으면 확인 콜백이 거부할 수 있다."""
     from gitshuttle.patchset import run_replay_import
@@ -314,8 +373,29 @@ def test_replay_import_existing_path_conflict_has_recovery_hint(tmp_path):
         raise AssertionError("conflicting existing path should fail")
 
     assert "replay patch 적용 실패" in message
+    assert "(1/1)" in message
+    assert "feat: replay feature" in message
     assert "같은 경로의 파일이 이미" in message
     assert "그 이후 커밋만 patchset" in message
+
+
+def test_patch_apply_failure_includes_stdout_and_stderr():
+    """git apply가 stdout/stderr 어디에 쓰든 실패 상세를 보존한다."""
+    import gitshuttle.patchset as patchset_module
+
+    result = subprocess.CompletedProcess(
+        args=["git", "apply"],
+        returncode=1,
+        stdout=b"stdout detail",
+        stderr=b"stderr detail",
+    )
+
+    message = patchset_module._format_patch_apply_failure(
+        patchset_module._process_output(result)
+    )
+
+    assert "stdout detail" in message
+    assert "stderr detail" in message
 
 
 def _write_empty_patchset(path: Path, subject: str) -> None:
