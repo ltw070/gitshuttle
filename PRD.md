@@ -110,6 +110,8 @@ Phase 1에서 커밋 선택은 아래 방식 중 하나(또는 조합)로 구현
   - `--target-branch <이름>`: import된 커밋을 담을 신규 브랜치명 지정.
   - 미지정 시 기본값: `imported/<소스브랜치명>` (예: `imported/main`, `imported/master`).
   - 해당 브랜치가 타겟에 이미 존재하면 `--on-conflict` 옵션 정책을 따름.
+  - 기존 기본 브랜치에 코드가 있는 경우, `migration/<소스브랜치>` 같은 별도 브랜치에 먼저 import하고 사용자가 검토 후 직접 merge할 수 있어야 함.
+  - 별도 브랜치 import는 기존 기본 브랜치 ref를 이동시키지 않아야 하며, merge 시 동일 파일 충돌은 Git conflict로 드러나 사용자가 해결할 수 있어야 함.
 - **CLI 예시:**
   ```
   gitshuttle import --file shuttle.bundle
@@ -117,6 +119,11 @@ Phase 1에서 커밋 선택은 아래 방식 중 하나(또는 조합)로 구현
 
   gitshuttle import --file shuttle.bundle --target-branch ext-main
   # → 타겟에 ext-main 브랜치 생성
+
+  gitshuttle import --file shuttle.bundle --target-branch migration/source-main
+  git switch main
+  git merge migration/source-main --allow-unrelated-histories
+  # → 기존 main을 보존한 채 검토 후 병합
   ```
 - **구현:** fast-import 시 ref를 `refs/heads/<target-branch>`로 지정.
 

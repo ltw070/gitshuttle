@@ -411,6 +411,22 @@ git log imported/main --oneline    # 반입된 커밋 확인
 git merge imported/main            # 검토 완료 후 병합
 ```
 
+대상 repo의 `main`에 이미 코드가 있다면, 바로 `main`에 import하지 말고 별도 브랜치로 먼저 가져오는 방식을 권장합니다.
+
+```powershell
+gitshuttle import `
+  --repo C:\repos\target `
+  --file C:\transfer\shuttle_YYMMDD.bundle `
+  --target-branch migration/source-main
+
+git -C C:\repos\target switch main
+git -C C:\repos\target merge migration/source-main --allow-unrelated-histories
+```
+
+이 방식에서는 기존 `main` 커밋이 브랜치 이력에 남고, bundle로 가져온 이력이 `migration/source-main`에 따로 들어갑니다. 병합 시 같은 파일이 양쪽에서 다르게 수정되어 있으면 Git merge conflict가 발생하며, 그때 최종 파일 내용을 직접 선택하면 됩니다.
+
+`--target-branch main --on-conflict force`처럼 기본 브랜치를 직접 대상으로 지정하면 `main` ref가 import 결과로 이동할 수 있습니다. 기존 커밋 object가 즉시 삭제되는 것은 아니지만 `git log main`에서는 보이지 않을 수 있으므로, 기존 코드를 보존하면서 합치려면 별도 브랜치 import 후 merge 흐름을 사용하세요.
+
 rewrite import가 완료되면 GitShuttle은 대상 브랜치로 checkout한 뒤 `reset --hard <브랜치 tip>`을 실행해 작업 폴더의 실제 파일도 import 결과와 맞춥니다.  
 따라서 import 전 대상 repo에 커밋되지 않은 변경 사항이 있으면 먼저 commit/stash 하거나 정리해야 합니다.
 

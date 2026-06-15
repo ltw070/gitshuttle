@@ -708,6 +708,18 @@ git -C C:\repos\target-gitshuttle push origin migration/gitshuttle-20260610
 git -C C:\repos\target-gitshuttle push origin migration/gitshuttle-20260610:main
 ```
 
+사내 리포지토리의 `main`에 이미 코드가 있다면, 먼저 migration 브랜치를 올린 뒤 사내 GitHub에서 PR을 만들거나 로컬에서 merge합니다.
+
+```powershell
+git -C C:\repos\target-gitshuttle push origin migration/gitshuttle-20260610
+
+git -C C:\repos\target-gitshuttle switch main
+git -C C:\repos\target-gitshuttle merge migration/gitshuttle-20260610 --allow-unrelated-histories
+git -C C:\repos\target-gitshuttle push origin main
+```
+
+이 방식은 기존 `main` 이력을 유지한 채 bundle로 가져온 이력을 병합합니다. 같은 파일을 양쪽에서 다르게 수정했다면 merge conflict가 날 수 있으며, 이때 최종 내용을 선택해 커밋하면 됩니다.
+
 GitHub 화면에서 "push한 사람"으로 보이는 계정은 커밋 author가 아니라 실제 push 인증 계정입니다.  
 그 표시까지 바꾸려면 해당 계정의 PAT 또는 SSH 인증으로 push해야 합니다.
 

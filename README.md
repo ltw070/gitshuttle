@@ -166,6 +166,17 @@ gitshuttle import --file C:\transfer\shuttle_260612.bundle --repo C:\repos\inter
 **브랜치 격리:** 소스의 `main`/`master`는 타겟의 기존 기본 브랜치에 직접 병합되지 않고, 별도 브랜치(`imported/main` 등)로 격리됩니다.
 rewrite import 후에는 대상 브랜치로 checkout/reset 되어 작업 폴더의 실제 파일도 import 결과와 맞춰집니다.
 
+기존 코드가 있는 대상 repo에 bundle을 가져올 때는 바로 `main`에 반영하지 말고, 먼저 `migration/...` 같은 별도 브랜치에 import하는 흐름을 권장합니다. 이 경우 기존 `main` 이력은 그대로 두고, bundle 이력은 별도 브랜치에 들어갑니다. 이후 검토가 끝나면 Git merge로 두 이력을 합칩니다. 같은 파일을 양쪽에서 다르게 수정했다면 merge conflict가 발생할 수 있으며, 이때 사람이 최종 내용을 결정합니다.
+
+```
+gitshuttle import --repo C:\repos\target --file C:\transfer\shuttle_YYMMDD.bundle --target-branch migration/source-main
+
+git -C C:\repos\target switch main
+git -C C:\repos\target merge migration/source-main --allow-unrelated-histories
+```
+
+반대로 `--target-branch main --on-conflict force`처럼 기존 기본 브랜치를 직접 대상으로 지정하면, `main` ref가 import 결과 쪽으로 이동할 수 있습니다. 기존 커밋 object가 즉시 삭제되는 것은 아니지만 일반 `git log main`에서는 보이지 않을 수 있으므로, 기존 코드를 보존하며 합치려면 별도 브랜치 import 후 merge 방식을 사용하세요.
+
 **커밋 타임스탬프 옵션:**
 
 | 옵션 | 동작 |
