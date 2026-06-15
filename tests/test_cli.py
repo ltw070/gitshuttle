@@ -357,6 +357,82 @@ def test_export_accepts_bundle_scope_full(tmp_path, monkeypatch):
     assert captured["bundle_scope"] == "full"
 
 
+def test_export_full_branch_selects_tip_as_full_bundle_without_ui(tmp_path, monkeypatch):
+    """export --full-branch 는 브랜치 tip 기준 전체 이력을 bundle로 추출한다."""
+    from gitshuttle.cli import app
+    from gitshuttle.export_ import ExportResult
+    from gitshuttle.git_ops import Commit
+    import gitshuttle.export_ as export_module
+    import gitshuttle.git_ops as git_ops_module
+    import gitshuttle.ui.tui as tui_module
+
+    repo_dir = tmp_path / "source_repo"
+    repo_dir.mkdir()
+    output_dir = tmp_path / "out"
+    captured = {}
+    tip_commit = Commit(
+        hash="b" * 40,
+        short_hash="bbbbbbb",
+        date="2026-06-10 09:00:00 +0900",
+        author="ltw070",
+        message="branch tip",
+        files_changed=1,
+    )
+
+    def fake_get_commits(repo_path, branch="HEAD", limit=None):
+        captured["branch"] = branch
+        captured["limit"] = limit
+        return [tip_commit]
+
+    def fail_select_commits(commits):
+        raise AssertionError("full-branch mode should not open TUI")
+
+    def fake_run_export(
+        repo_path,
+        commits,
+        output_dir,
+        branch,
+        package_format="bundle",
+        patchset_compression="fast",
+        bundle_scope="range",
+    ):
+        captured["selected"] = commits
+        captured["package_format"] = package_format
+        captured["bundle_scope"] = bundle_scope
+        return ExportResult(
+            bundle=output_dir / "test.bundle",
+            sha256=output_dir / "test.bundle.sha256",
+            manifest=output_dir / "test_manifest.txt",
+        )
+
+    monkeypatch.setattr(git_ops_module, "get_commits", fake_get_commits)
+    monkeypatch.setattr(tui_module, "select_commits_tui", fail_select_commits)
+    monkeypatch.setattr(export_module, "run_export", fake_run_export)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        app,
+        [
+            "export",
+            "--repo",
+            str(repo_dir),
+            "--branch",
+            "main",
+            "--output",
+            str(output_dir),
+            "--full-branch",
+        ],
+    )
+
+    assert result.exit_code == 0, f"exit code {result.exit_code}: {result.output}"
+    assert captured["branch"] == "main"
+    assert captured["limit"] == 1
+    assert captured["selected"] == [tip_commit]
+    assert captured["package_format"] == "bundle"
+    assert captured["bundle_scope"] == "full"
+    assert "전체 이력" in result.output
+
+
 def test_import_stub():
     """import 커맨드는 --file 없이 실행하면 오류 안내 후 exit code 1."""
     from gitshuttle.cli import app

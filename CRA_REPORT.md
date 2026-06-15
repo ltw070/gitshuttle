@@ -169,7 +169,7 @@ Sprint 5  →  79 passed
 Sprint 6  →  85 passed
 Sprint 7  → 102 passed
 최종 정리 → 106 passed  (0 failed)
-기능 보강 → 171 collected  (hidden refs, patchset/replay, TUI 단축키, patchset export 속도 개선 포함)
+기능 보강 → 172 collected  (hidden refs, patchset/replay, TUI 단축키, patchset export 속도 개선, full-branch export 포함)
 ```
 
 **최근 TDD 사례 — patchset/replay:**
@@ -379,12 +379,13 @@ patchset import는 일부 커밋 적용 시 가볍지만, patchset export는 pat
 이 병목을 줄이기 위해 metadata는 `git show --no-patch`로 batch 조회하고, parent 정보는 metadata에서 재사용해 `rev-list` 중복 호출을 제거했다.
 연속 선형 first-parent 범위는 `git format-patch --stdout` 기반으로 빠르게 만들고, merge나 비연속 선택은 기존 커밋별 diff 방식으로 fallback한다.
 CLI에는 `--recent N`을 추가해 최신 N개만 조회·선택하게 했고, `--patchset-compression fast|stored|deflated`로 zip 압축 비용을 조절할 수 있게 했다.
+또한 `--full-branch`로 현재/지정 브랜치 tip 기준 전체 이력을 TUI 없이 self-contained bundle로 만들 수 있게 했다.
 이미 적용된 patch는 skip하고, 같은 경로의 다른 내용 충돌은 복구 안내와 함께 중단하도록 보강했다.
 따라서 현재 권장 기준은 다음과 같다.
 
 | 상황 | 권장 방식 |
 |------|-----------|
-| 전체 이력 이전, 원본 구조 보존 | `bundle` |
+| 전체 이력 이전, 원본 구조 보존 | `bundle`, 선택 없이 진행 시 `--full-branch` |
 | hidden 기준점 기반의 증분 이전 | `bundle` |
 | 기준점 없이 내부 브랜치 위에 일부 변경만 적용 | `patchset/replay` |
 | 많은 커밋을 한 번에 이동 | 대체로 `bundle` 우선 검토 |
@@ -655,4 +656,4 @@ Mock 테스트는 "명령 호출 방식", "오류 처리", "토큰 마스킹", "
 
 ---
 
-*GitShuttle · Sprint 0~7 완료 + 기능 보강 · 171 tests collected · patchset/replay 및 patchset export 속도 개선 포함*
+*GitShuttle · Sprint 0~7 완료 + 기능 보강 · 172 tests collected · patchset/replay, patchset export 속도 개선, full-branch export 포함*

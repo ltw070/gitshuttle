@@ -81,6 +81,7 @@ Options:
   --format [bundle|patchset]     패키지 형식 (기본값: bundle)
   --patchset-compression TEXT    patchset 압축 방식 (fast|stored|deflated)
   --bundle-scope TEXT            bundle 범위 방식 (range|full)
+  --full-branch                  현재/지정 브랜치 tip 기준 전체 이력을 TUI 없이 bundle로 추출
   --recent INTEGER               UI 없이 최신 N개 커밋 선택
 ```
 
@@ -88,6 +89,12 @@ Options:
 
 ```
 gitshuttle export --repo C:\repos\external-repo --branch main --output C:\transfer
+```
+
+현재/지정 브랜치 내용을 통째로 옮기려면 `--full-branch`를 사용합니다. 이 옵션은 TUI를 열지 않고 브랜치 tip을 선택한 뒤, 해당 tip까지 도달 가능한 전체 이력을 self-contained bundle로 만듭니다. merge된 서브브랜치 이력은 포함되지만, 현재 브랜치에 merge되지 않은 독립 브랜치는 포함되지 않습니다.
+
+```
+gitshuttle export --repo C:\repos\external-repo --branch main --full-branch --output C:\transfer
 ```
 
 기준점 없이 대상 브랜치 위에 cherry-pick처럼 붙이고 싶다면 `patchset` 형식으로 export합니다.
@@ -108,7 +115,7 @@ patchset 생성 속도를 더 우선하면 압축을 줄일 수 있습니다. `f
 gitshuttle export --repo C:\repos\external-repo --format patchset --patchset-compression stored --output C:\transfer
 ```
 
-모든 커밋을 선택하고 싶고 TUI 선택 화면을 건너뛰려면 headless 모드를 사용할 수 있습니다.
+모든 커밋을 수동 선택 없이 bundle로 옮기는 일반적인 경우에는 `--full-branch`를 권장합니다. TUI 동작 자체를 테스트하거나 조회된 커밋 전체를 선택해야 하는 자동화에서는 headless 모드도 사용할 수 있습니다.
 
 ```powershell
 $env:GITSHUTTLE_HEADLESS = "1"
@@ -175,7 +182,14 @@ import 시 SHA-256 체크섬이 자동 검증됩니다. 불일치 시 작업이 
 따라서 이 버전으로 한 번 전체 또는 필요한 기준 범위를 import한 뒤에는 이후 최신 커밋 몇 개만 export/import하는 증분 흐름을 사용할 수 있습니다.
 구버전으로 이미 이전한 대상 repo는 한 번 전체 범위를 다시 import해 기준점을 만든 뒤 부분 증분을 이어가세요.
 
-대상 repo의 기준점 상태와 관계없이 bundle을 강제로 이어붙여야 한다면 export 단계에서 self-contained bundle을 만듭니다.
+대상 repo의 기준점 상태와 관계없이 bundle을 강제로 이어붙여야 한다면 export 단계에서 self-contained bundle을 만듭니다. 현재 브랜치 전체를 가져올 때는 `--full-branch`가 가장 간단합니다.
+
+```
+gitshuttle export --repo C:\repos\source --branch main --full-branch --output C:\transfer
+gitshuttle import --repo C:\repos\target --file C:\transfer\shuttle_YYMMDD.bundle --target-branch main --on-conflict force
+```
+
+선택 커밋 기준으로 직접 제어해야 한다면 `--bundle-scope full`을 사용할 수 있습니다.
 
 ```
 gitshuttle export --repo C:\repos\source --branch main --format bundle --recent 2 --bundle-scope full --output C:\transfer

@@ -240,6 +240,7 @@ gitshuttle export [OPTIONS]
 | `--format [bundle\|patchset]` | 패키지 형식. `patchset`은 replay/cherry-pick용 | `--format patchset` |
 | `--patchset-compression [fast\|stored\|deflated]` | patchset 압축 방식. `stored`는 무압축이라 빠르지만 파일이 큼 | `--patchset-compression stored` |
 | `--bundle-scope [range\|full]` | bundle 범위 방식. `full`은 선택 tip까지 전체 이력을 포함 | `--bundle-scope full` |
+| `--full-branch` | 현재/지정 브랜치 tip 기준 전체 이력을 TUI 없이 bundle로 추출 | `--full-branch` |
 | `--recent INTEGER` | UI 없이 최신 N개 커밋만 바로 선택 | `--recent 2` |
 
 ### 실행 예시
@@ -253,6 +254,9 @@ gitshuttle export --branch main
 
 # 현재 위치와 다른 폴더의 repo를 export
 gitshuttle export --repo C:\projects\my-repo --branch main --output C:\transfer
+
+# 현재/지정 브랜치 전체 이력을 TUI 없이 self-contained bundle로 export
+gitshuttle export --repo C:\projects\my-repo --branch main --full-branch --output C:\transfer
 
 # CSV 방식으로 Excel에서 선택
 gitshuttle export --ui csv
@@ -269,9 +273,11 @@ gitshuttle export --repo C:\projects\my-repo --branch main --format patchset --r
 # patchset 생성 속도 우선: zip 무압축 저장
 gitshuttle export --format patchset --patchset-compression stored --output C:\transfer
 
-# 부분 bundle prerequisite 없이 강제 연결 가능한 self-contained bundle 생성
+# 선택 tip 기준으로 부분 bundle prerequisite 없이 강제 연결 가능한 self-contained bundle 생성
 gitshuttle export --format bundle --recent 2 --bundle-scope full --output C:\transfer
 ```
+
+`--full-branch`는 브랜치 tip까지 도달 가능한 전체 이력을 포함합니다. merge된 서브브랜치 커밋은 포함되지만, 현재 브랜치에 merge되지 않은 독립 브랜치의 커밋은 포함되지 않습니다.
 
 ### 모든 커밋을 선택하고 TUI를 건너뛰기
 
@@ -1146,7 +1152,17 @@ python -m gitshuttle export `
   --output C:\transfer
 ```
 
-전체 이력을 TUI 선택 없이 모두 export하려면 명령 전에 headless 환경변수를 켭니다.
+현재 브랜치의 전체 이력을 TUI 선택 없이 bundle로 export하려면 `--full-branch`를 사용합니다.
+
+```powershell
+python -m gitshuttle export `
+  --repo C:\repos\source-gitshuttle `
+  --branch main `
+  --full-branch `
+  --output C:\transfer
+```
+
+TUI 동작을 유지한 채 조회된 커밋 전체를 자동 선택해야 하는 테스트·자동화 상황에서는 headless 환경변수를 사용할 수 있습니다.
 
 ```powershell
 $env:GITSHUTTLE_HEADLESS = "1"

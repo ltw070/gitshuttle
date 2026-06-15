@@ -29,6 +29,7 @@
 - `gitshuttle/cli.py`
   - export `--recent N` 옵션 추가: TUI 없이 최신 N개 커밋을 바로 선택
   - export `--patchset-compression fast|stored|deflated` 옵션 추가
+  - export `--full-branch` 옵션 추가: 현재/지정 브랜치 tip 기준 전체 이력을 TUI 없이 self-contained bundle로 생성
 - `gitshuttle/patchset.py`
   - 커밋 metadata를 커밋별 3회 조회하던 구조를 `git show --no-patch` batch 조회로 변경
   - parent 정보를 metadata에서 재사용해 patch 생성 시 `rev-list` 중복 조회 제거
@@ -39,7 +40,7 @@
   - `--recent N`이 UI를 열지 않고 limit 조회로 이어지는지 검증
   - patchset metadata/parent 재사용과 `stored` 압축 옵션 검증
 
-**현재 기준 테스트:** 171개 테스트 수집 확인. 신규 속도 개선 관련 테스트 통과.
+**현재 기준 테스트:** 172개 테스트 수집 확인. 신규 속도 개선 관련 테스트 통과.
 
 ---
 
@@ -72,7 +73,7 @@
   - 기준점 hidden ref 없이 작업자 책임으로 변경분을 붙이는 replay/cherry-pick 사용법 추가
   - replay는 원본 SHA와 merge topology를 보존하지 않는다는 제약 문서화
 
-**현재 기준 테스트:** 171개 테스트 수집 확인. patchset/CLI 관련 테스트 통과.
+**현재 기준 테스트:** 172개 테스트 수집 확인. patchset/CLI 관련 테스트 통과.
 
 ---
 
@@ -83,7 +84,7 @@
   - 5번 항목: SOLID 원칙 관점 추가
   - 6번 항목: Mock 테스트 관점 추가
 - `PR_REVIEW_POINTS.md`
-  - 현재 테스트 수를 171개 기준으로 업데이트
+  - 현재 테스트 수를 172개 기준으로 업데이트
   - `--repo` 옵션, fast-import 바이너리 입력, fast-export `data N` payload 보존 포인트 반영
   - `author_map.json` 형식을 이메일 키 + `{name,email}` dict 형식으로 정리
 - `README.md`
@@ -96,7 +97,7 @@
   - `refs/gitshuttle/tmp_*` ref가 target branch로 rewrite되는 최신 동작 반영
 - `EXAMPLE.md`
   - 일반 GitHub → 사내 GitHub 이전 예제 추가
-  - 전체 이력 선택을 위한 `GITSHUTTLE_HEADLESS=1` 흐름 문서화
+  - 전체 이력 선택을 위한 `--full-branch` 및 `GITSHUTTLE_HEADLESS=1` 흐름 문서화
 - `gitshuttle/import_.py`
   - rewrite import에서 `--on-conflict force` 사용 시 `git fast-import --force`를 전달하도록 수정
   - 기존 target branch가 non-fast-forward 관계일 때 복구 방법을 포함한 오류 메시지 출력
@@ -114,6 +115,7 @@
   - `git bundle verify` 실패 상세 메시지 보존
   - 최근 일부 커밋 bundle의 prerequisite 실패와 rewrite SHA 변경 가능성을 import 오류 메시지에 안내
   - export `--bundle-scope full` 추가: 선택 tip까지 전체 이력을 포함하는 self-contained bundle 생성
+  - export `--full-branch` 추가: 현재/지정 브랜치를 통째로 가져오는 쉬운 self-contained bundle 경로 제공
   - full-scope bundle은 prerequisite 없는 검증이 가능해 `--on-conflict force --target-branch ...` 조합의 강제 이어붙이기에 사용 가능
 - `gitshuttle/import_.py`
   - rewrite import 성공 후 원본 bundle refs를 `refs/gitshuttle/original/<target-branch>/...`에 보관
@@ -128,10 +130,11 @@
 - `README.md`, `MANUAL.md`, `EXAMPLE.md`
   - 최근 1~2개 커밋만 export할 때의 bundle prerequisite 제약 문서화
   - `--bundle-scope full` self-contained bundle과 강제 이어붙이기 예시 추가
+  - `--full-branch`가 merge된 서브브랜치 이력은 포함하고, merge되지 않은 독립 브랜치는 포함하지 않는다는 범위 문서화
   - 최신 버전의 `refs/gitshuttle/original/...` 기준점 보관 방식과 구버전 repo의 1회 전체 import 필요성 문서화
   - cherry-pick/replay 방식은 가능하지만 원본 bundle 이력 이전과 달리 SHA/merge 구조가 달라질 수 있음을 안내
 
-**현재 기준 테스트:** 171개 테스트 수집 확인. 관련 단위/통합 테스트 통과.
+**현재 기준 테스트:** 172개 테스트 수집 확인. 관련 단위/통합 테스트 통과.
 
 ---
 
@@ -148,7 +151,7 @@
   - 🟡 일반 검토 6개 (split archive, checksum 강제화, branch fallback, author_map 키 검증, toml 우선순위, Phase 2 노출)
   - 🟢 확인 완료 항목, exe 빌드 방법 및 제약 명시
 
-**최종 테스트 확인:** 당시 `134/134 PASS` (2026-06-15 현재 문서 기준: 171개 테스트)
+**최종 테스트 확인:** 당시 `134/134 PASS` (2026-06-15 현재 문서 기준: 172개 테스트)
 
 **현재 상태 요약:**
 
@@ -156,7 +159,7 @@
 |------|------|
 | Phase 1 구현 | ✅ 완료 (Sprint 0~6, 4b 포함) |
 | Phase 2 (Direct Sync) | ✅ Python API 구현 완료, CLI 노출 예정 |
-| 전체 테스트 | ✅ 171개 수집 확인 (2026-06-15 기준) |
+| 전체 테스트 | ✅ 172개 수집 확인 (2026-06-15 기준) |
 | gitshuttle.exe | ⚠️ 미빌드 (사내 PyInstaller 설치 불가, spec/build.ps1 준비 완료) |
 | GitHub push | ✅ main 브랜치 최신 |
 | PR #1 | ✅ Sprint 4b feat/PR 병합 완료 |
@@ -780,7 +783,7 @@ GitHub: https://github.com/ltw070/gitshuttle (private)
 
 ## Phase 1 완료 (2026-05-08)
 
-모든 Sprint(0~7)가 완료되었습니다. 당시 최종 테스트는 **106 passed**, 0 failed였고, 이후 기능 보강을 포함한 2026-06-15 기준 테스트 수는 171개입니다.
+모든 Sprint(0~7)가 완료되었습니다. 당시 최종 테스트는 **106 passed**, 0 failed였고, 이후 기능 보강을 포함한 2026-06-15 기준 테스트 수는 172개입니다.
 
 ### 남은 작업 (Phase 2 이후)
 

@@ -1,6 +1,7 @@
 """cli 모듈: Typer app 및 커맨드 등록."""
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
@@ -13,6 +14,45 @@ app = typer.Typer(
     help="Air-gapped Git history synchronizer.",
     no_args_is_help=True,
 )
+
+
+@dataclass(frozen=True)
+class ExportCliOptions:
+    """CLI 입력값을 실제 export 실행 옵션으로 정규화한 값."""
+
+    commit_limit: Optional[int]
+    package_format: str
+    bundle_scope: str
+    auto_select_message: Optional[str] = None
+
+
+def _resolve_export_cli_options(
+    *,
+    full_branch: bool,
+    recent: Optional[int],
+    package_format: str,
+    bundle_scope: str,
+) -> ExportCliOptions:
+    if not full_branch:
+        message = f"최근 {recent}개 커밋을 UI 없이 선택했습니다." if recent is not None else None
+        return ExportCliOptions(
+            commit_limit=recent,
+            package_format=package_format,
+            bundle_scope=bundle_scope,
+            auto_select_message=message,
+        )
+
+    if package_format != "bundle":
+        raise ValueError("--full-branch 옵션은 --format bundle에서만 사용할 수 있습니다.")
+    if recent is not None:
+        raise ValueError("--full-branch 옵션은 --recent와 함께 사용할 수 없습니다.")
+
+    return ExportCliOptions(
+        commit_limit=1,
+        package_format="bundle",
+        bundle_scope="full",
+        auto_select_message="현재 브랜치 tip 기준 전체 이력을 UI 없이 선택했습니다.",
+    )
 
 
 def _version_callback(value: bool) -> None:
@@ -65,6 +105,11 @@ def export(
         "--bundle-scope",
         help="bundle 범위 방식 (range|full). full은 선택 tip까지 전체 이력을 포함합니다.",
     ),
+    full_branch: bool = typer.Option(
+        False,
+        "--full-branch",
+        help="현재/지정 브랜치 tip 기준 전체 이력을 TUI 없이 bundle로 추출합니다.",
+    ),
     recent: Optional[int] = typer.Option(
         None,
         "--recent",
@@ -81,10 +126,20 @@ def export(
     repo_path = repo if repo is not None else Path.cwd()
     output_dir = Path(output) if output else repo_path
     branch_name = branch or "HEAD"
+    try:
+        export_options = _resolve_export_cli_options(
+            full_branch=full_branch,
+            recent=recent,
+            package_format=package_format,
+            bundle_scope=bundle_scope,
+        )
+    except ValueError as e:
+        typer.echo(f"[오류] {e}", err=True)
+        raise typer.Exit(1)
 
     typer.echo(f"source        : {repo_path}")
     typer.echo(f"커밋 목록을 읽는 중... (브랜치: {branch_name})")
-    commits = get_commits(repo_path, branch=branch_name, limit=recent)
+    commits = get_commits(repo_path, branch=branch_name, limit=export_options.commit_limit)
 
     if not commits:
         typer.echo("커밋이 없습니다.", err=True)
@@ -92,9 +147,9 @@ def export(
 
     typer.echo(f"총 {len(commits)}개 커밋을 찾았습니다.")
 
-    if recent is not None:
+    if export_options.auto_select_message is not None:
         selected = commits
-        typer.echo(f"최근 {len(selected)}개 커밋을 UI 없이 선택했습니다.")
+        typer.echo(export_options.auto_select_message)
     else:
         selected = None
 
@@ -139,12 +194,12 @@ def export(
         commits=selected,
         output_dir=output_dir,
         branch=branch_name,
-        package_format=package_format,
+        package_format=export_options.package_format,
         patchset_compression=patchset_compression,
-        bundle_scope=bundle_scope,
+        bundle_scope=export_options.bundle_scope,
     )
 
-    label = "patchset" if package_format == "patchset" else "bundle"
+    label = "patchset" if export_options.package_format == "patchset" else "bundle"
     typer.echo(f"{label:<8}: {result.bundle}")
     typer.echo(f"sha256   : {result.sha256}")
     typer.echo(f"manifest : {result.manifest}")

@@ -623,20 +623,17 @@ git -C C:\repos\source-gitshuttle log --all --format="%an <%ae>" | Sort-Object -
 
 ---
 
-### Step 4 — 전체 이력을 선택 없이 export
+### Step 4 — 현재 브랜치 전체 이력을 선택 없이 export
 
-`GITSHUTTLE_HEADLESS=1`을 켜면 TUI 선택 없이 조회된 커밋 전체가 선택됩니다.
+`--full-branch`는 TUI를 열지 않고 지정 브랜치 tip을 선택한 뒤, 그 tip까지 도달 가능한 전체 이력을 self-contained bundle로 만듭니다.
+merge된 서브브랜치 이력은 포함되지만, 현재 브랜치에 merge되지 않은 독립 브랜치는 포함되지 않습니다.
 
 ```powershell
-$env:GITSHUTTLE_HEADLESS = "1"
-
 python -m gitshuttle export `
   --repo C:\repos\source-gitshuttle `
   --branch main `
-  --ui tui `
+  --full-branch `
   --output C:\transfer
-
-Remove-Item Env:\GITSHUTTLE_HEADLESS
 ```
 
 생성 파일:
@@ -741,9 +738,7 @@ python -m gitshuttle import `
 python -m gitshuttle export `
   --repo C:\repos\source-gitshuttle `
   --branch main `
-  --format bundle `
-  --recent 2 `
-  --bundle-scope full `
+  --full-branch `
   --output C:\transfer
 
 python -m gitshuttle import `
@@ -755,7 +750,8 @@ python -m gitshuttle import `
   --on-conflict force
 ```
 
-`--bundle-scope full`은 선택한 최신 tip까지 전체 이력을 담기 때문에 일반 부분 bundle보다 커질 수 있지만, prerequisite 실패를 피할 수 있습니다.
+현재 브랜치 전체가 아니라 선택한 최신 tip만 직접 제어하려면 `--format bundle --recent 2 --bundle-scope full`처럼 고급 옵션을 사용할 수 있습니다.
+`--full-branch`와 `--bundle-scope full`은 선택한 tip까지 전체 이력을 담기 때문에 일반 부분 bundle보다 커질 수 있지만, prerequisite 실패를 피할 수 있습니다.
 
 체리픽처럼 변경분만 대상 브랜치 위에 재생하려면 아래 예제 5의 `patchset` + `replay` 방식을 사용합니다. 원본 bundle 이력 이전과 달리 merge 구조와 커밋 SHA가 달라질 수 있으므로, 이 예제에서는 bundle 기반 증분 import를 사용합니다.
 
