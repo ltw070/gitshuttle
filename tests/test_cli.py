@@ -433,6 +433,56 @@ def test_export_full_branch_selects_tip_as_full_bundle_without_ui(tmp_path, monk
     assert "전체 이력" in result.output
 
 
+def test_export_full_branch_rejects_recent(tmp_path):
+    """export --full-branch 는 --recent 와 함께 사용할 수 없다."""
+    from gitshuttle.cli import app
+
+    repo_dir = tmp_path / "source_repo"
+    repo_dir.mkdir()
+
+    runner = CliRunner()
+    result = runner.invoke(
+        app,
+        [
+            "export",
+            "--repo",
+            str(repo_dir),
+            "--full-branch",
+            "--recent",
+            "2",
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "--full-branch" in result.output
+    assert "--recent" in result.output
+
+
+def test_export_full_branch_rejects_patchset_format(tmp_path):
+    """export --full-branch 는 bundle 형식에서만 사용할 수 있다."""
+    from gitshuttle.cli import app
+
+    repo_dir = tmp_path / "source_repo"
+    repo_dir.mkdir()
+
+    runner = CliRunner()
+    result = runner.invoke(
+        app,
+        [
+            "export",
+            "--repo",
+            str(repo_dir),
+            "--format",
+            "patchset",
+            "--full-branch",
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "--full-branch" in result.output
+    assert "--format bundle" in result.output
+
+
 def test_import_stub():
     """import 커맨드는 --file 없이 실행하면 오류 안내 후 exit code 1."""
     from gitshuttle.cli import app

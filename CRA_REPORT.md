@@ -169,7 +169,7 @@ Sprint 5  →  79 passed
 Sprint 6  →  85 passed
 Sprint 7  → 102 passed
 최종 정리 → 106 passed  (0 failed)
-기능 보강 → 172 collected  (hidden refs, patchset/replay, TUI 단축키, patchset export 속도 개선, full-branch export 포함)
+기능 보강 → 174 collected  (hidden refs, patchset/replay, TUI 단축키, patchset export 속도 개선, full-branch export, CLI 리팩토링 포함)
 ```
 
 **최근 TDD 사례 — patchset/replay:**
@@ -380,6 +380,7 @@ patchset import는 일부 커밋 적용 시 가볍지만, patchset export는 pat
 연속 선형 first-parent 범위는 `git format-patch --stdout` 기반으로 빠르게 만들고, merge나 비연속 선택은 기존 커밋별 diff 방식으로 fallback한다.
 CLI에는 `--recent N`을 추가해 최신 N개만 조회·선택하게 했고, `--patchset-compression fast|stored|deflated`로 zip 압축 비용을 조절할 수 있게 했다.
 또한 `--full-branch`로 현재/지정 브랜치 tip 기준 전체 이력을 TUI 없이 self-contained bundle로 만들 수 있게 했다.
+CLI 명령 함수는 경로 해석, 선택 UI, 결과 출력 helper로 분리해 기능 변경 없이 읽기성과 테스트 고정성을 높였다.
 이미 적용된 patch는 skip하고, 같은 경로의 다른 내용 충돌은 복구 안내와 함께 중단하도록 보강했다.
 따라서 현재 권장 기준은 다음과 같다.
 
@@ -656,4 +657,4 @@ Mock 테스트는 "명령 호출 방식", "오류 처리", "토큰 마스킹", "
 
 ---
 
-*GitShuttle · Sprint 0~7 완료 + 기능 보강 · 172 tests collected · patchset/replay, patchset export 속도 개선, full-branch export 포함*
+*GitShuttle · Sprint 0~7 완료 + 기능 보강 · 174 tests collected · patchset/replay, patchset export 속도 개선, full-branch export, CLI 리팩토링 포함*
