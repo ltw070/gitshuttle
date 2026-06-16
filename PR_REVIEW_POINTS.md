@@ -37,17 +37,16 @@ gitshuttle export                  USB →       gitshuttle import
 | 4b | `sprint/4b-import-rewrite` | Import Rewrite (작성자 매핑·브랜치 격리·타임스탬프 재작성) |
 | 5 | `sprint/5-e2e` | E2E 테스트 (실제 git repo 대상, 분할 전송 포함) |
 | 6 | `sprint/6-build` | PyInstaller 빌드 스펙·스크립트 (`gitshuttle.spec`, `build.ps1`) |
-| 7 | `sprint/7-direct-sync` | Direct Sync API — Phase 2 기반 구현 (`sync_.py`, `github_auth.py`) |
 
 ---
 
 ### 파일 구조 및 역할
 
 ```
-gitshuttle/                   17개 모듈
+gitshuttle/                   15개 모듈
 ├── __init__.py               버전 상수
 ├── __main__.py               엔트리포인트 (UTF-8 강제)
-├── cli.py                    Typer app (export/import/config/sync 커맨드)
+├── cli.py                    Typer app (export/import/config 커맨드)
 ├── git_ops.py                git 서브프로세스 래퍼 (log, bundle, verify)
 ├── bundle.py                 bundle 생성·검증·분할·재조립
 ├── checksum.py               SHA-256 생성·검증
@@ -55,8 +54,6 @@ gitshuttle/                   17개 모듈
 ├── export_.py                export 오케스트레이션
 ├── import_.py                import 오케스트레이션 + Rewrite 파이프라인
 ├── rewrite.py                fast-export 스트림 치환 (작성자·브랜치·타임스탬프)
-├── sync_.py                  Direct Sync API (Phase 2)
-├── github_auth.py            HTTPS Token / SSH 인증 (Phase 2)
 ├── config.py                 gitshuttle.toml 읽기·쓰기·마법사
 └── ui/
     ├── tui.py                Textual 체크박스 + 테이블 (기본값)
@@ -64,7 +61,7 @@ gitshuttle/                   17개 모듈
     ├── html_ui.py            단일 HTML (인터넷 불필요), selection.json 파싱
     └── prompt_ui.py          InquirerPy 방향키 멀티셀렉트
 
-tests/                        15개 테스트 파일, 161개 테스트
+tests/                        14개 테스트 파일, 145개 테스트
 ├── conftest.py               임시 git repo 픽스처
 ├── test_git_ops.py
 ├── test_bundle.py
@@ -75,7 +72,6 @@ tests/                        15개 테스트 파일, 161개 테스트
 ├── test_rewrite.py           30개 (Sprint 4b + data payload 보존)
 ├── test_config.py
 ├── test_build.py
-├── test_sync.py
 └── ui/
     ├── test_csv_ui.py
     ├── test_html_ui.py
@@ -143,7 +139,6 @@ gitshuttle import   --file <path>
                     [--target-branch <name>]
                     [--timestamp now|original|from=<UTC_ISO>]
 gitshuttle config   (대화형 마법사)
-gitshuttle sync     (Phase 2 — Python API 단계)
 ```
 
 ---
@@ -151,9 +146,9 @@ gitshuttle sync     (Phase 2 — Python API 단계)
 ### 테스트 현황
 
 ```
-현재 수집 테스트: 161개
+현재 수집 테스트: 145개
 커버리지 대상 모듈: git_ops, bundle, checksum, manifest, export_, import_,
-                   rewrite, config, sync, ui(csv/html/prompt), build
+                   rewrite, config, ui(csv/html/prompt), build
 ```
 
 ```bash
@@ -168,7 +163,6 @@ python -m pytest tests/ -v --tb=short
 | 항목 | 상태 | 비고 |
 |------|------|------|
 | `gitshuttle.exe` 빌드 | 미완 | 사내 PyInstaller 설치 불가 (프록시 SSL 차단). `build.ps1` + `gitshuttle.spec` 준비 완료 |
-| `gitshuttle sync` CLI | Phase 2 | Python API(`sync_.py`) 구현 완료, CLI 노출 예정 |
 | `author_map.json` 키 형식 검증 | 문서화 완료 | 키는 이메일 주소 단독, 값은 `{name,email}` dict. 형식 검증 추가 여지 있음 |
 | TUI (Textual) Windows CMD | 제한적 | Windows Terminal / PowerShell 7+ 권장 |
 
@@ -318,18 +312,11 @@ CLI --timestamp 모드        >  gitshuttle.toml [import].timestamp    >  "now"
 CLI와 toml이 동시에 설정된 경우 CLI 옵션이 우선합니다.
 사용자에게 어떤 설정이 적용됐는지 verbose 출력으로 알려주는 것을 고려해 주세요.
 
-#### Y6. `sync_.py` / `github_auth.py` — Phase 2 노출 범위
-
-Direct Sync는 Python API 레벨까지 구현되어 있으나 CLI에 노출되지 않습니다.
-Phase 2 승인 전 코드가 임의로 호출되지 않도록 `__all__` 제한이나 명시적 가드가 있는지 확인해 주세요.
-
----
-
 ### 🟢 확인 완료
 
-- **테스트 161개 수집 확인** — 전체 suite는 환경에 따라 장시간 실행될 수 있음
+- **테스트 145개 수집 확인** — 전체 suite는 환경에 따라 장시간 실행될 수 있음
 - **UTF-8 / 한글 처리** — 모든 파일 I/O, subprocess, TUI에 인코딩 명시
-- **망분리 제약** — 외부 네트워크 호출 코드 없음 (sync_.py는 명시적 Phase 2 API)
+- **망분리 제약** — 외부 네트워크 호출 코드 없음
 - **Breaking Changes 없음** — 기존 `gitshuttle import --file <bundle>` 호환 유지
 - **SA4 규약 검증 PASS** — 인코딩, 네트워크 격리, Phase 1 범위 준수
 - **`[imported]` 태그** — TUI에서 이미 반입된 커밋 시각적 구분

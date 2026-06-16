@@ -39,4 +39,4 @@ def select_commits_tui(
     from gitshuttle.ui._textual_app import CommitSelectorApp
 
     app = CommitSelectorApp(commits, already_imported)
-    return app.run_sync()
+    return app.run_selection()

@@ -14,7 +14,6 @@
 | 4b | `sprint/4b-import-rewrite` | 작성자 매핑 & 브랜치 리네임 | ✅ DONE | PASS | PASS | PASS (당시 134/134) | PASS |
 | 5 | `sprint/5-e2e` | 분할 압축 + E2E | ✅ DONE | PASS | PASS | PASS (79/79) | PASS |
 | 6 | `sprint/6-build` | PyInstaller 빌드 | ✅ DONE | PASS | PASS | PASS (85/85) | PASS |
-| 7 | `sprint/7-direct-sync` | Direct Sync (Phase 2) | ✅ DONE | PASS | PASS | PASS (102/102) | PASS |
 
 ---
 
@@ -37,7 +36,7 @@
   - `--recent N`이 UI를 열지 않고 limit 조회로 이어지는지 검증
   - full-scope bundle이 빈 repo에서도 검증되는지 확인
 
-**현재 기준 테스트:** 161개 테스트 수집 확인. bundle 선택 범위 관련 테스트 통과.
+**현재 기준 테스트:** 145개 테스트 수집 확인. bundle 선택 범위 관련 테스트 통과.
 
 ---
 
@@ -58,7 +57,7 @@
   - 기존 main을 보존해야 할 때 migration 브랜치에 bundle import 후 Git merge하는 가이드로 정리
   - 현재 전송 방식이 bundle 중심임을 명확화
 
-**현재 기준 테스트:** 161개 테스트 수집 확인. CLI 제거 옵션 회귀 테스트 통과.
+**현재 기준 테스트:** 145개 테스트 수집 확인. CLI 제거 옵션 회귀 테스트 통과.
 
 ---
 
@@ -69,12 +68,11 @@
   - 5번 항목: SOLID 원칙 관점 추가
   - 6번 항목: Mock 테스트 관점 추가
 - `PR_REVIEW_POINTS.md`
-  - 현재 테스트 수를 161개 기준으로 업데이트
+  - 현재 테스트 수를 145개 기준으로 업데이트
   - `--repo` 옵션, fast-import 바이너리 입력, fast-export `data N` payload 보존 포인트 반영
   - `author_map.json` 형식을 이메일 키 + `{name,email}` dict 형식으로 정리
 - `README.md`
   - `--repo` 기반 실행, headless 전체 선택, 작성자 매핑 JSON 예시 보강
-  - `sync`는 현재 CLI 직접 동기화가 아니라 Python API 단계임을 명확화
 - `MANUAL.md`
   - `--output`을 파일명이 아닌 출력 폴더 옵션으로 수정
   - 작성자 매핑 JSON 형식과 `gitshuttle.toml`의 `author_map` 파일 경로 설정 수정
@@ -119,7 +117,7 @@
   - 최신 버전의 `refs/gitshuttle/original/...` 기준점 보관 방식과 구버전 repo의 1회 전체 import 필요성 문서화
   - 기존 코드가 있는 repo는 migration 브랜치에 bundle import 후 Git merge로 합치는 흐름 문서화
 
-**현재 기준 테스트:** 161개 테스트 수집 확인. 관련 단위/통합 테스트 통과.
+**현재 기준 테스트:** 145개 테스트 수집 확인. 관련 단위/통합 테스트 통과.
 
 ---
 
@@ -130,21 +128,20 @@
 **변경 내용:**
 - `PR_REVIEW_POINTS.md` Sprint 4b 한정 → **GitShuttle v0.1.0 전체 프로젝트** 범위로 재작성
   - PR 제목: `feat: GitShuttle v0.1.0 — 망분리 환경 Git 히스토리 동기화 CLI (Phase 1 완료)`
-  - Sprint 0~7 전체 구현 범위 표 포함
+  - Sprint 0~6 전체 구현 범위 표 포함
   - 핵심 아키텍처 결정 5가지 (bundle 포맷, Rewrite 파이프라인, 브랜치 격리, SHA-256, UTF-8)
   - 🔴 중점 검토 3개 (binary mode CRLF 버그, 정규식 엣지케이스, rewrite_needed 조건)
-  - 🟡 일반 검토 6개 (split archive, checksum 강제화, branch fallback, author_map 키 검증, toml 우선순위, Phase 2 노출)
+  - 🟡 일반 검토 5개 (split archive, checksum 강제화, branch fallback, author_map 키 검증, toml 우선순위)
   - 🟢 확인 완료 항목, exe 빌드 방법 및 제약 명시
 
-**최종 테스트 확인:** 당시 `134/134 PASS` (2026-06-16 현재 문서 기준: 161개 테스트)
+**최종 테스트 확인:** 당시 `134/134 PASS` (2026-06-16 현재 문서 기준: 145개 테스트)
 
 **현재 상태 요약:**
 
 | 항목 | 상태 |
 |------|------|
 | Phase 1 구현 | ✅ 완료 (Sprint 0~6, 4b 포함) |
-| Phase 2 (Direct Sync) | ✅ Python API 구현 완료, CLI 노출 예정 |
-| 전체 테스트 | ✅ 161개 수집 확인 (2026-06-16 기준) |
+| 전체 테스트 | ✅ 145개 수집 확인 (2026-06-16 기준) |
 | gitshuttle.exe | ⚠️ 미빌드 (사내 PyInstaller 설치 불가, spec/build.ps1 준비 완료) |
 | GitHub push | ✅ main 브랜치 최신 |
 | PR #1 | ✅ Sprint 4b feat/PR 병합 완료 |
@@ -336,25 +333,9 @@
 
 ---
 
-### 10. Direct Sync 기능 추가 (Phase 2)
-- **배경:** 단일 망 환경에서 두 GitHub repo 간 파일 없이 직접 동기화 요구
-- **PRD 3.6** 신규 추가: Direct Sync 스펙, 인증 방식(HTTPS+Token / SSH), `gitshuttle.toml` 설정 구조
-- **PRD 시나리오 B** 추가: `gitshuttle sync` 워크플로우
-- **PLAN Sprint 7** 추가: `github_auth.py`, `sync_.py`, 환경변수 인증(`GS_SOURCE_TOKEN` / `GS_TARGET_TOKEN`)
-- **README** 업데이트: `sync` 명령어 레퍼런스, HTTPS Token / SSH 설정 예시
-- **CLAUDE.md** 업데이트: 명령어 구조에 `sync` 추가, 패키지 구조에 `sync_.py` / `github_auth.py` 추가
-
-주요 설계 결정:
-- Source / Target 각각 별도 인증 (다른 계정/조직 지원)
-- 토큰은 파일에 저장 금지 → 환경변수(`GS_SOURCE_TOKEN`, `GS_TARGET_TOKEN`)로만 주입
-- export/import와 동일한 커밋 선택 UI 재사용 (코드 중복 없음)
-
----
-
-### 11. 문서 업데이트 규칙 수립
+### 10. 문서 업데이트 규칙 수립
 - `CLAUDE.md` 최상단에 **문서 업데이트 규칙** 섹션 추가
 - 주요 작업 후 커밋 전 README / REPORT / CLAUDE 3개 파일 업데이트 의무화
-- 배경: Direct Sync 작업 시 REPORT.md 누락 사례 발생 → 재발 방지
 
 ---
 
@@ -400,7 +381,7 @@ GitHub: https://github.com/ltw070/gitshuttle (private)
 | `requirements-dev.txt` | pytest, pytest-cov |
 | `gitshuttle/__init__.py` | 버전 `0.1.0` 정의 |
 | `gitshuttle/__main__.py` | 엔트리포인트, stdout/stderr UTF-8 강제 래핑 |
-| `gitshuttle/cli.py` | Typer app, export/import/config/sync 커맨드 스텁 |
+| `gitshuttle/cli.py` | Typer app, export/import/config 커맨드 스텁 |
 | `gitshuttle/config.py` | `load_config()`, `get_ui_mode()`, 기본값 `tui` |
 | `tests/__init__.py` | 테스트 패키지 초기화 |
 | `tests/conftest.py` | `tmp_git_repo` 픽스처 |
@@ -419,7 +400,7 @@ GitHub: https://github.com/ltw070/gitshuttle (private)
 - SA4 (규약 준수): **PASS** — 인코딩·네트워크·Phase 범위·예약어 전 항목 통과
 
 ### 수락 기준 달성
-- [x] `python -m gitshuttle --help` → export/import/config/sync 커맨드 목록 출력
+- [x] `python -m gitshuttle --help` → export/import/config 커맨드 목록 출력
 - [x] `pytest tests/` → 6 passed, 0 errors
 - [x] `gitshuttle.toml` 없을 때 기본값 `tui` 동작
 
@@ -705,70 +686,9 @@ GitHub: https://github.com/ltw070/gitshuttle (private)
 
 ---
 
-## Sprint 7 — Direct Sync (Phase 2) (2026-05-08)
-
-**브랜치:** `sprint/7-direct-sync` → `main` merge 완료
-
-### 생성/수정 파일
-
-| 파일 | 내용 |
-|------|------|
-| `gitshuttle/github_auth.py` | `build_authenticated_url()`, `get_ssh_env()`, `mask_token_in_url()` |
-| `gitshuttle/sync_.py` | `run_sync()`, `SyncResult` 데이터클래스 |
-| `gitshuttle/config.py` | `get_sync_config()`, `_parse_sync_toml()` 추가 |
-| `tests/test_sync.py` | Direct Sync 테스트 17개 (신규) |
-
-### 설계 결정
-
-**토큰 보안 — 마스킹 레이어 구현**
-- `mask_token_in_url(url)`: `https://<token>@host` 패턴을 `https://***@host`로 정규식 치환
-- `_run_git_cmd()`: RuntimeError 발생 시 stderr에 포함된 URL도 `mask_token_in_url()` 통과 후 메시지 생성
-- 테스트 `test_run_sync_token_not_in_error`: 실제 토큰 문자열이 예외 메시지에 없음을 단언
-
-**인증 방식 추상화 — `_build_url()` 헬퍼**
-- HTTPS+Token: `build_authenticated_url(url, token)` → 인증 URL 반환, 추가 env 없음
-- SSH: URL 그대로, `get_ssh_env(ssh_key)` → `GIT_SSH_COMMAND` env dict 반환
-- `_run_git_cmd(extra_env=)` 파라미터로 SSH env 주입
-
-**`get_sync_config()` — 중첩 섹션 파싱**
-- `[sync.source]`, `[sync.target]` 같은 점(`.`) 구분 중첩 섹션을 수동 파싱으로 지원
-- `tomllib` 있으면 그것을 사용, 없으면 `_parse_sync_toml()` fallback
-- 반환: `{'source': {...}, 'target': {...}}` — `[sync]` 루트는 제거하고 하위만 반환
-
-**`run_sync()` 흐름**
-1. `work_dir / clone` 경로에 `git clone --bare <source_url>` 실행
-2. `git rev-list --count --all`로 커밋 수 측정
-3. `git push <target_url> --all` (force 옵션은 `on_conflict="force"` 시 추가)
-4. `SyncResult(synced=N, skipped=0, total=N)` 반환
-
-**모든 subprocess 호출 규약 준수**
-- `encoding='utf-8'` 명시
-- `env`에 `PYTHONIOENCODING='utf-8'` 포함 (`_sync_env()` 헬퍼로 일괄 적용)
-
-### TDD Harness 결과
-
-- SA2 (TDD): **PASS**
-  - RED: 17개 테스트 실패 (모듈 없음, ImportError)
-  - GREEN: 17/17 테스트 통과
-  - 전체 suite: **102 passed** (기존 85 + 신규 17), 0 failed, 회귀 없음
-
-### 수락 기준 달성
-
-- [x] `build_authenticated_url(url, token)` → `https://<token>@host/...` 형식
-- [x] `get_ssh_env(key_path)` → `{'GIT_SSH_COMMAND': 'ssh -i <path> -o StrictHostKeyChecking=no'}`
-- [x] `mask_token_in_url()` → 토큰 부분 `***` 치환
-- [x] `get_sync_config()` — 파일 없거나 [sync] 없으면 `{}` 반환
-- [x] `get_sync_config()` — `[sync.source]`, `[sync.target]` 중첩 섹션 파싱
-- [x] `run_sync()` → subprocess mock 시 `encoding='utf-8'` 및 `PYTHONIOENCODING='utf-8'` 준수
-- [x] 오류 발생 시 source/target 토큰 예외 메시지에 미노출
-- [x] `run_sync()` → `SyncResult` 반환, 필드 `synced/skipped/total` 정수 타입
-- [x] 기존 85개 테스트 회귀 없음 (102 passed)
-
----
-
 ## Phase 1 완료 (2026-05-08)
 
-모든 Sprint(0~7)가 완료되었습니다. 당시 최종 테스트는 **106 passed**, 0 failed였고, 이후 기능 보강과 bundle-only 단순화를 반영한 2026-06-16 기준 테스트 수는 161개입니다.
+모든 Sprint(0~6)가 완료되었습니다. 당시 최종 테스트는 **85 passed**, 0 failed였고, 이후 기능 보강과 bundle-only 단순화를 반영한 2026-06-16 기준 테스트 수는 145개입니다.
 
 ### 남은 작업 (Phase 2 이후)
 

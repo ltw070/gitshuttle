@@ -189,43 +189,6 @@ gitshuttle import \
 
 ---
 
-### 3.7 Direct Sync — 두 GitHub 간 직접 동기화 (Phase 2 추가)
-네트워크가 연결된 단일 망 환경에서 파일 없이 두 GitHub 리포지토리를 직접 동기화한다.
-
-- **`gitshuttle sync` 커맨드:** Source GitHub repo → Target GitHub repo로 선택한 커밋을 직접 전송.
-- **파일 불필요:** `.bundle` 파일 생성 없이 메모리 내에서 직접 fetch → push.
-- **커밋 선택 UI:** export와 동일한 TUI/CSV/HTML/Prompt 인터페이스 재사용.
-- **중복 감지:** Target repo에 이미 존재하는 커밋 자동 감지 후 `[synced]` 표시.
-- **충돌 처리:** export/import와 동일한 `--on-conflict skip/force/abort` 옵션.
-
-#### 인증 방식
-
-| 방식 | 설정 | 특징 |
-|------|------|------|
-| **HTTPS + Token (기본값)** | repo별 PAT 입력 | 가장 단순, 프로그램 자동화에 적합 |
-| **SSH** | SSH 키 파일 경로 지정 | 토큰 만료 없음, 서버 자동화에 적합 |
-
-#### 연결 설정 (`gitshuttle.toml`)
-```toml
-[sync.source]
-url   = "https://github.com/org1/repo"
-auth  = "token"          # token | ssh
-token = ""               # HTTPS+Token 방식: PAT 입력 (또는 환경변수 GS_SOURCE_TOKEN)
-
-[sync.target]
-url   = "https://github.com/org2/repo"
-auth  = "token"
-token = ""               # 또는 환경변수 GS_TARGET_TOKEN
-
-# SSH 방식 사용 시
-# [sync.source]
-# url      = "git@github.com:org1/repo.git"
-# auth     = "ssh"
-# ssh_key  = "~/.ssh/id_rsa_source"
-```
-
-> **보안:** 토큰은 `gitshuttle.toml`에 직접 저장하지 않고 환경변수(`GS_SOURCE_TOKEN`, `GS_TARGET_TOKEN`) 사용을 권장. `gitshuttle.toml`은 `.gitignore`에 등록.
-
 ## 4. 사용자 시나리오 (User Scenario)
 
 ### 시나리오 A — 망분리 환경 (파일 이동)
@@ -234,12 +197,6 @@ token = ""               # 또는 환경변수 GS_TARGET_TOKEN
 3. **[이동]** 보안 승인 후 해당 파일들을 USB나 망간 전송 시스템으로 내부망 전달.
 4. **[내부망]** 담당자가 `gitshuttle import --file shuttle_240522.bundle` 실행.
 5. **[결과]** 내부 Git 서버에 외부와 동일한 커밋 메시지와 히스토리가 그대로 반영됨.
-
-### 시나리오 B — 단일 망 환경 (GitHub 직접 연결)
-1. **[설정]** `gitshuttle config` 실행 → Source/Target GitHub URL 및 인증 정보 입력.
-2. **[실행]** `gitshuttle sync` 실행 → TUI에서 전송할 커밋 선택.
-3. **[GitShuttle]** Source repo에서 선택 커밋 fetch → Target repo로 직접 push.
-4. **[결과]** 파일 이동 없이 두 GitHub 간 히스토리 동기화 완료.
 
 ## 5. 기술 스펙 (Technical Specification)
 
@@ -285,8 +242,7 @@ python -m gitshuttle config
 - 매니페스트 자동 생성
 - SHA-256 체크섬 생성/검증
 
-### Phase 2 — Direct Sync + GUI
-- `gitshuttle sync`: 두 GitHub 간 직접 동기화 (HTTPS Token / SSH)
+### Phase 2 — GUI
 - Phase 1의 모든 기능을 데스크탑 GUI로 전환
 - 마우스 기반 커밋 선택, 드래그 범위 선택
 - 시각적 히스토리 그래프 제공

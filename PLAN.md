@@ -365,55 +365,6 @@ exe 실행 + 한글 출력 검증 테스트.
 
 ---
 
-## Sprint 7 — Direct Sync (Phase 2)
-
-**목표:** 네트워크 연결 환경에서 두 GitHub repo 간 파일 없이 직접 동기화
-
-### 구현 대상
-- `sync_.py`: Source fetch → Target push 파이프라인
-- `github_auth.py`: HTTPS+Token / SSH 두 가지 인증 방식
-- `config.py` 확장: `[sync.source]` / `[sync.target]` 섹션 추가
-- 환경변수 지원: `GS_SOURCE_TOKEN`, `GS_TARGET_TOKEN`
-
-### 인증 흐름
-
-```
-HTTPS + Token:
-  URL: https://github.com/org/repo
-  인증: Authorization: Bearer <token>  (git credential helper로 주입)
-
-SSH:
-  URL: git@github.com:org/repo.git
-  인증: GIT_SSH_COMMAND="ssh -i <key_path>"  (subprocess env로 주입)
-```
-
-### TDD 사이클
-
-| 단계 | SubAgent | 내용 |
-|------|----------|------|
-| 문서 검증 | SA1 | PRD 3.6(Direct Sync) 스펙, 인증 방식 확인 |
-| 구현 | SA2 | mock GitHub API로 fetch/push 단위 테스트. 토큰이 로그에 노출되지 않는지 테스트 포함 |
-| 검증 | SA3+SA4 | 토큰 노출 여부 compliance 체크, 네트워크 호출은 mock 처리 확인 |
-
-### 수락 기준
-- [x] `gitshuttle sync` → TUI 커밋 선택 → Source fetch → Target push
-- [x] HTTPS+Token 방식: `GS_SOURCE_TOKEN` 환경변수로 인증
-- [x] SSH 방식: `ssh_key` 경로 지정으로 인증
-- [x] 토큰이 로그·오류 메시지에 노출되지 않음
-- [x] Target에 이미 존재하는 커밋 `[synced]` 표시 및 skip
-- [x] `--on-conflict skip/force/abort` 동작
-
-### SA2 호출 프롬프트
-```
-Sprint 7: Direct Sync 구현.
-github_auth.py(HTTPS+Token, SSH 두 방식 — 토큰 로그 노출 절대 금지),
-sync_.py(Source fetch → Target push, 커밋 선택 UI 재사용),
-config.py 확장([sync.source], [sync.target], 환경변수 GS_SOURCE_TOKEN/GS_TARGET_TOKEN).
-mock GitHub으로 단위 테스트 필수.
-```
-
----
-
 ## 전체 일정 요약
 
 | Sprint | Phase | 내용 | 핵심 산출물 |
@@ -426,7 +377,6 @@ mock GitHub으로 단위 테스트 필수.
 | 4b | 1 | Import Rewrite | rewrite.py, 작성자 매핑, 브랜치 리네임 |
 | 5 | 1 | 대용량 + E2E | split archive, E2E 테스트 |
 | 6 | 1 | 빌드 | gitshuttle.exe, build.ps1 |
-| 7 | 2 | Direct Sync | github_auth.py, sync_.py, config 확장 |
 
 ---
 
@@ -442,7 +392,6 @@ main          ← 릴리즈 브랜치 (각 Sprint 완료 후 merge)
   └── sprint/4b-import-rewrite
   └── sprint/5-e2e
   └── sprint/6-build
-  └── sprint/7-direct-sync
 ```
 
 각 Sprint 브랜치에서 개발 → SA3+SA4 PASS → `main` merge → 커밋 & push.

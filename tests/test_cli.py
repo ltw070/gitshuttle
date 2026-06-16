@@ -19,6 +19,17 @@ def test_help_shows_commands():
     assert "config" in result.output
 
 
+def test_direct_command_removed():
+    """직접 동기화 명령은 더 이상 제공하지 않는다."""
+    from gitshuttle.cli import app
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["sync"])
+
+    assert result.exit_code != 0
+    assert "No such command" in result.output
+
+
 def test_version():
     """--version 실행 시 버전 문자열이 출력되어야 한다."""
     from gitshuttle.cli import app

@@ -17,12 +17,11 @@
 8. [config — 기본 설정 변경하기](#8-config--기본-설정-변경하기)
 9. [커밋 선택 UI 4가지 방식](#9-커밋-선택-ui-4가지-방식)
 10. [대용량 파일 분할 전송](#10-대용량-파일-분할-전송)
-11. [sync — GitHub 직접 동기화 (Phase 2)](#11-sync--github-직접-동기화-phase-2)
-12. [생성 파일 상세 설명](#12-생성-파일-상세-설명)
-13. [충돌 처리 옵션 상세](#13-충돌-처리-옵션-상세)
-14. [자주 묻는 질문 (FAQ)](#14-자주-묻는-질문-faq)
-15. [오류 메시지 해설](#15-오류-메시지-해설)
-16. [기존 GitHub에서 새 GitHub로 이전하기](#16-기존-github에서-새-github로-이전하기)
+11. [생성 파일 상세 설명](#11-생성-파일-상세-설명)
+12. [충돌 처리 옵션 상세](#12-충돌-처리-옵션-상세)
+13. [자주 묻는 질문 (FAQ)](#13-자주-묻는-질문-faq)
+14. [오류 메시지 해설](#14-오류-메시지-해설)
+15. [기존 GitHub에서 새 GitHub로 이전하기](#15-기존-github에서-새-github로-이전하기)
 
 ---
 
@@ -183,7 +182,6 @@ Commands:
   export  선택한 커밋을 .bundle 파일로 추출합니다.
   import  shuttle 패키지를 현재 리포지토리에 반입합니다.
   config  대화형 마법사로 gitshuttle.toml 설정을 변경합니다.
-  sync    두 GitHub 리포지토리 간 직접 동기화합니다.
 ```
 
 이 화면이 나오면 설치가 완료된 것입니다.
@@ -720,76 +718,7 @@ gitshuttle import --file shuttle_260508_merged.bundle
 
 ---
 
-## 11. sync — GitHub 직접 동기화 (Phase 2)
-
-> **네트워크가 연결된 환경에서만 사용합니다.**  
-> 두 GitHub 리포지토리 사이에서 USB 없이 직접 커밋을 동기화합니다.
-
-### 사전 준비
-
-**1단계: 설정 파일 작성**
-
-작업 디렉터리에 `gitshuttle.toml` 파일을 만들거나 `gitshuttle config`로 생성합니다.
-
-```toml
-[sync.source]
-url  = "https://github.com/회사외부/repo"
-auth = "token"
-
-[sync.target]
-url  = "https://github.com/회사내부/repo"
-auth = "token"
-```
-
-**2단계: 토큰 환경변수 설정**
-
-GitHub Personal Access Token을 환경변수로 전달합니다.  
-(**절대 `gitshuttle.toml` 파일에 직접 토큰을 쓰지 마세요.**)
-
-```
-set GS_SOURCE_TOKEN=ghp_xxxxxxxxxxxxxxxxxxxx
-set GS_TARGET_TOKEN=ghp_yyyyyyyyyyyyyyyyyyyy
-```
-
-### 실행
-
-> **현재 `gitshuttle sync` CLI는 Phase 2 준비 중입니다.**  
-> 지금은 Python API로 직접 사용할 수 있습니다.
-
-```python
-import os
-from gitshuttle.sync_ import run_sync
-
-result = run_sync(
-    source_url="https://github.com/org1/repo",
-    target_url="https://github.com/org2/repo",
-    source_token=os.environ["GS_SOURCE_TOKEN"],
-    target_token=os.environ["GS_TARGET_TOKEN"],
-)
-print(f"동기화 완료: {result.synced}개 커밋")
-```
-
-### SSH 방식
-
-토큰 대신 SSH 키를 사용하는 경우:
-
-```toml
-[sync.source]
-url     = "git@github.com:org1/repo.git"
-auth    = "ssh"
-ssh_key = "C:\\Users\\사용자명\\.ssh\\id_rsa_source"
-
-[sync.target]
-url     = "git@github.com:org2/repo.git"
-auth    = "ssh"
-ssh_key = "C:\\Users\\사용자명\\.ssh\\id_rsa_target"
-```
-
-SSH 키 파일 경로의 백슬래시(`\`)는 두 번(`\\`) 씁니다.
-
----
-
-## 12. 생성 파일 상세 설명
+## 11. 생성 파일 상세 설명
 
 export 실행 시 아래 3개 파일이 생성됩니다.
 
@@ -834,7 +763,7 @@ c2d1e9f3  2026-05-01  Alice  docs: README 갱신          (1 file)
 
 ---
 
-## 13. 충돌 처리 옵션 상세
+## 12. 충돌 처리 옵션 상세
 
 "충돌"이란 import하려는 커밋이 대상 리포지토리에 이미 존재하는 상황을 말합니다.
 
@@ -857,7 +786,7 @@ gitshuttle import --file shuttle.bundle --on-conflict abort
 
 ---
 
-## 14. 자주 묻는 질문 (FAQ)
+## 13. 자주 묻는 질문 (FAQ)
 
 **Q. 실행 시 "Git 2.37 이상이 필요합니다" 오류가 납니다.**
 
@@ -1038,7 +967,7 @@ python -m gitshuttle import `
 
 ---
 
-## 15. 오류 메시지 해설
+## 14. 오류 메시지 해설
 
 | 오류 메시지 | 원인 | 해결 방법 |
 |-------------|------|-----------|
@@ -1057,7 +986,7 @@ python -m gitshuttle import `
 
 ---
 
-## 16. 기존 GitHub에서 새 GitHub로 이전하기
+## 15. 기존 GitHub에서 새 GitHub로 이전하기
 
 하나의 GitHub 리포지토리에 있는 내용을 새로운 GitHub 리포지토리로 옮기면서, 커밋 작성자를 새 사용자로 바꾸는 절차입니다.
 

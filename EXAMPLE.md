@@ -27,7 +27,7 @@ git log --oneline | tail -10
 
 **출력 예시 (오래된 순, 아래가 가장 오래됨):**
 ```
-6b6b2b3 Add Direct Sync feature (Phase 2)
+6b6b2b3 Add import rewrite workflow
 be1e3c3 Final update: REPORT.md session summary
 5050df3 Untrack .mcp.json, add to .gitignore
 bab5a4b Add .mcp.json initial template
@@ -158,7 +158,7 @@ git log --oneline
 
 **출력 예시:**
 ```
-6b6b2b3 Add Direct Sync feature (Phase 2)
+6b6b2b3 Add import rewrite workflow
 be1e3c3 Final update: REPORT.md session summary
 5050df3 Untrack .mcp.json, add to .gitignore
 bab5a4b Add .mcp.json initial template
@@ -224,7 +224,7 @@ d9c4ff3 Sprint 1: Git 핵심 레이어 구현
 36cfe31 Sprint 0: 프로젝트 기반 구조 스캐폴딩
 833e752 Final update: REPORT.md session close
 971c872 Add mandatory doc update rule to CLAUDE.md
-ba95f50 Update REPORT.md: Direct Sync feature log
+ba95f50 Update REPORT.md: import workflow log
 ```
 
 ---
@@ -277,7 +277,7 @@ python export_11to20.py
 **출력 예시:**
 ```
 총 커밋: 30개 / 선택: 10개
-  #11  ba95f50  Update REPORT.md: Direct Sync feature log
+  #11  ba95f50  Update REPORT.md: import workflow log
   #12  971c872  Add mandatory doc update rule to CLAUDE.md
   ...
   #20  fca94dd  Sprint 2: Export 핵심 + TUI 구현
@@ -327,7 +327,7 @@ git log --oneline
 
 **현재 상태 확인 — 10개 커밋이 있어야 합니다:**
 ```
-6b6b2b3 Add Direct Sync feature (Phase 2)
+6b6b2b3 Add import rewrite workflow
 ...
 2891a21 Initial commit: PRD, README, CLAUDE.md
 ```
@@ -376,8 +376,8 @@ d9c4ff3 Sprint 1: Git 핵심 레이어 구현
 36cfe31 Sprint 0: 프로젝트 기반 구조 스캐폴딩
 833e752 Final update: REPORT.md session close
 971c872 Add mandatory doc update rule to CLAUDE.md
-ba95f50 Update REPORT.md: Direct Sync feature log  ← 11번째
-6b6b2b3 Add Direct Sync feature (Phase 2)           ← 10번째 (예제 1에서 반입)
+ba95f50 Update REPORT.md: import workflow log  ← 11번째
+6b6b2b3 Add import rewrite workflow           ← 10번째 (예제 1에서 반입)
 ...
 2891a21 Initial commit: PRD, README, CLAUDE.md      ← 1번째
 ```
@@ -525,7 +525,7 @@ git log feat/gitshuttle_1st --format="%H %an <%ae> %ad %s" \
 
 **출력 예시:**
 ```
-6b0c157 tw070-lim <tw070-lim@users.noreply.github.com> 2026-05-09 10:51 KST  Add Direct Sync feature (Phase 2)
+6b0c157 tw070-lim <tw070-lim@users.noreply.github.com> 2026-05-09 10:51 KST  Add import rewrite workflow
 c4f595 tw070-lim <tw070-lim@users.noreply.github.com> 2026-05-09 10:46 KST  Final update: REPORT.md session summary
 ...
 da9e68 tw070-lim <tw070-lim@users.noreply.github.com> 2026-05-09 10:23 KST  Initial commit: PRD, README, CLAUDE.md

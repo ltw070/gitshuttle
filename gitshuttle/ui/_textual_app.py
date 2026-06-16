@@ -101,7 +101,7 @@ if _TEXTUAL_AVAILABLE:
             ]
             self.exit(self._result)
 
-        def run_sync(self) -> list[Commit]:
+        def run_selection(self) -> list[Commit]:
             """동기 실행 후 선택된 커밋 목록을 반환한다."""
             result = self.run()
             if result is None:
@@ -115,7 +115,7 @@ else:
         def __init__(self, commits: list[Commit], already_imported: set[str]) -> None:
             self._commits = commits
 
-        def run_sync(self) -> list[Commit]:
+        def run_selection(self) -> list[Commit]:
             raise RuntimeError(
                 "Textual 이 설치되어 있지 않습니다. "
                 "'pip install textual' 로 설치하거나 "

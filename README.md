@@ -273,55 +273,6 @@ merge_bundles(parts, "shuttle_260508_merged.bundle")
 
 ---
 
-## `sync` — GitHub 간 직접 동기화 (Phase 2)
-
-네트워크가 연결된 환경에서 파일 없이 두 GitHub repo를 직접 동기화합니다.
-
-현재 `gitshuttle sync` CLI는 안내 메시지만 출력합니다. 실제 동기화는 Python API `run_sync()`로 사용할 수 있습니다.
-
-**연결 설정 (`gitshuttle.toml`):**
-
-```toml
-[sync.source]
-url  = "https://github.com/org1/repo"
-auth = "token"
-
-[sync.target]
-url  = "https://github.com/org2/repo"
-auth = "token"
-```
-
-**토큰은 환경변수로 전달합니다 (파일에 직접 저장 금지):**
-
-```
-set GS_SOURCE_TOKEN=ghp_...
-set GS_TARGET_TOKEN=ghp_...
-```
-
-```python
-import os
-from gitshuttle.sync_ import run_sync
-
-result = run_sync(
-    source_url="https://github.com/org1/repo",
-    target_url="https://github.com/org2/repo",
-    source_token=os.environ["GS_SOURCE_TOKEN"],
-    target_token=os.environ["GS_TARGET_TOKEN"],
-)
-print(result)
-```
-
-**SSH 방식:**
-
-```toml
-[sync.source]
-url     = "git@github.com:org1/repo.git"
-auth    = "ssh"
-ssh_key = "C:\\Users\\user\\.ssh\\id_rsa_source"
-```
-
----
-
 ## 개발 워크플로우 (기여자용)
 
 모든 구현은 TDD Harness를 통해 진행합니다. 자세한 내용은 [`HARNESS.md`](HARNESS.md) 참고.

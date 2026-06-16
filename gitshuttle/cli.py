@@ -376,18 +376,3 @@ def config() -> None:
     """대화형 마법사로 gitshuttle.toml 설정을 변경합니다."""
     from gitshuttle.config import run_config_wizard
     run_config_wizard()
-
-
-@app.command()
-def sync(
-    on_conflict: str = typer.Option("skip", "--on-conflict", help="충돌 처리 방식 (skip|force|abort)"),
-) -> None:
-    """두 GitHub 리포지토리 간 직접 동기화합니다 (Phase 2)."""
-    typer.echo(
-        "[Phase 2] sync 커맨드는 아직 CLI에서 지원되지 않습니다.\n"
-        "Python API로 직접 사용하려면:\n\n"
-        "  from gitshuttle.sync_ import run_sync\n"
-        "  run_sync(source_url=..., target_url=...,\n"
-        "           source_token=..., target_token=...)\n\n"
-        "gitshuttle.toml 설정 방법은 README.md의 sync 섹션을 참고하세요."
-    )

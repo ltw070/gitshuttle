@@ -65,8 +65,6 @@ gitshuttle/
 ├── export_.py        # export 오케스트레이션
 ├── import_.py        # import 오케스트레이션
 ├── rewrite.py        # 작성자 매핑 & 브랜치 리네임 (fast-export/fast-import 파이프라인)
-├── sync_.py          # direct sync 오케스트레이션 (Phase 2)
-├── github_auth.py    # HTTPS+Token / SSH 인증 (Phase 2)
 ├── config.py         # config 마법사, gitshuttle.toml 읽기/쓰기
 └── ui/
     ├── __init__.py
@@ -86,7 +84,7 @@ tests/
 ├── test_rewrite.py   # 작성자 매핑, 브랜치 리네임, 미매핑 원본 유지 테스트
 ├── test_config.py
 ├── test_build.py     # gitshuttle.spec, build.ps1 내용 검증
-├── test_sync.py      # Direct Sync + github_auth 테스트 (Phase 2)
+├── test_e2e.py       # 실제 git repo 기반 end-to-end 테스트
 └── ui/
     ├── test_csv_ui.py
     ├── test_html_ui.py
@@ -109,8 +107,7 @@ main
 ├── sprint/3-ui-config
 ├── sprint/4-import
 ├── sprint/5-e2e
-├── sprint/6-build
-└── sprint/7-direct-sync
+└── sprint/6-build
 ```
 
 각 Sprint 브랜치에서 개발 → SA3+SA4 PASS → main merge.
@@ -125,7 +122,6 @@ gitshuttle import   --file <path> [--on-conflict skip|force|abort]
                     [--author-map <json>] [--target-branch <name>]
                     [--timestamp now|original|from=<datetime>]     # Phase 1
 gitshuttle config   (대화형 마법사 — gitshuttle.toml 수정)              # Phase 1
-gitshuttle sync     [--on-conflict skip|force|abort]                    # Phase 2
 ```
 
 ---

@@ -56,9 +56,9 @@
 
 3. **보안 감사 대응** — `_manifest.txt`에 커밋 목록이 요약되어 반출입 심사 자료로 활용할 수 있다. SHA-256 체크섬으로 USB 이동 중 변조 여부를 자동 검증한다.
 
-4. **망분리 GitHub 양방향 구조 지원**
+4. **망분리 GitHub 이전 흐름 지원**
    - 외부망 GitHub(Public/External) → USB → 내부망 GitHub(On-prem/Private)
-   - Phase 2 Direct Sync: 네트워크가 허용될 때 API로 직접 동기화
+   - 네트워크 직접 연결 없이 bundle 파일과 checksum으로 이력 이전
 
 5. **운영 방식 단순화**
    - `bundle`: 전체 이력·부모 관계·Git object 중심 이전. 원본 구조 보존에 적합하다.
@@ -104,13 +104,13 @@ Sprint N 시작
               └─ 둘 다 PASS → 커밋
 ```
 
-**SA4가 발견한 실제 위반 사례 (Sprint 7):**
+**최근 정리 작업에서 확인한 검토 사례:**
 ```
-tests/test_sync.py:8   F401 'os' imported but unused
-tests/test_sync.py:11  F401 'unittest.mock.call' imported but unused
-tests/test_sync.py:206 F841 local variable 'result' assigned but never used
+tests/test_import.py: unused helper import 제거
+tests/test_cli.py: 제거된 옵션 회귀 테스트의 과도한 문자열 매칭 수정
+gitshuttle/config.py: 사용하지 않는 설정 API 제거 후 import 설정 파서 유지
 ```
-→ SA2 결과를 SA4가 독립적으로 재검증해 미사용 코드를 자동 제거했다.
+→ SA2 결과를 SA4가 독립적으로 재검증해 현재 기능과 무관한 코드를 제거했다.
 
 ---
 
@@ -167,9 +167,8 @@ Sprint 3  →  64 passed
 Sprint 4  →  71 passed   ← import_.py
 Sprint 5  →  79 passed
 Sprint 6  →  85 passed
-Sprint 7  → 102 passed
 최종 정리 → 106 passed  (0 failed)
-기능 보강 → 161 collected  (hidden refs, TUI 단축키, full-branch export, bundle-only CLI 리팩토링 포함)
+기능 보강 → 145 collected  (hidden refs, TUI 단축키, full-branch export, bundle-only CLI 리팩토링 포함)
 ```
 
 **최근 TDD 사례 — bundle-only CLI 단순화:**
@@ -515,7 +514,7 @@ from gitshuttle.import_ import run_import, ChecksumError, ImportConflictError
 
 **분석:**  
 완전한 DI 컨테이너 구조는 아니지만, 사용자 인터페이스와 Git 처리 세부 구현이 분리되어 있다.  
-테스트에서도 이 경계가 활용되어 `cli.py`는 `run_import()`를 monkeypatch하고, `sync_.py`는 `subprocess.run`을 mock 처리해 네트워크 없이 검증한다.
+테스트에서도 이 경계가 활용되어 `cli.py`는 `run_export()`와 `run_import()`를 monkeypatch하고, 실제 Git 동작은 별도 임시 repo 기반 통합 테스트로 검증한다.
 
 **적용하지 않은 원칙 — LSP:**  
 이 프로젝트는 상속 기반 다형성보다 함수 조합과 데이터클래스를 중심으로 구성되어 있어 LSP(Liskov Substitution Principle)를 평가할 만한 클래스 계층이 거의 없다.  
@@ -525,82 +524,63 @@ from gitshuttle.import_ import run_import, ChecksumError, ImportConflictError
 
 ### 6. Mock 관점
 
-**제목:** 외부 GitHub·Git subprocess를 격리한 테스트 전략
+**제목:** CLI 계약과 실제 Git 동작을 분리한 테스트 전략
 
 **설명:**  
-GitShuttle은 실제 GitHub 접근, 토큰 인증, 네트워크 push처럼 느리고 실패 가능성이 높은 동작을 테스트에서 직접 수행하지 않는다.  
-대신 `unittest.mock.patch`, `MagicMock`, `monkeypatch`, `CliRunner`를 사용해 외부 의존성을 격리하고, 코드가 어떤 명령과 옵션을 호출하는지 검증한다.
+GitShuttle은 CLI 옵션 전달처럼 빠르게 검증할 수 있는 부분은 `monkeypatch`, `CliRunner`로 격리한다.
+반면 bundle 생성·검증·import처럼 Git object가 실제로 움직이는 부분은 임시 Git repo를 만들어 통합 테스트로 확인한다.
 
-#### 사례 1 — Direct Sync의 subprocess mock
+#### 사례 1 — CLI의 export/import API 호출 격리
 
-`tests/test_sync.py`는 `gitshuttle.sync_.subprocess.run`을 mock 처리해 실제 clone/push 없이 Direct Sync 흐름을 검증한다.
+`tests/test_cli.py`는 실제 bundle 생성 없이 `run_export()`를 monkeypatch해 CLI 옵션이 내부 API로 전달되는지 검증한다.
 
 ```python
-with patch("gitshuttle.sync_.subprocess.run") as mock_run:
-    mock_result = MagicMock()
-    mock_result.returncode = 0
-    mock_result.stdout = ""
-    mock_result.stderr = ""
-    mock_run.return_value = mock_result
-
-    run_sync(
-        source_url="https://github.com/org1/repo",
-        target_url="https://github.com/org2/repo",
-        work_dir=tmp_path,
+def fake_run_export(repo_path, commits, output_dir, branch, bundle_scope="range"):
+    captured["repo_path"] = repo_path
+    captured["bundle_scope"] = bundle_scope
+    return ExportResult(
+        bundle=output_dir / "test.bundle",
+        sha256=output_dir / "test.bundle.sha256",
+        manifest=output_dir / "test_manifest.txt",
     )
 
-assert mock_run.call_count >= 1
+monkeypatch.setattr(export_module, "run_export", fake_run_export)
 ```
 
 **효과:**  
-테스트가 네트워크 상태, GitHub 권한, 토큰 만료 여부에 영향을 받지 않는다.  
-CI 환경에서도 안정적으로 실행할 수 있고, 실패 원인이 비즈니스 로직인지 외부 서비스인지 분리된다.
+CLI 테스트가 Git bundle 생성 비용이나 로컬 Git 상태에 흔들리지 않는다.
+`--repo`, `--recent`, `--full-branch`, `--bundle-scope` 같은 옵션 계약을 빠르게 검증할 수 있다.
 
-#### 사례 2 — subprocess 호출 옵션 검증
+#### 사례 2 — 실제 Git repo 기반 통합 테스트
 
-동기화 테스트는 mock 호출 기록을 검사해 모든 Git 명령이 UTF-8 인코딩과 안전한 환경변수를 사용하는지 확인한다.
+`tests/test_import.py`, `tests/test_bundle.py`, `tests/test_e2e.py`는 임시 Git repo를 만들고 실제 `git bundle`, `git fast-export`, `git fast-import` 흐름을 실행한다.
 
 ```python
-for c in mock_run.call_args_list:
-    kwargs = c.kwargs if c.kwargs else {}
-    assert kwargs.get("encoding") == "utf-8"
+bundle_path = _export_repo(source, tmp_path)
+before_count = len(get_commits(target))
 
-    env = kwargs.get("env")
-    if env is not None:
-        assert env.get("PYTHONIOENCODING") == "utf-8"
+result = run_import(bundle_path, target)
+
+assert result.imported >= 1
+assert len(get_commits(target)) > before_count
 ```
 
 **효과:**  
-실제 Git 명령을 실행하지 않아도 "명령을 어떤 방식으로 호출하는가"를 검증할 수 있다.  
-Windows 한글 경로, 콘솔 인코딩, 망분리 환경에서 자주 발생하는 문자 깨짐 위험을 테스트 레벨에서 줄인다.
+mock으로는 잡기 어려운 Git object prerequisite, fast-import 입력 형식, worktree checkout/reset 문제를 실제 Git 실행으로 잡는다.
 
-#### 사례 3 — 보안 관점 mock: 토큰 노출 방지
+#### 사례 3 — rewrite 옵션 전달 monkeypatch
 
-실패하는 subprocess 결과를 mock으로 만들고, 예외 메시지에 토큰이 포함되지 않는지 검증한다.
+CLI import 테스트는 `run_import()`를 fake 함수로 바꿔 작성자 매핑과 타임스탬프 옵션 전달만 빠르게 확인한다.
 
 ```python
-secret_token = "ghp_VERYSECRETTOKEN999"
-
-with patch("gitshuttle.sync_.subprocess.run") as mock_run:
-    mock_result = MagicMock()
-    mock_result.returncode = 1
-    mock_result.stderr = "fatal: repository not found"
-    mock_run.return_value = mock_result
-
-    with pytest.raises(Exception) as exc_info:
-        run_sync(
-            source_url="https://github.com/org/repo",
-            target_url="https://github.com/org/repo2",
-            source_token=secret_token,
-            work_dir=tmp_path,
-        )
-
-assert secret_token not in str(exc_info.value)
+def fake_run_import(..., author_map_path=None, timestamp_mode="now"):
+    captured["author_map_path"] = author_map_path
+    captured["timestamp_mode"] = timestamp_mode
+    return ImportResult(imported=1, skipped=0, total=1)
 ```
 
 **효과:**  
-보안 요구사항을 사람이 리뷰로만 확인하지 않고 테스트로 고정했다.  
-토큰이 URL에 삽입되는 구조에서도 오류 메시지에는 마스킹된 값만 남도록 강제한다.
+느린 import 파이프라인을 반복 실행하지 않고도 CLI 계약을 고정한다.
 
 #### 사례 4 — CLI 테스트의 monkeypatch
 
@@ -654,8 +634,8 @@ Mock은 외부 의존성을 빠르고 안정적으로 격리하지만, 실제 Gi
 그래서 GitShuttle은 mock 테스트만 두지 않고 `test_import.py`, `test_bundle.py`, `test_e2e.py`처럼 실제 임시 Git repo를 만들어 검증하는 테스트도 함께 둔다.
 
 **정리:**  
-Mock 테스트는 "명령 호출 방식", "오류 처리", "토큰 마스킹", "CLI 옵션 전달"을 빠르게 검증하고, 실제 Git repo 기반 테스트는 bundle 생성·검증·반입의 현실 동작을 보완한다.
+Mock 테스트는 "명령 호출 방식", "오류 처리", "CLI 옵션 전달"을 빠르게 검증하고, 실제 Git repo 기반 테스트는 bundle 생성·검증·반입의 현실 동작을 보완한다.
 
 ---
 
-*GitShuttle · Sprint 0~7 완료 + 기능 보강 · 161 tests collected · hidden refs, full-branch export, bundle-only CLI 리팩토링 포함*
+*GitShuttle · Sprint 0~6 완료 + 기능 보강 · 145 tests collected · hidden refs, full-branch export, bundle-only CLI 리팩토링 포함*
