@@ -96,29 +96,23 @@ build.ps1             # Windows PowerShell 빌드 자동화
 
 ## 브랜치 전략
 
-```
-main
-├── sprint/0-scaffold
-├── sprint/1-git-core
-├── sprint/2-export-tui
-├── sprint/3-ui-config
-├── sprint/4-import
-├── sprint/5-e2e
-└── sprint/6-build
-```
-
-각 Sprint 브랜치에서 개발 → SA3+SA4 PASS → main merge.
+- 새 작업은 `main` 또는 현재 승인된 기준 브랜치에서 `type/short-topic` 형태의 브랜치를 만들어 진행한다.
+- 예: `docs/sync-consolidated-guides`, `refactor/cleanup-core`, `fix/import-branch-reset`.
+- 기능 변경은 테스트 통과 후 커밋하고 원격 브랜치에 push한다.
 
 ---
 
 ## 명령어 구조
 
 ```
-gitshuttle export   [--branch] [--ui tui|csv] [--output]               # Phase 1
-gitshuttle import   --file <path> [--on-conflict skip|force|abort]
+gitshuttle export   [--repo <path>] [--branch <name>] [--ui tui|csv]
+                    [--output <path>] [--bundle-scope range|full]
+                    [--full-branch] [--recent N]
+gitshuttle import   --file <path> [--repo <path>]
+                    [--on-conflict skip|force|abort]
                     [--author-map <json>] [--target-branch <name>]
-                    [--timestamp now|original|from=<datetime>]     # Phase 1
-gitshuttle config   (대화형 마법사 — gitshuttle.toml 수정)              # Phase 1
+                    [--timestamp now|original|from=<datetime>]
+gitshuttle config   (대화형 마법사 — gitshuttle.toml 수정)
 ```
 
 ---
@@ -129,10 +123,10 @@ gitshuttle config   (대화형 마법사 — gitshuttle.toml 수정)            
 
 | 모드 | 구현 방식 |
 |------|-----------|
-| `tui` | Textual 체크박스 + 테이블. Shift 범위선택, 작성자/파일/날짜 필터. |
+| `tui` | Textual 체크박스 + 테이블. 방향키, Space, A, E/Enter, Q. |
 | `csv` | `commits.csv` 생성 → 사용자가 `include` 컬럼 Y/N 편집 → 재입력 |
 
-공통: 이미 타겟에 반영된 커밋은 `[imported]` 태그로 표시.
+`--full-branch`와 `--recent`는 동시에 사용할 수 없다. `--full-branch`는 브랜치 tip 1개만 조회하고 `bundle_scope=full`로 self-contained bundle을 만든다.
 
 ---
 
@@ -157,6 +151,7 @@ shuttle_YYMMDD_manifest.txt  # 커밋 목록 요약 (반출입 심사용)
 - CLI 기반 bundle export/import
 - 기본 TUI 선택기와 보조 CSV 선택기
 - 작성자/타임스탬프 rewrite, 대상 브랜치 격리, 대용량 분할 전송
+- rewrite 옵션 없이 import하면 현재 브랜치 merge 경로를 사용하고, rewrite/target branch 옵션을 쓰면 fast-import로 대상 브랜치에 반영한다.
 
 ---
 

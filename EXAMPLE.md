@@ -98,6 +98,8 @@ C:\transfer\shuttle_YYMMDD_manifest.txt
 ### 5. 이후 repo에 import
 
 바로 `main`에 넣기보다 migration 브랜치에 먼저 넣는 방식을 권장합니다.
+이 대표 예제는 `--target-branch`와 `--timestamp original/from`을 사용하므로 rewrite import 경로입니다.
+반대로 `gitshuttle import --file ...`만 실행하면 현재 브랜치로 merge될 수 있습니다.
 
 ```powershell
 python -m gitshuttle import `

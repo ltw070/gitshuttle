@@ -67,7 +67,7 @@ def run_import(
     on_conflict: str = "skip",             # "skip" | "force" | "abort"
     sha256_path: Path | str | None = None,
     author_map_path: Optional[str] = None, # 작성자 매핑 JSON 경로
-    target_branch: Optional[str] = None,   # 대상 브랜치 (None → "imported/<소스브랜치>")
+    target_branch: Optional[str] = None,   # rewrite 대상 브랜치. None이면 rewrite 시 "imported/<소스브랜치>"
     timestamp_mode: str = "now",           # "now" | "original" | "from=DATETIME"
 ) -> ImportResult:
     """bundle 파일을 target repo에 반입한다.
@@ -79,8 +79,9 @@ def run_import(
         sha256_path:      SHA-256 체크섬 파일 경로. 미지정 시 bundle_path.sha256 탐색.
                           체크섬 파일이 없으면 경고 출력 후 검증 생략.
         author_map_path:  작성자 매핑 JSON 파일 경로. None 이면 치환 없음.
-        target_branch:    import 대상 브랜치 이름.
-                          None 이면 "imported/<소스브랜치>" 형식 자동 생성.
+        target_branch:    rewrite import 대상 브랜치 이름.
+                          None 이면 rewrite import에서 "imported/<소스브랜치>" 형식 자동 생성.
+                          rewrite가 필요 없는 일반 import는 현재 브랜치로 merge한다.
         timestamp_mode:   타임스탬프 재작성 모드.
                           "now"(기본) | "original" | "from=YYYY-MM-DDTHH:MM:SS"
 

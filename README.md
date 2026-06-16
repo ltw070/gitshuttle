@@ -2,7 +2,7 @@
 
 망분리(Air-Gapped) 환경에서 Git 리포지토리의 커밋 히스토리와 메타데이터를 완전히 보존하며 이전하는 CLI 도구입니다.
 
-단순 소스 복사와 달리 커밋 메시지, 작성자, 상세 설명, 태그, 브랜치 히스토리를 그대로 유지합니다.
+단순 소스 복사와 달리 선택한 브랜치/커밋 범위의 커밋 메시지, 작성자, 상세 설명, 파일 이력을 Git 커밋 단위로 보존합니다.
 
 실전 명령 예제는 **[EXAMPLE.md](EXAMPLE.md)** 를 참고하세요.
 
@@ -57,7 +57,7 @@ python -m gitshuttle --help
 ```
 [외부망]  gitshuttle export
             → 커밋 목록에서 전송할 커밋 선택
-            → shuttle_YYMMDD.bundle + .sha256 + _manifest.txt 생성
+            → shuttle_YYMMDD.bundle + .bundle.sha256 + _manifest.txt 생성
 
 [이동]    USB 또는 망간 전송 시스템으로 내부망 전달
 
@@ -115,10 +115,10 @@ Remove-Item Env:\GITSHUTTLE_HEADLESS
 
 | 옵션 | 방식 | 설명 |
 |------|------|------|
-| `tui` | TUI (기본값) | 터미널 인터랙티브 체크박스·테이블 |
+| `tui` | TUI (기본값) | 방향키, Space, A, E/Enter, Q로 선택하는 터미널 테이블 |
 | `csv` | CSV 편집 | `commits.csv` 생성 → Excel에서 `include` 컬럼 Y/N 수정 |
 
-이미 타겟 리포지토리에 반영된 커밋은 `[imported]`로 표시됩니다.
+CSV 모드는 `commits.csv`를 생성한 뒤 사용자가 `include` 컬럼을 편집하고 Enter를 누르면 선택 결과를 읽습니다.
 
 ### `import` — 셔틀 패키지 반영
 
@@ -130,7 +130,7 @@ Options:
   --repo PATH                                대상 Git 리포지토리 경로 (기본값: 현재 디렉터리)
   --on-conflict [skip|force|abort]           충돌 처리 방식 (기본값: skip)
   --author-map FILE                          작성자 매핑 JSON 파일 경로
-  --target-branch TEXT                       import 커밋을 담을 브랜치명 (기본값: imported/<소스브랜치>)
+  --target-branch TEXT                       import 커밋을 담을 브랜치명
   --timestamp [now|original|from=DATETIME]  커밋 타임스탬프 모드 (기본값: now)
 ```
 
@@ -148,7 +148,7 @@ gitshuttle import --file C:\transfer\shuttle_260612.bundle --repo C:\repos\inter
 | `force` | 이미 존재해도 강제 계속 진행. rewrite import에서는 기존 대상 브랜치 ref도 덮어씀 |
 | `abort` | 충돌 발견 즉시 전체 작업 중단 |
 
-**브랜치 격리:** 소스의 `main`/`master`는 타겟의 기존 기본 브랜치에 직접 병합되지 않고, 별도 브랜치(`imported/main` 등)로 격리됩니다.
+**브랜치 동작:** `--target-branch`, `--author-map`, `--timestamp original`, `--timestamp from=...`처럼 rewrite 경로를 쓰면 import 결과가 지정 브랜치로 들어갑니다. `--target-branch`를 생략한 rewrite import는 `imported/<소스브랜치>`를 사용합니다. 반대로 아무 rewrite 옵션 없이 `gitshuttle import --file ...`만 실행하면 현재 브랜치로 merge를 시도합니다.
 rewrite import 후에는 대상 브랜치로 checkout/reset 되어 작업 폴더의 실제 파일도 import 결과와 맞춰집니다.
 
 기존 코드가 있는 대상 repo에 bundle을 가져올 때는 바로 `main`에 반영하지 말고, 먼저 `migration/...` 같은 별도 브랜치에 import하는 흐름을 권장합니다. 이 경우 기존 `main` 이력은 그대로 두고, bundle 이력은 별도 브랜치에 들어갑니다. 이후 검토가 끝나면 Git merge로 두 이력을 합칩니다. 같은 파일을 양쪽에서 다르게 수정했다면 merge conflict가 발생할 수 있으며, 이때 사람이 최종 내용을 결정합니다.
@@ -178,6 +178,8 @@ git -C C:\repos\target merge migration/source-main --allow-unrelated-histories
 | `original` | 소스 원본 author/committer date 그대로 보존 |
 | `from=YYYY-MM-DDTHH:MM:SS` | 최초 커밋 = 지정 시각, 이후 커밋은 원본 상대 간격 유지 |
 
+`from=` 값에 타임존을 쓰지 않으면 현재 구현은 UTC로 해석합니다. KST 09:00 기준으로 시작하려면 `from=YYYY-MM-DDT00:00:00`처럼 UTC 값으로 입력하세요.
+
 기존 `main`의 최신 커밋 시간이 현재라면, `original` 또는 과거 `from=`으로 import한 커밋은 merge 그래프상 나중에 합쳐졌더라도 커밋 날짜는 과거로 보일 수 있습니다. 이게 어색하면 `--timestamp now`를 쓰거나, `from=` 값을 기존 main의 최신 커밋보다 뒤 시각으로 지정하세요.
 
 import 시 SHA-256 체크섬이 자동 검증됩니다. 불일치 시 작업이 중단되며 재export 방법이 안내됩니다.
@@ -205,6 +207,8 @@ gitshuttle import --repo C:\repos\target --file C:\transfer\shuttle_YYMMDD.bundl
 `--bundle-scope full`은 선택한 최신 tip까지 전체 이력을 포함하므로 파일은 커질 수 있지만, 부분 bundle prerequisite 실패를 피할 수 있습니다.
 
 GitShuttle은 bundle 기반 이력 이전에 집중합니다. 기존 코드가 있는 repo에는 별도 migration 브랜치로 import한 뒤 Git merge로 합치는 흐름을 사용하세요.
+
+`--full-branch`와 `--recent`는 함께 사용할 수 없습니다. 전체 브랜치를 가져오려면 `--full-branch`, 최신 일부만 가져오려면 `--recent N`을 선택하세요.
 
 **작성자 매핑 JSON 형식:**
 
