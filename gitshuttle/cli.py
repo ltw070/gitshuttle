@@ -313,7 +313,10 @@ def import_(
     target_branch: Optional[str] = typer.Option(
         None,
         "--target-branch",
-        help="import 대상 브랜치 이름. 미지정 시 'imported/<소스브랜치>'.",
+        help=(
+            "rewrite import 대상 브랜치 이름. 미지정 시 rewrite import는 "
+            "'imported/<소스브랜치>', 일반 import는 현재 브랜치에 merge."
+        ),
     ),
     timestamp: Optional[str] = typer.Option(
         None,

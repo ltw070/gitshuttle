@@ -4,14 +4,14 @@
 GitShuttle은 서로 연결되지 않은 두 네트워크(내부망/외부망) 사이에서 Git 리포지토리의 변경 사항을 메타데이터(커밋 메시지, 설명, 작성자 등) 유실 없이 안전하게 나르는 '셔틀' 역할을 하는 도구입니다.
 
 ## 2. 목표 (Goals)
-- 커밋 메시지, 상세 설명(Description), 태그, 브랜치 히스토리의 100% 무결성 유지.
+- 선택한 브랜치/커밋 범위의 커밋 메시지, 상세 설명(Description), 작성자, 파일 이력 무결성 유지.
 - 네트워크가 단절된 환경에서도 증분(Incremental) 업데이트를 통한 효율적인 데이터 이전.
 - 복잡한 Git 명령어를 몰라도 누구나 쉽게 반출입 패키지를 만들 수 있는 편의성 제공.
 
 ## 3. 핵심 기능 (Key Features)
 
 ### 3.1 히스토리 보존형 추출 (Full-Context Export)
-- **Git Bundle 기술 활용:** 단순 소스 복사가 아닌, Git의 모든 객체(Objects)와 참조(Refs)를 포함하는 `.bundle` 파일 생성.
+- **Git Bundle 기술 활용:** 단순 소스 복사가 아닌, 선택한 tip 또는 범위에서 도달 가능한 Git 객체를 `.bundle` 파일로 생성.
 - **메타데이터 포함:** 각 커밋의 메시지(Subject), 상세 내용(Body), 작성자 정보, 커밋 시각을 그대로 유지.
 - **커밋 단위 선택 추출:** 전체 브랜치 또는 특정 커밋을 개별 선택하여 패키징.
 
@@ -21,7 +21,7 @@ GitShuttle은 서로 연결되지 않은 두 네트워크(내부망/외부망) �
 
 | # | 방식 | 설명 | 장점 | 단점 |
 |---|------|------|------|------|
-| **A** ⭐ | **TUI (Textual)** — 기본값 | 터미널 안에서 체크박스·테이블 인터랙션 | 외부 앱 불필요, Shift 범위선택·필터 가능 | Windows 터미널 호환성 이슈 가능 |
+| **A** ⭐ | **TUI (Textual)** — 기본값 | 터미널 안에서 체크박스·테이블 인터랙션 | 외부 앱 불필요, 방향키/Space/A/E 조작 가능 | Windows 터미널 호환성 이슈 가능 |
 | B | **CSV 편집** | `commits.csv` 생성 → Excel에서 `include` 컬럼 Y/N 수정 | Excel 친화적, 비개발자도 직관적 | 파일 열고 저장하는 별도 단계 필요 |
 
 **UI 방식 선택 메커니즘 — 2+3 조합:**
@@ -52,17 +52,18 @@ GitShuttle은 서로 연결되지 않은 두 네트워크(내부망/외부망) �
 
 #### 공통 표시 사항 (방식 무관)
 - 커밋 해시(short), 날짜, 작성자, 커밋 메시지, 변경 파일 수를 컬럼으로 표시.
-- 이미 타겟 리포지토리에 반영된 커밋은 별도 표시(회색 또는 `[imported]` 태그)하여 중복 선택 방지.
-- 작성자(Author), 파일 경로(File path), 날짜 범위 기준 필터링 제공.
+- CSV는 Excel 호환을 위해 UTF-8 BOM(`utf-8-sig`)으로 생성.
 
 ### 3.3 셔틀 패키지 관리 (Shuttle Package)
 - **Git bundle:** 선택한 이력을 `.bundle` 파일로 생성한다.
 - **매니페스트 생성:** 패키지 내부에 포함된 커밋 로그 요약본(Summary)을 텍스트 파일로 자동 생성하여, 반출입 심사 시 검토용으로 활용.
 - **SHA-256 체크섬:** 패키지 생성 시 체크섬 파일을 함께 생성하여 전송 중 파일 변조·손상 검증.
 
-### 3.4 스마트 복원 (Intelligent Import)
-- **자동 커밋 매칭:** 타겟 리포지토리의 현재 상태와 패키지 내 커밋을 비교하여 신규 커밋만 선별 반영.
-- **Fast-Forward 지원:** 히스토리가 깨지지 않도록 가능한 경우 Fast-forward 방식으로 병합 유도.
+### 3.4 스마트 반입 (Intelligent Import)
+- **체크섬 검증:** `.bundle.sha256` 파일이 있으면 import 전에 SHA-256을 검증한다.
+- **중복 감지:** 타겟 리포지토리의 기존 커밋과 bundle tip을 비교해 `skip|force|abort` 정책을 적용한다.
+- **일반 import:** rewrite 옵션이 없으면 bundle 객체를 풀고 현재 브랜치로 fast-forward 또는 merge를 시도한다.
+- **rewrite import:** 작성자/시간/브랜치 재작성이 필요하면 `fast-export | rewrite | fast-import` 파이프라인으로 대상 브랜치에 반영한다.
 - **충돌 처리 — 3단계 옵션:**
   - `--on-conflict skip` (기본값): 이미 존재하는 커밋은 건너뛰고 나머지 계속 진행.
   - `--on-conflict force`: 이미 존재해도 강제 덮어쓰기.
@@ -107,7 +108,8 @@ GitShuttle은 서로 연결되지 않은 두 네트워크(내부망/외부망) �
   타겟 repo에 **별도 브랜치**를 새로 만들어 커밋을 반영하여, 타겟의 기본 브랜치를 보호한다.
 - **기능:**
   - `--target-branch <이름>`: import된 커밋을 담을 신규 브랜치명 지정.
-  - 미지정 시 기본값: `imported/<소스브랜치명>` (예: `imported/main`, `imported/master`).
+  - rewrite import에서 미지정 시 기본값: `imported/<소스브랜치명>` (예: `imported/main`, `imported/master`).
+  - rewrite 옵션 없이 `gitshuttle import --file ...`만 실행하면 현재 브랜치로 merge를 시도한다.
   - 해당 브랜치가 타겟에 이미 존재하면 `--on-conflict` 옵션 정책을 따름.
   - 기존 기본 브랜치에 코드가 있는 경우, `migration/<소스브랜치>` 같은 별도 브랜치에 먼저 import하고 사용자가 검토 후 직접 merge할 수 있어야 함.
   - 별도 브랜치 import는 기존 기본 브랜치 ref를 이동시키지 않아야 하며, merge 시 동일 파일 충돌은 Git conflict로 드러나 사용자가 해결할 수 있어야 함.
@@ -153,7 +155,7 @@ GitShuttle은 서로 연결되지 않은 두 네트워크(내부망/외부망) �
   - 가장 오래된 커밋의 committer date = `<datetime>`.
   - 나머지 커밋 = `<datetime>` + (원본 커밋과 최초 커밋 간의 시간 차이).
   - author date는 committer date와 동일하게 설정.
-  - datetime 형식: ISO 8601 (`YYYY-MM-DDTHH:MM:SS`, 타임존 생략 시 로컬 시간대 적용).
+  - datetime 형식: ISO 8601 (`YYYY-MM-DDTHH:MM:SS`, 타임존 생략 시 UTC로 해석).
 
 - **toml 설정:**
   ```toml
@@ -182,7 +184,7 @@ gitshuttle import \
 | 옵션 | 설명 | 기본값 |
 |------|------|--------|
 | `--author-map <파일>` | 작성자 매핑 JSON 파일 경로 | 없음 (원본 유지) |
-| `--target-branch <이름>` | import 커밋을 담을 신규 브랜치명 | `imported/<소스브랜치명>` |
+| `--target-branch <이름>` | rewrite import 커밋을 담을 브랜치명 | rewrite 시 `imported/<소스브랜치명>` |
 | `--timestamp now\|original\|from=<dt>` | 커밋 타임스탬프 모드 | `now` |
 
 ---
@@ -235,5 +237,5 @@ python -m gitshuttle config
 ## 8. 현재 제공 범위
 
 - `gitshuttle export`: TUI/CSV 커밋 선택, `--recent`, `--full-branch`, bundle/manifest/checksum 생성
-- `gitshuttle import`: SHA-256 검증, 작성자/타임스탬프 rewrite, 대상 브랜치 격리, 충돌 처리
+- `gitshuttle import`: SHA-256 검증, 일반 merge import, 작성자/타임스탬프 rewrite, rewrite 기반 대상 브랜치 반입, 충돌 처리
 - 대용량 전송: bundle 분할/병합 지원
