@@ -226,6 +226,50 @@ def test_import_force_overwrites(two_git_repos, tmp_path):
     assert result is not None
 
 
+def test_rewrite_import_preserves_crlf_blob_payload(two_git_repos, tmp_path):
+    """CRLF 파일이 포함된 bundle도 rewrite import에서 fast-import 오류 없이 반입한다."""
+    from gitshuttle.import_ import run_import
+
+    source, target = two_git_repos
+    env = _git_env()
+    subprocess.run(["git", "config", "core.autocrlf", "false"], cwd=source, check=True, env=env)
+    subprocess.run(["git", "config", "core.autocrlf", "false"], cwd=target, check=True, env=env)
+
+    crlf_payload = b"line1\r\nline2\r\n"
+    (source / "crlf.txt").write_bytes(crlf_payload)
+    subprocess.run(["git", "add", "crlf.txt"], cwd=source, check=True, env=env)
+    subprocess.run(
+        ["git", "commit", "-m", "feat: add crlf payload"],
+        cwd=source,
+        check=True,
+        env=env,
+    )
+
+    author_map_path = tmp_path / "author_map.json"
+    author_map_path.write_text(
+        json.dumps({
+            "test@test.com": {
+                "name": "New Author",
+                "email": "new.author@example.com",
+            },
+        }),
+        encoding="utf-8",
+    )
+
+    bundle_path = _export_repo(source, tmp_path)
+
+    result = run_import(
+        bundle_path,
+        target,
+        author_map_path=str(author_map_path),
+        target_branch="migration/crlf",
+        timestamp_mode="original",
+    )
+
+    assert result.imported >= 1
+    assert (target / "crlf.txt").read_bytes() == crlf_payload
+
+
 def test_rewrite_import_force_ref_update_uses_fast_import_force(tmp_path, monkeypatch):
     """rewrite import에서 force_ref_update=True이면 fast-import --force를 사용한다."""
     import gitshuttle.import_ as import_module
@@ -246,8 +290,8 @@ def test_rewrite_import_force_ref_update_uses_fast_import_force(tmp_path, monkey
                     "data 4\n"
                     "msg\n"
                     "\n"
-                ),
-                stderr="",
+                ).encode("utf-8"),
+                stderr=b"",
             )
         if args[:2] == ["git", "fast-import"]:
             return SimpleNamespace(returncode=0, stdout=b"", stderr=b"")
@@ -275,6 +319,61 @@ def test_rewrite_import_force_ref_update_uses_fast_import_force(tmp_path, monkey
     assert "--force" in fast_import_args
 
 
+def test_rewrite_import_captures_fast_export_as_bytes_to_preserve_crlf_payload(tmp_path, monkeypatch):
+    """fast-export blob payload의 CRLF가 text mode 변환으로 깨지면 안 된다."""
+    import gitshuttle.import_ as import_module
+
+    fast_export_kwargs = []
+    fast_import_inputs = []
+    payload = b"line1\r\nline2\r\n"
+    stream = (
+        b"blob\n"
+        b"mark :1\n"
+        + f"data {len(payload)}\n".encode("utf-8")
+        + payload
+        + b"reset refs/heads/main\n"
+        + b"commit refs/heads/main\n"
+        + b"mark :2\n"
+        + b"author A <a@example.com> 1 +0000\n"
+        + b"committer A <a@example.com> 1 +0000\n"
+        + b"data 4\n"
+        + b"msg\n"
+        + b"M 100644 :1 crlf.txt\n"
+        + b"\n"
+    )
+
+    def fake_run(args, **kwargs):
+        if args[:2] == ["git", "fast-export"]:
+            fast_export_kwargs.append(kwargs)
+            return SimpleNamespace(returncode=0, stdout=stream, stderr=b"")
+        if args[:2] == ["git", "fast-import"]:
+            fast_import_inputs.append(kwargs["input"])
+            return SimpleNamespace(returncode=0, stdout=b"", stderr=b"")
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(import_module.subprocess, "run", fake_run)
+    monkeypatch.setattr(import_module, "_ensure_clean_worktree", lambda repo_path: None)
+    monkeypatch.setattr(
+        import_module,
+        "_checkout_or_create_branch",
+        lambda repo_path, branch: ["e18" + "0" * 37],
+    )
+
+    import_module._rewrite_and_import(
+        bundle_path=tmp_path / "test.bundle",
+        repo_path=tmp_path,
+        author_map={},
+        target_branch="feat/gitshuttle",
+        timestamp_mode="original",
+        from_dt=None,
+    )
+
+    assert "encoding" not in fast_export_kwargs[0]
+    assert "text" not in fast_export_kwargs[0]
+    assert fast_import_inputs
+    assert f"data {len(payload)}\n".encode("utf-8") + payload in fast_import_inputs[0]
+
+
 def test_rewrite_import_non_ff_error_has_recovery_hint(tmp_path, monkeypatch):
     """fast-import non-fast-forward 오류에는 target branch 해결 안내를 포함한다."""
     import gitshuttle.import_ as import_module
@@ -292,8 +391,8 @@ def test_rewrite_import_non_ff_error_has_recovery_hint(tmp_path, monkeypatch):
                     "data 4\n"
                     "msg\n"
                     "\n"
-                ),
-                stderr="",
+                ).encode("utf-8"),
+                stderr=b"",
             )
         if args[:2] == ["git", "fast-import"]:
             return SimpleNamespace(
