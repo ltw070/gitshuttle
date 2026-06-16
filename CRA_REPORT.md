@@ -31,7 +31,7 @@
 커밋 메시지, 작성자, AI가 제안한 변경 이유, 리뷰 코멘트 — 모두 사라진다.
 
 **GitShuttle이 해결하는 것:** git bundle 포맷으로 커밋 히스토리 전체를 압축·검증·이전한다.
-또한 hidden 기준점을 만들 수 없는 운영 상황에서는 patchset/replay 방식으로 선택 커밋의 변경분을 대상 브랜치 위에 새 커밋으로 재생할 수 있다.
+부분 증분 이전은 hidden 원본 기준점으로 이어가고, 기존 main을 보존해야 하는 상황은 별도 migration 브랜치로 import한 뒤 Git merge로 합친다.
 
 ---
 
@@ -56,13 +56,13 @@
 
 3. **보안 감사 대응** — `_manifest.txt`에 커밋 목록이 요약되어 반출입 심사 자료로 활용할 수 있다. SHA-256 체크섬으로 USB 이동 중 변조 여부를 자동 검증한다.
 
-4. **망분리 GitHub 양방향 구조 지원**
+4. **망분리 GitHub 이전 흐름 지원**
    - 외부망 GitHub(Public/External) → USB → 내부망 GitHub(On-prem/Private)
-   - Phase 2 Direct Sync: 네트워크가 허용될 때 API로 직접 동기화
+   - 네트워크 직접 연결 없이 bundle 파일과 checksum으로 이력 이전
 
-5. **운영 방식 이원화**
+5. **운영 방식 단순화**
    - `bundle`: 전체 이력·부모 관계·Git object 중심 이전. 원본 구조 보존에 적합하다.
-   - `patchset/replay`: 기준점 없이 일부 변경분만 대상 HEAD 위에 재생. 내부 브랜치가 이미 달라진 상황에서 작업자 책임으로 적용하기 쉽다.
+   - `migration branch + merge`: 기존 main 위에 바로 덮지 않고 별도 브랜치에 가져온 뒤, Git의 표준 merge 절차로 검토·충돌 해결한다.
 
 ---
 
@@ -104,13 +104,13 @@ Sprint N 시작
               └─ 둘 다 PASS → 커밋
 ```
 
-**SA4가 발견한 실제 위반 사례 (Sprint 7):**
+**최근 정리 작업에서 확인한 검토 사례:**
 ```
-tests/test_sync.py:8   F401 'os' imported but unused
-tests/test_sync.py:11  F401 'unittest.mock.call' imported but unused
-tests/test_sync.py:206 F841 local variable 'result' assigned but never used
+tests/test_import.py: unused helper import 제거
+tests/test_cli.py: 제거된 옵션 회귀 테스트의 과도한 문자열 매칭 수정
+gitshuttle/config.py: 사용하지 않는 설정 API 제거 후 import 설정 파서 유지
 ```
-→ SA2 결과를 SA4가 독립적으로 재검증해 미사용 코드를 자동 제거했다.
+→ SA2 결과를 SA4가 독립적으로 재검증해 현재 기능과 무관한 코드를 제거했다.
 
 ---
 
@@ -167,39 +167,42 @@ Sprint 3  →  64 passed
 Sprint 4  →  71 passed   ← import_.py
 Sprint 5  →  79 passed
 Sprint 6  →  85 passed
-Sprint 7  → 102 passed
 최종 정리 → 106 passed  (0 failed)
-기능 보강 → 172 collected  (hidden refs, patchset/replay, TUI 단축키, patchset export 속도 개선, full-branch export 포함)
+기능 보강 → 133 collected  (hidden refs, TUI 단축키, CSV 보조 UI, full-branch export, bundle-only CLI 리팩토링 포함)
 ```
 
-**최근 TDD 사례 — patchset/replay:**
+**최근 TDD 사례 — bundle-only CLI 단순화:**
 
 ```python
-def test_run_replay_import_applies_patchset_with_author_map(tmp_path):
-    """patchset을 대상 HEAD 위에 replay하고 author_map을 적용한다."""
-    patchset = create_patchset(source, [commits[0]], tmp_path, "feature.patchset")
+def test_export_rejects_removed_format_option(tmp_path):
+    """export는 bundle 전용이므로 --format 옵션을 제공하지 않는다."""
+    result = runner.invoke(app, [
+        "export",
+        "--repo", str(repo_dir),
+        "--format", "bundle",
+        "--output", str(tmp_path),
+    ])
 
-    result = run_replay_import(
-        patchset_path=patchset,
-        repo_path=target,
-        author_map_path=str(author_map),
-        target_branch="main",
-        timestamp_mode="original",
-    )
-
-    assert result.imported == 1
-    assert latest == "feat: replay feature|ltw070 <ltw070@naver.com>"
+    assert result.exit_code == 2
+    assert "No such option: --format" in result.output
 
 
-def test_replay_import_duplicate_head_message_requires_confirmation(tmp_path):
-    """대상 HEAD subject와 첫 replay subject가 같으면 확인을 요구한다."""
-    with pytest.raises(ValueError):
-        run_replay_import(..., confirm_duplicate_message=lambda head, first: False)
+def test_import_rejects_removed_mode_option(tmp_path):
+    """import는 bundle 전용이므로 --mode 옵션을 제공하지 않는다."""
+    result = runner.invoke(app, [
+        "import",
+        "--file", str(bundle_path),
+        "--repo", str(repo_dir),
+        "--mode", "bundle",
+    ])
+
+    assert result.exit_code == 2
+    assert "No such option: --mode" in result.output
 ```
 
 **의미:**
-사용자 요구인 "기준점 없이 작업자 책임으로 cherry-pick 형태로 붙이기"를 구현하기 전에,
-patchset 생성·replay 적용·중복 커밋 메시지 확인 조건을 테스트로 먼저 고정했다.
+전송 방식을 bundle 하나로 줄이면서 사용자가 오래된 옵션을 입력했을 때 조용히 다른 동작을 하지 않도록 회귀 테스트를 먼저 고정했다.
+CLI 계약이 단순해졌고, 문서·테스트·구현이 같은 방향을 바라보게 됐다.
 
 ---
 
@@ -349,11 +352,12 @@ After refactoring:
   (전체 7/7 PASSED)
 ```
 
-#### 추가 Refactoring — bundle 이력 이전과 patchset replay 분리
+#### 추가 Refactoring — bundle-only 이력 이전으로 단순화
 
 **배경:**
 작성자·날짜 rewrite 후 최근 일부 커밋만 bundle로 가져오려면 대상 repo에 원본 부모 SHA가 있어야 한다.
-최신 구현은 `refs/gitshuttle/original/...` hidden 기준점으로 이를 해결하지만, 이미 내부 브랜치가 독자적으로 수정된 경우에는 "원본 이력 mirror"보다 "변경분만 적용"이 더 자연스러운 요구가 생겼다.
+최신 구현은 `refs/gitshuttle/original/...` hidden 기준점으로 이를 해결한다.
+기존 main이 이미 독자적으로 수정된 경우에는 대상 main에 직접 반영하지 않고 migration 브랜치에 import한 뒤 Git merge로 합치는 흐름을 권장한다.
 
 **설계 선택:**
 
@@ -363,33 +367,32 @@ bundle import
   - hidden 기준점으로 부분 bundle prerequisite 해결
   - 이력 구조 보존에 적합
 
-patchset replay
-  - 커밋별 binary diff + metadata 저장
-  - 대상 HEAD 위에 새 커밋으로 재생
-  - 기준점 없이 일부 변경 적용에 적합
+migration branch + merge
+  - 기존 main과 독립된 브랜치에 이력 반입
+  - Git merge로 차이 검토 및 충돌 해결
+  - 불필요한 별도 전송 포맷 없이 Git 표준 동작 사용
 ```
 
-**왜 기존 bundle 경로에 억지로 넣지 않았나:**
-bundle은 Git object graph를 다루고, patchset은 diff replay를 다룬다.
-두 방식을 하나의 흐름에 섞으면 "원본 이력 보존"과 "작업자 책임 적용"의 의미가 흐려진다.
-그래서 `--format patchset`, `--mode replay`로 별도 모드화했다.
+**왜 전송 경로를 줄였나:**
+GitShuttle의 핵심 가치는 커밋 이력과 Git object graph를 보존하는 것이다.
+별도 diff 기반 전송 경로는 사용법과 오류 원인을 늘리고, bundle 기반 증분 기준점·브랜치 merge 흐름과 역할이 겹쳤다.
+따라서 export는 항상 bundle을 만들고, import는 bundle 검증·rewrite·target branch checkout/reset 흐름만 유지하도록 단순화했다.
 
 **성능 관점:**
-patchset import는 일부 커밋 적용 시 가볍지만, patchset export는 patch 파일을 만들어야 하므로 많은 커밋에서는 bundle보다 느릴 수 있다.
-이 병목을 줄이기 위해 metadata는 `git show --no-patch`로 batch 조회하고, parent 정보는 metadata에서 재사용해 `rev-list` 중복 호출을 제거했다.
-연속 선형 first-parent 범위는 `git format-patch --stdout` 기반으로 빠르게 만들고, merge나 비연속 선택은 기존 커밋별 diff 방식으로 fallback한다.
-CLI에는 `--recent N`을 추가해 최신 N개만 조회·선택하게 했고, `--patchset-compression fast|stored|deflated`로 zip 압축 비용을 조절할 수 있게 했다.
-또한 `--full-branch`로 현재/지정 브랜치 tip 기준 전체 이력을 TUI 없이 self-contained bundle로 만들 수 있게 했다.
-이미 적용된 patch는 skip하고, 같은 경로의 다른 내용 충돌은 복구 안내와 함께 중단하도록 보강했다.
+불필요한 포맷 분기를 제거하면서 CLI 옵션 검증, export 결과 출력, import 경로 판단이 줄었다.
+성능 개선은 bundle 경로에 집중한다.
+`--recent N`은 최신 N개만 조회·선택하고, `--full-branch`는 현재/지정 브랜치 tip 기준 전체 이력을 TUI 없이 self-contained bundle로 만든다.
+고급 선택 흐름에서는 `--bundle-scope full`로 선택 tip까지 전체 이력을 포함해 prerequisite 없는 bundle을 만들 수 있다.
+CLI 명령 함수는 경로 해석, 선택 UI, 결과 출력 helper로 분리해 기능 변경 없이 읽기성과 테스트 고정성을 높였다.
 따라서 현재 권장 기준은 다음과 같다.
 
 | 상황 | 권장 방식 |
 |------|-----------|
 | 전체 이력 이전, 원본 구조 보존 | `bundle`, 선택 없이 진행 시 `--full-branch` |
 | hidden 기준점 기반의 증분 이전 | `bundle` |
-| 기준점 없이 내부 브랜치 위에 일부 변경만 적용 | `patchset/replay` |
+| 기존 main 보존 후 검토 반영 | migration 브랜치 import 후 Git merge |
 | 많은 커밋을 한 번에 이동 | 대체로 `bundle` 우선 검토 |
-| 최신 몇 개 커밋만 patchset으로 이동 | `--recent N` + 필요 시 `--patchset-compression stored` |
+| 최신 몇 개 커밋만 이동 | `--recent N`, prerequisite 회피 필요 시 `--bundle-scope full` |
 
 ---
 
@@ -446,16 +449,19 @@ def apply_rewrites(
 예를 들어 커밋 메시지 prefix 추가, 특정 파일 경로 rewrite 같은 요구가 생기면 새 함수를 만들고 `apply_rewrites()`에 한 단계로 추가할 수 있다.
 
 **확장 사례:**
-patchset/replay는 기존 bundle import 의미를 바꾸지 않고, `patchset.py`와 `import_mode` 분기로 추가했다.
+전체 브랜치 이전 요구는 별도 전송 포맷을 만들지 않고 bundle 경로의 옵션으로 흡수했다.
 
 ```python
-if import_mode == "replay" or (
-    import_mode == "auto" and bundle_path.suffix.lower() == ".patchset"
-):
-    replay_result = run_replay_import(...)
+result = run_export(
+    repo_path=repo_path,
+    branch=branch,
+    output_dir=output_dir,
+    commits=selected_commits,
+    bundle_scope=bundle_scope,
+)
 ```
 
-기존 bundle import는 그대로 닫혀 있고, replay 기능은 새 모듈로 열려 있다.
+핵심 export 동작은 bundle 생성으로 닫혀 있고, `--recent`, `--full-branch`, `--bundle-scope full` 같은 선택 범위만 열려 있다.
 
 #### ISP — Interface Segregation Principle
 
@@ -480,19 +486,20 @@ typer.echo(f"  total    : {result.total}개")
 CLI 레이어는 `git bundle`, `fast-export`, `fast-import`, SHA-256 계산 방식까지 알 필요가 없다.  
 `ImportResult`의 `imported`, `skipped`, `total`, `warnings`만 사용하므로 호출자 관점의 인터페이스가 작고 명확하다.
 
-**최근 사례 — replay 결과도 같은 호출자 인터페이스로 흡수:**
+**최근 사례 — import 결과 인터페이스 유지:**
 
 ```python
-replay_result = run_replay_import(...)
-return ImportResult(
-    imported=replay_result.imported,
-    skipped=replay_result.skipped,
-    total=replay_result.total,
-    warnings=replay_result.warnings,
+result = run_import(
+    bundle_path=bundle_path,
+    repo_path=repo_path,
+    on_conflict=on_conflict,
+    author_map_path=effective_author_map,
+    target_branch=target_branch,
+    timestamp_mode=effective_timestamp,
 )
 ```
 
-CLI는 bundle import인지 patchset replay인지 세부 구현을 몰라도 동일한 결과 출력 로직을 사용할 수 있다.
+CLI는 checksum 검증, hidden ref 보관, fast-import, checkout/reset 같은 세부 구현을 몰라도 동일한 `ImportResult` 출력 로직을 사용할 수 있다.
 
 #### DIP — Dependency Inversion Principle 관점
 
@@ -507,7 +514,7 @@ from gitshuttle.import_ import run_import, ChecksumError, ImportConflictError
 
 **분석:**  
 완전한 DI 컨테이너 구조는 아니지만, 사용자 인터페이스와 Git 처리 세부 구현이 분리되어 있다.  
-테스트에서도 이 경계가 활용되어 `cli.py`는 `run_import()`를 monkeypatch하고, `sync_.py`는 `subprocess.run`을 mock 처리해 네트워크 없이 검증한다.
+테스트에서도 이 경계가 활용되어 `cli.py`는 `run_export()`와 `run_import()`를 monkeypatch하고, 실제 Git 동작은 별도 임시 repo 기반 통합 테스트로 검증한다.
 
 **적용하지 않은 원칙 — LSP:**  
 이 프로젝트는 상속 기반 다형성보다 함수 조합과 데이터클래스를 중심으로 구성되어 있어 LSP(Liskov Substitution Principle)를 평가할 만한 클래스 계층이 거의 없다.  
@@ -517,82 +524,63 @@ from gitshuttle.import_ import run_import, ChecksumError, ImportConflictError
 
 ### 6. Mock 관점
 
-**제목:** 외부 GitHub·Git subprocess를 격리한 테스트 전략
+**제목:** CLI 계약과 실제 Git 동작을 분리한 테스트 전략
 
 **설명:**  
-GitShuttle은 실제 GitHub 접근, 토큰 인증, 네트워크 push처럼 느리고 실패 가능성이 높은 동작을 테스트에서 직접 수행하지 않는다.  
-대신 `unittest.mock.patch`, `MagicMock`, `monkeypatch`, `CliRunner`를 사용해 외부 의존성을 격리하고, 코드가 어떤 명령과 옵션을 호출하는지 검증한다.
+GitShuttle은 CLI 옵션 전달처럼 빠르게 검증할 수 있는 부분은 `monkeypatch`, `CliRunner`로 격리한다.
+반면 bundle 생성·검증·import처럼 Git object가 실제로 움직이는 부분은 임시 Git repo를 만들어 통합 테스트로 확인한다.
 
-#### 사례 1 — Direct Sync의 subprocess mock
+#### 사례 1 — CLI의 export/import API 호출 격리
 
-`tests/test_sync.py`는 `gitshuttle.sync_.subprocess.run`을 mock 처리해 실제 clone/push 없이 Direct Sync 흐름을 검증한다.
+`tests/test_cli.py`는 실제 bundle 생성 없이 `run_export()`를 monkeypatch해 CLI 옵션이 내부 API로 전달되는지 검증한다.
 
 ```python
-with patch("gitshuttle.sync_.subprocess.run") as mock_run:
-    mock_result = MagicMock()
-    mock_result.returncode = 0
-    mock_result.stdout = ""
-    mock_result.stderr = ""
-    mock_run.return_value = mock_result
-
-    run_sync(
-        source_url="https://github.com/org1/repo",
-        target_url="https://github.com/org2/repo",
-        work_dir=tmp_path,
+def fake_run_export(repo_path, commits, output_dir, branch, bundle_scope="range"):
+    captured["repo_path"] = repo_path
+    captured["bundle_scope"] = bundle_scope
+    return ExportResult(
+        bundle=output_dir / "test.bundle",
+        sha256=output_dir / "test.bundle.sha256",
+        manifest=output_dir / "test_manifest.txt",
     )
 
-assert mock_run.call_count >= 1
+monkeypatch.setattr(export_module, "run_export", fake_run_export)
 ```
 
 **효과:**  
-테스트가 네트워크 상태, GitHub 권한, 토큰 만료 여부에 영향을 받지 않는다.  
-CI 환경에서도 안정적으로 실행할 수 있고, 실패 원인이 비즈니스 로직인지 외부 서비스인지 분리된다.
+CLI 테스트가 Git bundle 생성 비용이나 로컬 Git 상태에 흔들리지 않는다.
+`--repo`, `--recent`, `--full-branch`, `--bundle-scope` 같은 옵션 계약을 빠르게 검증할 수 있다.
 
-#### 사례 2 — subprocess 호출 옵션 검증
+#### 사례 2 — 실제 Git repo 기반 통합 테스트
 
-동기화 테스트는 mock 호출 기록을 검사해 모든 Git 명령이 UTF-8 인코딩과 안전한 환경변수를 사용하는지 확인한다.
+`tests/test_import.py`, `tests/test_bundle.py`, `tests/test_e2e.py`는 임시 Git repo를 만들고 실제 `git bundle`, `git fast-export`, `git fast-import` 흐름을 실행한다.
 
 ```python
-for c in mock_run.call_args_list:
-    kwargs = c.kwargs if c.kwargs else {}
-    assert kwargs.get("encoding") == "utf-8"
+bundle_path = _export_repo(source, tmp_path)
+before_count = len(get_commits(target))
 
-    env = kwargs.get("env")
-    if env is not None:
-        assert env.get("PYTHONIOENCODING") == "utf-8"
+result = run_import(bundle_path, target)
+
+assert result.imported >= 1
+assert len(get_commits(target)) > before_count
 ```
 
 **효과:**  
-실제 Git 명령을 실행하지 않아도 "명령을 어떤 방식으로 호출하는가"를 검증할 수 있다.  
-Windows 한글 경로, 콘솔 인코딩, 망분리 환경에서 자주 발생하는 문자 깨짐 위험을 테스트 레벨에서 줄인다.
+mock으로는 잡기 어려운 Git object prerequisite, fast-import 입력 형식, worktree checkout/reset 문제를 실제 Git 실행으로 잡는다.
 
-#### 사례 3 — 보안 관점 mock: 토큰 노출 방지
+#### 사례 3 — rewrite 옵션 전달 monkeypatch
 
-실패하는 subprocess 결과를 mock으로 만들고, 예외 메시지에 토큰이 포함되지 않는지 검증한다.
+CLI import 테스트는 `run_import()`를 fake 함수로 바꿔 작성자 매핑과 타임스탬프 옵션 전달만 빠르게 확인한다.
 
 ```python
-secret_token = "ghp_VERYSECRETTOKEN999"
-
-with patch("gitshuttle.sync_.subprocess.run") as mock_run:
-    mock_result = MagicMock()
-    mock_result.returncode = 1
-    mock_result.stderr = "fatal: repository not found"
-    mock_run.return_value = mock_result
-
-    with pytest.raises(Exception) as exc_info:
-        run_sync(
-            source_url="https://github.com/org/repo",
-            target_url="https://github.com/org/repo2",
-            source_token=secret_token,
-            work_dir=tmp_path,
-        )
-
-assert secret_token not in str(exc_info.value)
+def fake_run_import(..., author_map_path=None, timestamp_mode="now"):
+    captured["author_map_path"] = author_map_path
+    captured["timestamp_mode"] = timestamp_mode
+    return ImportResult(imported=1, skipped=0, total=1)
 ```
 
 **효과:**  
-보안 요구사항을 사람이 리뷰로만 확인하지 않고 테스트로 고정했다.  
-토큰이 URL에 삽입되는 구조에서도 오류 메시지에는 마스킹된 값만 남도록 강제한다.
+느린 import 파이프라인을 반복 실행하지 않고도 CLI 계약을 고정한다.
 
 #### 사례 4 — CLI 테스트의 monkeypatch
 
@@ -619,32 +607,26 @@ monkeypatch.setattr(import_module, "run_import", fake_run_import)
 CLI 테스트가 실제 bundle 검증이나 fast-import에 의존하지 않는다.  
 `--repo`, `--timestamp` 같은 옵션이 내부 API로 정확히 전달되는지 빠르게 확인할 수 있다.
 
-#### 사례 5 — replay CLI 옵션 전달 검증
+#### 사례 5 — 제거된 CLI 옵션 회귀 검증
 
-`tests/test_cli.py`는 실제 patch 적용 없이 `run_import()`를 monkeypatch해서 `--mode replay`와 확인 콜백이 내부 API로 전달되는지 검증한다.
+`tests/test_cli.py`는 제거된 옵션이 조용히 받아들여지지 않는지 검증한다.
+이 테스트는 실제 Git 작업 없이 CLI 계약만 빠르게 고정한다.
 
 ```python
-def fake_run_import(..., import_mode="auto", confirm_duplicate_message=None):
-    captured["import_mode"] = import_mode
-    captured["has_confirm_callback"] = confirm_duplicate_message is not None
-    return ImportResult(imported=1, skipped=0, total=1)
-
-monkeypatch.setattr(import_module, "run_import", fake_run_import)
-
 result = runner.invoke(app, [
     "import",
-    "--file", str(patchset_path),
+    "--file", str(bundle_path),
     "--repo", str(repo_dir),
-    "--mode", "replay",
+    "--mode", "bundle",
 ])
 
-assert captured["import_mode"] == "replay"
-assert captured["has_confirm_callback"] is True
+assert result.exit_code == 2
+assert "No such option: --mode" in result.output
 ```
 
 **효과:**
-느린 patch 생성·적용 없이 CLI 계약만 빠르게 확인한다.
-실제 patchset 생성과 replay 적용은 `tests/test_patchset.py`가 임시 Git repo로 보완한다.
+사용자가 예전 명령을 복사해 실행했을 때 현재 CLI가 명확하게 실패하도록 보장한다.
+동시에 export/import 경로가 bundle 하나로 유지되는지 빠르게 확인할 수 있다.
 
 #### Mock 사용 시 주의점
 
@@ -652,8 +634,8 @@ Mock은 외부 의존성을 빠르고 안정적으로 격리하지만, 실제 Gi
 그래서 GitShuttle은 mock 테스트만 두지 않고 `test_import.py`, `test_bundle.py`, `test_e2e.py`처럼 실제 임시 Git repo를 만들어 검증하는 테스트도 함께 둔다.
 
 **정리:**  
-Mock 테스트는 "명령 호출 방식", "오류 처리", "토큰 마스킹", "CLI 옵션 전달"을 빠르게 검증하고, 실제 Git repo 기반 테스트는 bundle 생성·검증·반입의 현실 동작을 보완한다.
+Mock 테스트는 "명령 호출 방식", "오류 처리", "CLI 옵션 전달"을 빠르게 검증하고, 실제 Git repo 기반 테스트는 bundle 생성·검증·반입의 현실 동작을 보완한다.
 
 ---
 
-*GitShuttle · Sprint 0~7 완료 + 기능 보강 · 172 tests collected · patchset/replay, patchset export 속도 개선, full-branch export 포함*
+*GitShuttle · Sprint 0~6 완료 + 기능 보강 · 133 tests collected · hidden refs, CSV 보조 UI, full-branch export, bundle-only CLI 리팩토링 포함*

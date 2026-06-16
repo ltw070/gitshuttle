@@ -20,7 +20,7 @@ else:
 DEFAULT_UI = "tui"
 CONFIG_FILENAME = "gitshuttle.toml"
 
-_VALID_UI_MODES = ("tui", "csv", "html", "prompt")
+_VALID_UI_MODES = ("tui", "csv")
 
 
 def load_config(config_path: Optional[Path] = None) -> dict:
@@ -113,14 +113,10 @@ def run_config_wizard(config_path: Optional[Path] = None) -> None:
     menu = {
         "1": "tui",
         "2": "csv",
-        "3": "html",
-        "4": "prompt",
     }
     labels = {
         "tui": "TUI      — 터미널 인터랙티브",
         "csv": "CSV      — Excel 편집",
-        "html": "HTML     — 브라우저",
-        "prompt": "Prompt   — 방향키 멀티셀렉트",
     }
 
     print("\n커밋 선택 UI 기본값을 선택하세요:")
@@ -129,7 +125,7 @@ def run_config_wizard(config_path: Optional[Path] = None) -> None:
         print(f"  [{num}] {labels[mode]}{current_mark}")
 
     try:
-        choice = input("\n선택 (1~4): ").strip()
+        choice = input("\n선택 (1~2): ").strip()
     except EOFError:
         print("\n입력이 없어 변경하지 않습니다.")
         return
@@ -173,7 +169,7 @@ def get_import_config(config_path: Path | str | None = None) -> dict:
     if not config_path.exists():
         return defaults
 
-    cfg = _parse_sync_toml(config_path)
+    cfg = _parse_toml(config_path)
     import_section = cfg.get("import", {})
 
     result = dict(defaults)
@@ -183,33 +179,6 @@ def get_import_config(config_path: Path | str | None = None) -> dict:
         result["timestamp"] = import_section["timestamp"]
 
     return result
-
-
-def get_sync_config(config_path: Path | str | None = None) -> dict:
-    """gitshuttle.toml의 [sync] 섹션을 읽어 반환한다.
-
-    예시 반환값:
-    {
-        'source': {'url': '...', 'auth': 'token'},
-        'target': {'url': '...', 'auth': 'token'},
-    }
-    파일 없거나 [sync] 섹션 없으면 빈 dict 반환.
-
-    Args:
-        config_path: toml 파일 경로. None 이면 기본 경로(gitshuttle.toml).
-
-    Returns:
-        [sync] 섹션 하위 구조 dict. 없으면 {}.
-    """
-    if config_path is None:
-        config_path = Path(CONFIG_FILENAME)
-
-    config_path = Path(config_path)
-    if not config_path.exists():
-        return {}
-
-    cfg = _parse_sync_toml(config_path)
-    return cfg.get("sync", {})
 
 
 # ---------------------------------------------------------------------------
@@ -247,10 +216,10 @@ def _parse_simple_toml(config_path: Path) -> dict:
     return result
 
 
-def _parse_sync_toml(config_path: Path) -> dict:
-    """tomllib 없는 환경용 단순 toml 파서 (sync 섹션 포함).
+def _parse_toml(config_path: Path) -> dict:
+    """tomllib 없는 환경용 단순 TOML 파서.
 
-    [sync], [sync.source], [sync.target] 같은 중첩 섹션을 지원한다.
+    [import], [export] 같은 일반 섹션과 점(.) 구분 중첩 섹션을 지원한다.
     tomllib이 있으면 그것을 사용하고, 없으면 수동 파싱한다.
     """
     if tomllib is not None:
@@ -267,7 +236,7 @@ def _parse_sync_toml(config_path: Path) -> dict:
     with open(config_path, encoding="utf-8") as f:
         lines = f.readlines()
 
-    current_keys: list[str] = []  # 현재 섹션 키 경로 (예: ["sync", "source"])
+    current_keys: list[str] = []  # 현재 섹션 키 경로
 
     for line in lines:
         line = line.strip()

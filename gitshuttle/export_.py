@@ -28,8 +28,6 @@ def run_export(
     output_dir: Path | str,
     branch: str = "unknown",
     filename: str | None = None,
-    package_format: str = "bundle",
-    patchset_compression: str = "fast",
     bundle_scope: str = "range",
 ) -> ExportResult:
     """선택된 커밋으로 bundle + sha256 + manifest 를 생성한다.
@@ -40,8 +38,6 @@ def run_export(
         output_dir:  출력 디렉터리 (없으면 자동 생성).
         branch:      브랜치 이름 (manifest 헤더에 기록).
         filename:    패키지 파일명 (확장자 제외). 미지정 시 shuttle_YYMMDD.
-        package_format: "bundle" 또는 "patchset".
-        patchset_compression: patchset zip 압축 방식 ("fast", "stored", "deflated").
         bundle_scope: bundle 범위 방식 ("range", "full").
 
     Returns:
@@ -64,33 +60,17 @@ def run_export(
     else:
         base_name = filename
 
-    if package_format not in ("bundle", "patchset"):
-        raise ValueError("package_format은 bundle 또는 patchset 이어야 합니다.")
-
-    package_suffix = ".patchset" if package_format == "patchset" else ".bundle"
-    package_filename = f"{base_name}{package_suffix}"
+    package_filename = f"{base_name}.bundle"
     manifest_filename = f"{base_name}_manifest.txt"
 
-    # 1. package 생성
-    if package_format == "patchset":
-        from .patchset import create_patchset
-
-        package_path = create_patchset(
-            repo_path=repo_path,
-            commits=commits,
-            output_dir=output_dir,
-            filename=package_filename,
-            branch=branch,
-            compression=patchset_compression,
-        )
-    else:
-        package_path = create_bundle(
-            repo_path=repo_path,
-            commits=commits,
-            output_dir=output_dir,
-            filename=package_filename,
-            scope=bundle_scope,
-        )
+    # 1. bundle 생성
+    package_path = create_bundle(
+        repo_path=repo_path,
+        commits=commits,
+        output_dir=output_dir,
+        filename=package_filename,
+        scope=bundle_scope,
+    )
 
     # 2. SHA-256 체크섬 생성
     sha256_path = generate_checksum(package_path)

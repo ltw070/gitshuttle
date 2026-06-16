@@ -32,40 +32,34 @@ gitshuttle export                  USB →       gitshuttle import
 | 0 | `sprint/0-scaffold` | 프로젝트 기반 구조 (pyproject.toml, 패키지 골격, CI) |
 | 1 | `sprint/1-git-core` | git 서브프로세스 레이어 (log, bundle, verify, checksum, manifest) |
 | 2 | `sprint/2-export-tui` | export 오케스트레이션 + Textual TUI 커밋 선택기 |
-| 3 | `sprint/3-ui-config` | CSV·HTML·Prompt UI + config 마법사 (gitshuttle.toml) |
+| 3 | `sprint/3-ui-config` | CSV 보조 UI + config 마법사 (gitshuttle.toml) |
 | 4 | `sprint/4-import` | import 오케스트레이션 (SHA-256 검증, unbundle, fast-forward) |
 | 4b | `sprint/4b-import-rewrite` | Import Rewrite (작성자 매핑·브랜치 격리·타임스탬프 재작성) |
 | 5 | `sprint/5-e2e` | E2E 테스트 (실제 git repo 대상, 분할 전송 포함) |
 | 6 | `sprint/6-build` | PyInstaller 빌드 스펙·스크립트 (`gitshuttle.spec`, `build.ps1`) |
-| 7 | `sprint/7-direct-sync` | Direct Sync API — Phase 2 기반 구현 (`sync_.py`, `github_auth.py`) |
 
 ---
 
 ### 파일 구조 및 역할
 
 ```
-gitshuttle/                   18개 모듈
+gitshuttle/                   13개 모듈
 ├── __init__.py               버전 상수
 ├── __main__.py               엔트리포인트 (UTF-8 강제)
-├── cli.py                    Typer app (export/import/config/sync 커맨드)
+├── cli.py                    Typer app (export/import/config 커맨드)
 ├── git_ops.py                git 서브프로세스 래퍼 (log, bundle, verify)
 ├── bundle.py                 bundle 생성·검증·분할·재조립
 ├── checksum.py               SHA-256 생성·검증
 ├── manifest.py               커밋 목록 요약 파일 생성
 ├── export_.py                export 오케스트레이션
 ├── import_.py                import 오케스트레이션 + Rewrite 파이프라인
-├── patchset.py               replay/cherry-pick용 patchset 생성·반입
 ├── rewrite.py                fast-export 스트림 치환 (작성자·브랜치·타임스탬프)
-├── sync_.py                  Direct Sync API (Phase 2)
-├── github_auth.py            HTTPS Token / SSH 인증 (Phase 2)
 ├── config.py                 gitshuttle.toml 읽기·쓰기·마법사
 └── ui/
     ├── tui.py                Textual 체크박스 + 테이블 (기본값)
-    ├── csv_ui.py             commits.csv 생성·파싱 (utf-8-sig)
-    ├── html_ui.py            단일 HTML (인터넷 불필요), selection.json 파싱
-    └── prompt_ui.py          InquirerPy 방향키 멀티셀렉트
+    └── csv_ui.py             commits.csv 생성·파싱 (utf-8-sig)
 
-tests/                        16개 테스트 파일, 172개 테스트
+tests/                        12개 테스트 파일, 133개 테스트
 ├── conftest.py               임시 git repo 픽스처
 ├── test_git_ops.py
 ├── test_bundle.py
@@ -73,15 +67,11 @@ tests/                        16개 테스트 파일, 172개 테스트
 ├── test_manifest.py
 ├── test_export.py
 ├── test_import.py
-├── test_patchset.py          replay patchset 생성·반입 테스트
 ├── test_rewrite.py           30개 (Sprint 4b + data payload 보존)
 ├── test_config.py
 ├── test_build.py
-├── test_sync.py
 └── ui/
     ├── test_csv_ui.py
-    ├── test_html_ui.py
-    ├── test_prompt_ui.py
     └── test_tui.py             TUI A/E 키 바인딩 검증
 ```
 
@@ -134,9 +124,7 @@ import 시 자동 검증 — 불일치 시 `ChecksumError`를 raise해 손상·�
 ### 커맨드 요약
 
 ```
-gitshuttle export   [--repo <path>] [--branch] [--ui tui|csv|html|prompt] [--output]
-                    [--format bundle|patchset]
-                    [--patchset-compression fast|stored|deflated]
+gitshuttle export   [--repo <path>] [--branch] [--ui tui|csv] [--output]
                     [--bundle-scope range|full]
                     [--full-branch]
                     [--recent <N>]
@@ -146,9 +134,7 @@ gitshuttle import   --file <path>
                     [--author-map <json>]
                     [--target-branch <name>]
                     [--timestamp now|original|from=<UTC_ISO>]
-                    [--mode auto|bundle|replay]
 gitshuttle config   (대화형 마법사)
-gitshuttle sync     (Phase 2 — Python API 단계)
 ```
 
 ---
@@ -156,9 +142,9 @@ gitshuttle sync     (Phase 2 — Python API 단계)
 ### 테스트 현황
 
 ```
-현재 수집 테스트: 172개
+현재 수집 테스트: 133개
 커버리지 대상 모듈: git_ops, bundle, checksum, manifest, export_, import_,
-                   rewrite, config, sync, ui(csv/html/prompt), build
+                   rewrite, config, ui(tui/csv), build
 ```
 
 ```bash
@@ -173,7 +159,6 @@ python -m pytest tests/ -v --tb=short
 | 항목 | 상태 | 비고 |
 |------|------|------|
 | `gitshuttle.exe` 빌드 | 미완 | 사내 PyInstaller 설치 불가 (프록시 SSL 차단). `build.ps1` + `gitshuttle.spec` 준비 완료 |
-| `gitshuttle sync` CLI | Phase 2 | Python API(`sync_.py`) 구현 완료, CLI 노출 예정 |
 | `author_map.json` 키 형식 검증 | 문서화 완료 | 키는 이메일 주소 단독, 값은 `{name,email}` dict. 형식 검증 추가 여지 있음 |
 | TUI (Textual) Windows CMD | 제한적 | Windows Terminal / PowerShell 7+ 권장 |
 
@@ -266,27 +251,17 @@ author/timestamp rewrite를 하면 target branch의 커밋 SHA가 원본과 달�
 - `fast-export --all`에 `refs/gitshuttle/original/...` reset/commit 라인이 포함되지 않는지
 - reported `imported` 수가 보관용 원본 객체를 세지 않고 target branch의 새 커밋만 세는지
 
-#### R8. replay/cherry-pick patchset 모드 (`patchset.py`, `cli.py`)
+#### R8. bundle-only CLI 단순화 (`cli.py`, `export_.py`, `import_.py`)
 
-`--format patchset`은 선택 커밋의 메타데이터와 binary diff를 `.patchset` zip에 저장합니다.
-`--mode replay` 또는 `.patchset` 자동 감지는 대상 브랜치 현재 HEAD 위에 새 커밋을 생성합니다.
+별도 diff 재생 모드를 제거하고 GitShuttle의 전송 경로를 bundle 기반 이력 이전으로 단순화했습니다.
 
 검토 포인트:
-- replay는 원본 SHA와 merge topology를 보존하지 않는다는 문서/출력 표현이 충분히 명확한지
-- 대상 HEAD 마지막 subject와 첫 replay subject가 같을 때만 확인 프롬프트가 뜨는지
-- `author_map`, `timestamp original/now/from=`이 replay 커밋의 author/committer에 일관되게 적용되는지
-- 이미 적용된 patch는 skip하고, 같은 경로의 다른 내용 충돌은 복구 안내와 함께 중단되는지
-- patch 적용 실패 시 사용자 변경 손실 없이 중단되는지
-- patch 적용 실패 시 실패한 replay 순번, 원본 커밋 hash/제목, git apply stdout/stderr가 보존되는지
-- 원본 첫 커밋부터 포함한 patchset을 새 target branch에 replay할 때 기존 HEAD가 섞이지 않는지
-- 같은 파일을 여러 번 수정한 전체 순차 replay가 중간 커밋 누락 없이 적용되는지
-- `--on-conflict force` replay가 최신 patchset의 파일 스냅샷으로 비어 있지 않은 브랜치에도 source-wins 적용되는지
-- 서브브랜치 merge 충돌 해결 결과가 force replay에서 최종 파일 상태로 반영되는지
-- patchset export가 metadata를 일괄 조회하고 parent 정보를 재사용해 커밋별 중복 Git 호출을 줄이는지
-- 연속 선형 first-parent 범위에서는 `git format-patch --stdout` 경로를 사용하고, merge/비연속 선택에서는 per-commit diff로 fallback하는지
+- `--format`, 별도 압축 모드, `--mode` 옵션이 CLI 도움말과 문서에서 제거되었는지
+- export가 항상 `.bundle`을 만들고 checksum/manifest 생성 흐름을 유지하는지
+- import가 bundle 검증, rewrite, target branch checkout/reset 흐름만 유지하는지
+- 기존 코드가 있는 repo에서는 migration 브랜치 import 후 merge하는 가이드가 README/MANUAL/EXAMPLE/PRD에 일관되게 설명되는지
 - `--recent N`이 TUI를 열지 않고 최신 N개만 조회·선택하는지
 - `--full-branch`가 TUI 없이 브랜치 tip만 조회하고 `bundle_scope=full`로 self-contained bundle을 만드는지
-- `--patchset-compression stored` 사용 시 무압축 저장으로 CPU 시간을 줄이는 대신 파일 크기 증가를 감수하는 동작이 문서와 일치하는지
 
 ---
 
@@ -309,8 +284,7 @@ author/timestamp rewrite를 하면 target branch의 커밋 SHA가 원본과 달�
 `verify_bundle_detailed()`와 import 오류 메시지가 이 원인 및 `refs/gitshuttle/original/...` 기준점 생성 필요성을 사용자에게 설명하는지 확인해 주세요.
 `--full-branch`는 현재/지정 브랜치 tip 기준 전체 이력을 TUI 없이 self-contained bundle로 만들며, merge된 서브브랜치 이력까지 포함합니다. 고급 선택 흐름에서는 `--bundle-scope full`이 선택 tip까지 전체 이력을 포함해 prerequisite 없는 bundle을 만들고, `--on-conflict force --target-branch ...` 조합으로 강제 이어붙이기에 사용할 수 있습니다.
 
-체리픽/replay 방식은 선택 커밋을 대상 브랜치 위에 새 커밋으로 재생할 수 있는 대안입니다.
-현재 `patchset.py`로 별도 포맷/모드가 추가되었으며, 원본 bundle 이력 이전과 달리 커밋 SHA와 merge 구조가 달라질 수 있습니다.
+GitShuttle은 bundle 이력 이전에 집중합니다. 기존 코드 위에 변경분을 직선형으로 재생하는 별도 diff 재생 모드는 제거했고, 기존 main 보존이 필요하면 migration 브랜치 import 후 Git merge로 합칩니다.
 
 #### Y3. `_detect_source_branch` fallback (`import_.py:~390`)
 
@@ -320,7 +294,7 @@ bundle에 named ref가 없으면 `"main"` 을 fallback으로 반환합니다.
 
 #### Y4. `author_map.json` 키 형식 (`rewrite.py:46~68`)
 
-매핑 키는 **이메일 주소 단독** (`"ltw070@naver.com"`)이어야 합니다.
+매핑 키는 **이메일 주소 단독** (`"OLD_AUTHOR_EMAIL"`)이어야 합니다.
 `"Name <email>"` 형식으로 입력하면 해당 이메일이 매칭되지 않아 미매핑 경고가 출력됩니다.
 입력 검증 로직 추가 또는 문서화 수준으로 처리할지 결정이 필요합니다.
 
@@ -334,18 +308,11 @@ CLI --timestamp 모드        >  gitshuttle.toml [import].timestamp    >  "now"
 CLI와 toml이 동시에 설정된 경우 CLI 옵션이 우선합니다.
 사용자에게 어떤 설정이 적용됐는지 verbose 출력으로 알려주는 것을 고려해 주세요.
 
-#### Y6. `sync_.py` / `github_auth.py` — Phase 2 노출 범위
-
-Direct Sync는 Python API 레벨까지 구현되어 있으나 CLI에 노출되지 않습니다.
-Phase 2 승인 전 코드가 임의로 호출되지 않도록 `__all__` 제한이나 명시적 가드가 있는지 확인해 주세요.
-
----
-
 ### 🟢 확인 완료
 
-- **테스트 172개 수집 확인** — 전체 suite는 환경에 따라 장시간 실행될 수 있음
+- **테스트 133개 수집 확인** — 전체 suite는 환경에 따라 장시간 실행될 수 있음
 - **UTF-8 / 한글 처리** — 모든 파일 I/O, subprocess, TUI에 인코딩 명시
-- **망분리 제약** — 외부 네트워크 호출 코드 없음 (sync_.py는 명시적 Phase 2 API)
+- **망분리 제약** — 외부 네트워크 호출 코드 없음
 - **Breaking Changes 없음** — 기존 `gitshuttle import --file <bundle>` 호환 유지
 - **SA4 규약 검증 PASS** — 인코딩, 네트워크 격리, Phase 1 범위 준수
 - **`[imported]` 태그** — TUI에서 이미 반입된 커밋 시각적 구분
@@ -363,14 +330,14 @@ python -m pytest tests/ -v --tb=short
 # Sprint 4b (Rewrite) 단위 테스트만
 python -m pytest tests/test_rewrite.py -v
 
-# 기본 export → import 흐름 (EXAMPLE.md 예제 1 참고)
+# 기본 export → import 흐름 (EXAMPLE.md 대표 예제 참고)
 cd <source-repo>
 python -m gitshuttle export --ui csv
 
 cd <target-repo>
 python -m gitshuttle import --file /path/to/shuttle.bundle
 
-# Import Rewrite 실전 (EXAMPLE.md 예제 3 참고)
+# Import Rewrite 실전 (EXAMPLE.md 대표 예제 참고)
 PYTHONPATH=D:/cla/03_gitshuttle python -m gitshuttle import \
   --file /tmp/first10.bundle \
   --author-map /tmp/author_map.json \
@@ -399,9 +366,9 @@ powershell -ExecutionPolicy Bypass -File build.ps1
 | 문서 | 내용 |
 |------|------|
 | `PRD.md` | 전체 기능 스펙 (섹션 3.6 Import-time Rewrite 포함) |
-| `PLAN.md` | Sprint 0~7 계획 및 수락 기준 |
+| `PLAN.md` | Sprint 0~6 계획 및 수락 기준 |
 | `README.md` | 사용자 빠른 시작 가이드 |
 | `MANUAL.md` | 전체 사용자 매뉴얼 (섹션 7-1 Rewrite 포함) |
-| `EXAMPLE.md` | 3가지 실전 시나리오 (최초 이전, 증분 업데이트, Import Rewrite) |
+| `EXAMPLE.md` | 대표 이전 시나리오와 참고 흐름 |
 | `REPORT.md` | 세션별 작업 기록 및 설계 결정 이유 |
 | `CRA_REPORT.md` | Agents / TDD / Clean Code / Refactoring / SOLID / Mock 관점 분석 |

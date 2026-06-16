@@ -33,10 +33,10 @@ PRD 전체 내용은 `PRD.md` 참고.
 |------|-----------|
 | Language | Python 3.10+ |
 | Git 지원 범위 | 2.37 이상 |
-| TUI | Textual (우선 검토), 대안: Rich + prompt_toolkit |
+| TUI | Textual |
 | CLI 프레임워크 | Typer 또는 Click |
 | 배포 | PyInstaller → `gitshuttle.exe` 단일 파일 |
-| 압축 | ZIP 또는 tar.gz |
+| 패키지 | Git bundle + 필요 시 분할 파일 |
 | 무결성 검증 | SHA-256 |
 
 ---
@@ -65,15 +65,11 @@ gitshuttle/
 ├── export_.py        # export 오케스트레이션
 ├── import_.py        # import 오케스트레이션
 ├── rewrite.py        # 작성자 매핑 & 브랜치 리네임 (fast-export/fast-import 파이프라인)
-├── sync_.py          # direct sync 오케스트레이션 (Phase 2)
-├── github_auth.py    # HTTPS+Token / SSH 인증 (Phase 2)
 ├── config.py         # config 마법사, gitshuttle.toml 읽기/쓰기
 └── ui/
     ├── __init__.py
     ├── tui.py        # Textual 체크박스+테이블 (기본값)
-    ├── csv_ui.py     # commits.csv 생성/파싱 (utf-8-sig)
-    ├── html_ui.py    # self-contained HTML, selection.json 파싱
-    └── prompt_ui.py  # InquirerPy 멀티셀렉트
+    └── csv_ui.py     # commits.csv 생성/파싱 (utf-8-sig)
 
 tests/
 ├── conftest.py       # 임시 git repo 픽스처
@@ -86,11 +82,10 @@ tests/
 ├── test_rewrite.py   # 작성자 매핑, 브랜치 리네임, 미매핑 원본 유지 테스트
 ├── test_config.py
 ├── test_build.py     # gitshuttle.spec, build.ps1 내용 검증
-├── test_sync.py      # Direct Sync + github_auth 테스트 (Phase 2)
+├── test_e2e.py       # 실제 git repo 기반 end-to-end 테스트
 └── ui/
     ├── test_csv_ui.py
-    ├── test_html_ui.py
-    └── test_prompt_ui.py
+    └── test_tui.py
 
 # 빌드 파일 (프로젝트 루트)
 gitshuttle.spec       # PyInstaller 스펙 (onefile, PYTHONUTF8=1)
@@ -109,8 +104,7 @@ main
 ├── sprint/3-ui-config
 ├── sprint/4-import
 ├── sprint/5-e2e
-├── sprint/6-build
-└── sprint/7-direct-sync
+└── sprint/6-build
 ```
 
 각 Sprint 브랜치에서 개발 → SA3+SA4 PASS → main merge.
@@ -120,12 +114,11 @@ main
 ## 명령어 구조
 
 ```
-gitshuttle export   [--branch] [--ui tui|csv|html|prompt] [--output]   # Phase 1
+gitshuttle export   [--branch] [--ui tui|csv] [--output]               # Phase 1
 gitshuttle import   --file <path> [--on-conflict skip|force|abort]
                     [--author-map <json>] [--target-branch <name>]
                     [--timestamp now|original|from=<datetime>]     # Phase 1
 gitshuttle config   (대화형 마법사 — gitshuttle.toml 수정)              # Phase 1
-gitshuttle sync     [--on-conflict skip|force|abort]                    # Phase 2
 ```
 
 ---
@@ -138,8 +131,6 @@ gitshuttle sync     [--on-conflict skip|force|abort]                    # Phase 
 |------|-----------|
 | `tui` | Textual 체크박스 + 테이블. Shift 범위선택, 작성자/파일/날짜 필터. |
 | `csv` | `commits.csv` 생성 → 사용자가 `include` 컬럼 Y/N 편집 → 재입력 |
-| `html` | 단일 `.html` 생성(인터넷 불필요) → 브라우저 선택 → `selection.json` → export |
-| `prompt` | InquirerPy 방향키 + Space 멀티셀렉트 |
 
 공통: 이미 타겟에 반영된 커밋은 `[imported]` 태그로 표시.
 
@@ -154,19 +145,18 @@ gitshuttle sync     [--on-conflict skip|force|abort]                    # Phase 
 ## 생성 파일 구조
 
 ```
-shuttle_YYMMDD.bundle        # git bundle (압축)
-shuttle_YYMMDD.sha256        # SHA-256 체크섬
+shuttle_YYMMDD.bundle        # git bundle
+shuttle_YYMMDD.bundle.sha256 # SHA-256 체크섬
 shuttle_YYMMDD_manifest.txt  # 커밋 목록 요약 (반출입 심사용)
 ```
 
 ---
 
-## 개발 로드맵
+## 현재 범위
 
-- **Phase 1**: CLI + TUI (현재 범위)
-- **Phase 2**: 데스크탑 GUI (마우스 기반, 히스토리 그래프)
-
-Phase 1 완료 전까지 GUI 관련 코드는 작성하지 않는다.
+- CLI 기반 bundle export/import
+- 기본 TUI 선택기와 보조 CSV 선택기
+- 작성자/타임스탬프 rewrite, 대상 브랜치 격리, 대용량 분할 전송
 
 ---
 
@@ -189,7 +179,7 @@ Windows에서 한글 깨짐이 발생하는 지점과 대응:
 - `subprocess.run([...], encoding='utf-8', env={**os.environ, 'PYTHONIOENCODING': 'utf-8'})` 사용.
 - `git log`, `git bundle` 출력 파싱 시 항상 `encoding='utf-8'` 지정.
 
-**매니페스트·CSV·HTML 파일 출력**
+**매니페스트·CSV 파일 출력**
 - 생성 파일 모두 UTF-8 with BOM 없이(`utf-8`, not `utf-8-sig`) 저장.
 - CSV는 Excel 호환을 위해 예외적으로 `utf-8-sig` 사용 가능 (Excel이 BOM으로 인코딩 감지).
 
@@ -225,7 +215,7 @@ SubAgent 호출 방법 (Claude Code Agent 툴):
 - Windows 우선. 터미널 호환성(Windows Terminal, CMD, PowerShell) 모두 검증 필요.
 - 망분리 환경이므로 외부 네트워크 호출 코드는 절대 포함하지 않는다.
 - `gitshuttle.exe`는 Python 없는 환경에서도 동작해야 한다 — 런타임 의존성을 PyInstaller로 모두 번들.
-- 대용량 리포지토리 대응: 분할 압축(Split archive) 지원.
+- 대용량 리포지토리 대응: bundle 분할 전송(Split archive) 지원.
 
 ---
 

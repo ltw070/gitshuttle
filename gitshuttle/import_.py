@@ -16,7 +16,7 @@ from __future__ import annotations
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Optional
 
 from .checksum import _compute_sha256
 from .bundle import verify_bundle_detailed
@@ -47,6 +47,16 @@ class ImportResult:
     warnings: list[str] = field(default_factory=list)  # 미매핑 작성자 경고 목록
 
 
+@dataclass(frozen=True)
+class RewriteOptions:
+    """rewrite import에 필요한 정규화된 옵션."""
+
+    author_map: dict
+    target_branch: str
+    timestamp_mode: str
+    from_dt: object | None
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -59,8 +69,6 @@ def run_import(
     author_map_path: Optional[str] = None, # 작성자 매핑 JSON 경로
     target_branch: Optional[str] = None,   # 대상 브랜치 (None → "imported/<소스브랜치>")
     timestamp_mode: str = "now",           # "now" | "original" | "from=DATETIME"
-    import_mode: str = "auto",             # "auto" | "bundle" | "replay"
-    confirm_duplicate_message: Callable[[str, str], bool] | None = None,
 ) -> ImportResult:
     """bundle 파일을 target repo에 반입한다.
 
@@ -75,10 +83,6 @@ def run_import(
                           None 이면 "imported/<소스브랜치>" 형식 자동 생성.
         timestamp_mode:   타임스탬프 재작성 모드.
                           "now"(기본) | "original" | "from=YYYY-MM-DDTHH:MM:SS"
-        import_mode:      "auto"(확장자 자동) | "bundle" | "replay".
-        confirm_duplicate_message:
-                          replay 모드에서 target HEAD subject와 첫 replay subject가
-                          같을 때 계속할지 묻는 콜백.
 
     Returns:
         ImportResult (imported, skipped, total, warnings 포함).
@@ -92,142 +96,50 @@ def run_import(
     bundle_path = Path(bundle_path)
     repo_path = Path(repo_path)
 
-    # ------------------------------------------------------------------
-    # Step 1. bundle 파일 존재 확인
-    # ------------------------------------------------------------------
     if not bundle_path.exists():
         raise FileNotFoundError(f"bundle 파일을 찾을 수 없습니다: {bundle_path}")
 
-    # ------------------------------------------------------------------
-    # Step 2. SHA-256 체크섬 검증
-    # ------------------------------------------------------------------
     _verify_checksum(bundle_path, sha256_path)
 
-    if import_mode not in ("auto", "bundle", "replay"):
-        raise ValueError("import_mode는 auto, bundle, replay 중 하나여야 합니다.")
-
-    if import_mode == "replay" or (
-        import_mode == "auto" and bundle_path.suffix.lower() == ".patchset"
-    ):
-        from .patchset import run_replay_import
-
-        replay_result = run_replay_import(
-            patchset_path=bundle_path,
-            repo_path=repo_path,
-            author_map_path=author_map_path,
-            target_branch=target_branch,
-            timestamp_mode=timestamp_mode,
-            on_conflict=on_conflict,
-            confirm_duplicate_message=confirm_duplicate_message,
-        )
-        return ImportResult(
-            imported=replay_result.imported,
-            skipped=replay_result.skipped,
-            total=replay_result.total,
-            warnings=replay_result.warnings,
-        )
-
-    # ------------------------------------------------------------------
-    # Step 3. git bundle verify
-    # ------------------------------------------------------------------
     verify_result = verify_bundle_detailed(bundle_path, repo_path=repo_path)
     if not verify_result.valid:
         raise ValueError(_format_bundle_verify_failure(bundle_path, verify_result.message))
 
-    # ------------------------------------------------------------------
-    # Step 4. target repo의 기존 커밋 해시 집합 (unbundle 이전 스냅샷)
-    # ------------------------------------------------------------------
     existing_hashes_before = _get_existing_hashes(repo_path)
-
-    # ------------------------------------------------------------------
-    # Step 5. bundle tip 해시로 중복 감지 (abort/skip/force 판단)
-    # 사전 조건 있는 bundle은 tip 해시만 반환되므로 tip 기준으로 판단
-    # ------------------------------------------------------------------
     bundle_tips = _get_bundle_commits(bundle_path)
-    duplicates = [c for c in bundle_tips if c in existing_hashes_before]
+    duplicates = _find_duplicates(bundle_tips, existing_hashes_before)
+    _handle_duplicates(duplicates, on_conflict)
 
-    if duplicates:
-        if on_conflict == "abort":
-            raise ImportConflictError(
-                f"이미 존재하는 커밋이 있습니다. (on_conflict=abort)\n"
-                f"첫 번째 중복: {duplicates[0]}"
-            )
-
-    # ------------------------------------------------------------------
-    # Step 6. rewrite 파이프라인 — author·branch·timestamp 재작성
-    #
-    # rewrite가 필요한 경우: fast-export → apply_rewrites → fast-import
-    # rewrite가 불필요한 경우: 기존 unbundle 방식 사용 (호환성 유지)
-    # ------------------------------------------------------------------
-    rewrite_needed = (
-        author_map_path is not None
-        or target_branch is not None
-        or timestamp_mode != "now"
-    )
-
+    rewrite_needed = _needs_rewrite(author_map_path, target_branch, timestamp_mode)
     rewrite_warnings: list[str] = []
-
     if rewrite_needed:
-        # bundle에서 소스 브랜치 이름 감지 (target_branch 기본값 생성용)
-        source_branch = _detect_source_branch(bundle_path)
-        effective_target_branch = (
-            target_branch
-            if target_branch is not None
-            else f"imported/{source_branch}"
+        rewrite_options = _build_rewrite_options(
+            bundle_path=bundle_path,
+            author_map_path=author_map_path,
+            target_branch=target_branch,
+            timestamp_mode=timestamp_mode,
         )
-
-        # from= 타임스탬프 파싱
-        from_dt = None
-        effective_ts_mode = timestamp_mode
-        if timestamp_mode.startswith("from="):
-            from_dt = _parse_from_datetime(timestamp_mode[len("from="):])
-            effective_ts_mode = "from"
-
-        # 작성자 매핑 로드
-        from .rewrite import load_author_map
-        author_map = load_author_map(author_map_path) if author_map_path else {}
-
-        # fast-export → rewrite → fast-import (임시 bare repo 경유)
         tip_hashes, rewrite_warnings = _rewrite_and_import(
             bundle_path=bundle_path,
             repo_path=repo_path,
-            author_map=author_map,
-            target_branch=effective_target_branch,
-            timestamp_mode=effective_ts_mode,
-            from_dt=from_dt,
+            author_map=rewrite_options.author_map,
+            target_branch=rewrite_options.target_branch,
+            timestamp_mode=rewrite_options.timestamp_mode,
+            from_dt=rewrite_options.from_dt,
             force_ref_update=on_conflict == "force",
         )
     else:
-        # ------------------------------------------------------------------
-        # Step 6b. bundle unbundle — objects를 target repo에 추가하고 tip 해시 획득
-        # git bundle unbundle은 refs/gitshuttle/* 등 커스텀 ref도 정상 처리
-        # ------------------------------------------------------------------
         tip_hashes = _unbundle(bundle_path, repo_path)
-
-        # ------------------------------------------------------------------
-        # Step 7. tip 해시를 현재 브랜치에 merge
-        # ------------------------------------------------------------------
         for tip_hash in tip_hashes:
             _merge_tip(repo_path, tip_hash)
 
-    # ------------------------------------------------------------------
-    # Step 8. ImportResult 계산 — before/after 비교로 정확한 커밋 수 집계
-    # ------------------------------------------------------------------
-    if rewrite_needed:
-        imported_hashes_after = _get_reachable_hashes(repo_path, tip_hashes)
-        newly_added = imported_hashes_after - existing_hashes_before
-    else:
-        existing_hashes_after = _get_existing_hashes(repo_path)
-        newly_added = existing_hashes_after - existing_hashes_before
-
-    imported = len(newly_added)
-    skipped = len(duplicates) if on_conflict == "skip" else 0
-    total = imported + skipped
-
-    return ImportResult(
-        imported=imported,
-        skipped=skipped,
-        total=total,
+    return _build_import_result(
+        repo_path=repo_path,
+        tip_hashes=tip_hashes,
+        existing_hashes_before=existing_hashes_before,
+        duplicates=duplicates,
+        on_conflict=on_conflict,
+        rewrite_needed=rewrite_needed,
         warnings=rewrite_warnings,
     )
 
@@ -235,6 +147,82 @@ def run_import(
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
+
+def _find_duplicates(bundle_tips: list[str], existing_hashes: set[str]) -> list[str]:
+    return [commit_hash for commit_hash in bundle_tips if commit_hash in existing_hashes]
+
+
+def _handle_duplicates(duplicates: list[str], on_conflict: str) -> None:
+    if duplicates and on_conflict == "abort":
+        raise ImportConflictError(
+            f"이미 존재하는 커밋이 있습니다. (on_conflict=abort)\n"
+            f"첫 번째 중복: {duplicates[0]}"
+        )
+
+
+def _needs_rewrite(
+    author_map_path: Optional[str],
+    target_branch: Optional[str],
+    timestamp_mode: str,
+) -> bool:
+    return (
+        author_map_path is not None
+        or target_branch is not None
+        or timestamp_mode != "now"
+    )
+
+
+def _build_rewrite_options(
+    *,
+    bundle_path: Path,
+    author_map_path: Optional[str],
+    target_branch: Optional[str],
+    timestamp_mode: str,
+) -> RewriteOptions:
+    source_branch = _detect_source_branch(bundle_path)
+    effective_target_branch = target_branch or f"imported/{source_branch}"
+    effective_ts_mode = timestamp_mode
+    from_dt = None
+
+    if timestamp_mode.startswith("from="):
+        from_dt = _parse_from_datetime(timestamp_mode[len("from="):])
+        effective_ts_mode = "from"
+
+    from .rewrite import load_author_map
+
+    return RewriteOptions(
+        author_map=load_author_map(author_map_path) if author_map_path else {},
+        target_branch=effective_target_branch,
+        timestamp_mode=effective_ts_mode,
+        from_dt=from_dt,
+    )
+
+
+def _build_import_result(
+    *,
+    repo_path: Path,
+    tip_hashes: list[str],
+    existing_hashes_before: set[str],
+    duplicates: list[str],
+    on_conflict: str,
+    rewrite_needed: bool,
+    warnings: list[str],
+) -> ImportResult:
+    if rewrite_needed:
+        hashes_after = _get_reachable_hashes(repo_path, tip_hashes)
+    else:
+        hashes_after = _get_existing_hashes(repo_path)
+
+    imported = len(hashes_after - existing_hashes_before)
+    skipped = len(duplicates) if on_conflict == "skip" else 0
+    return ImportResult(
+        imported=imported,
+        skipped=skipped,
+        total=imported + skipped,
+        warnings=warnings,
+    )
+
 
 def _verify_checksum(
     bundle_path: Path,

@@ -15,31 +15,27 @@ GitShuttle은 서로 연결되지 않은 두 네트워크(내부망/외부망) �
 - **메타데이터 포함:** 각 커밋의 메시지(Subject), 상세 내용(Body), 작성자 정보, 커밋 시각을 그대로 유지.
 - **커밋 단위 선택 추출:** 전체 브랜치 또는 특정 커밋을 개별 선택하여 패키징.
 
-### 3.2 커밋 선택 인터페이스 (Phase 1 — 방식 비교)
+### 3.2 커밋 선택 인터페이스
 
-Phase 1에서 커밋 선택은 아래 방식 중 하나(또는 조합)로 구현한다. 최종 방식은 구현 단계에서 확정.
+커밋 선택은 주력 TUI와 보조 CSV 방식으로 제공한다.
 
 | # | 방식 | 설명 | 장점 | 단점 |
 |---|------|------|------|------|
 | **A** ⭐ | **TUI (Textual)** — 기본값 | 터미널 안에서 체크박스·테이블 인터랙션 | 외부 앱 불필요, Shift 범위선택·필터 가능 | Windows 터미널 호환성 이슈 가능 |
-| B | **CSV 편집** | `gitshuttle list > commits.csv` 생성 → Excel에서 `include` 컬럼 Y/N 수정 → `gitshuttle export --from commits.csv` | Excel 친화적, 비개발자도 직관적 | 파일 열고 저장하는 별도 단계 필요 |
-| C | **Self-contained HTML** | 단일 `.html` 파일 생성 → 브라우저에서 열어 체크박스 선택 → "Export" 버튼으로 `selection.json` 다운로드 → `gitshuttle export --from selection.json` | 마우스 Shift 클릭·필터 완전 지원, 인터넷 불필요, Phase 2 GUI의 프리뷰 역할 | 2단계(브라우저 → CLI) 워크플로우 |
-| D | **InquirerPy 멀티셀렉트** | 터미널에서 방향키 + Space로 선택 | 의존성 최소, 설치 간단 | 커밋 수 많을 때 불편, 필터 없음 |
+| B | **CSV 편집** | `commits.csv` 생성 → Excel에서 `include` 컬럼 Y/N 수정 | Excel 친화적, 비개발자도 직관적 | 파일 열고 저장하는 별도 단계 필요 |
 
 **UI 방식 선택 메커니즘 — 2+3 조합:**
 
 1. **설정 파일 (`gitshuttle.toml`)** — 기본값 고정. 미설정 시 A(TUI).
    ```toml
    [export]
-   ui = "tui"   # tui | csv | html | prompt
+   ui = "tui"   # tui | csv
    ```
 
 2. **`--ui` 플래그** — 1회성 오버라이드. 설정 파일보다 항상 우선.
    ```
    gitshuttle export                  # 설정 파일 기본값 사용
    gitshuttle export --ui csv         # 이번 실행만 B
-   gitshuttle export --ui html        # 이번 실행만 C
-   gitshuttle export --ui prompt      # 이번 실행만 D
    ```
 
 3. **`gitshuttle config` 마법사** — 언제든 실행해 설정 파일의 기본값을 변경.
@@ -49,10 +45,8 @@ Phase 1에서 커밋 선택은 아래 방식 중 하나(또는 조합)로 구현
    커밋 선택 UI 기본값을 선택하세요:
      [1] TUI      — 터미널 인터랙티브 ← 현재 설정
      [2] CSV      — Excel 편집
-     [3] HTML     — 브라우저
-     [4] Prompt   — 방향키 멀티셀렉트
 
-   선택 (1~4): _
+   선택 (1~2): _
    ```
    선택 결과는 `gitshuttle.toml`에 저장.
 
@@ -62,7 +56,7 @@ Phase 1에서 커밋 선택은 아래 방식 중 하나(또는 조합)로 구현
 - 작성자(Author), 파일 경로(File path), 날짜 범위 기준 필터링 제공.
 
 ### 3.3 셔틀 패키지 관리 (Shuttle Package)
-- **압축:** 추출된 bundle 데이터를 압축하여 단일 패키지 파일로 생성.
+- **Git bundle:** 선택한 이력을 `.bundle` 파일로 생성한다.
 - **매니페스트 생성:** 패키지 내부에 포함된 커밋 로그 요약본(Summary)을 텍스트 파일로 자동 생성하여, 반출입 심사 시 검토용으로 활용.
 - **SHA-256 체크섬:** 패키지 생성 시 체크섬 파일을 함께 생성하여 전송 중 파일 변조·손상 검증.
 
@@ -85,19 +79,24 @@ Phase 1에서 커밋 선택은 아래 방식 중 하나(또는 조합)로 구현
 #### 3.6.1 작성자 매핑 (Author Mapping)
 
 - **문제:** 소스 repo의 커밋 작성자(이름·이메일)가 타겟 조직의 내부 계정과 다름.
-- **기능:** import 시 `--author-map <파일>` 플래그 또는 `gitshuttle.toml`의 `[import.author_map]` 섹션으로 작성자 일괄 대체.
+- **기능:** import 시 `--author-map <파일>` 플래그 또는 `gitshuttle.toml`의 `[import] author_map = "<파일>"` 설정으로 작성자 일괄 대체.
 - **매핑 형식 (JSON):**
   ```json
   {
-    "Jane Doe <jane@external.com>": "홍길동 <hong@internal.com>",
-    "Bob Smith <bob@external.com>": "이철수 <lee@internal.com>"
+    "jane@external.com": {
+      "name": "홍길동",
+      "email": "hong@internal.com"
+    },
+    "bob@external.com": {
+      "name": "이철수",
+      "email": "lee@internal.com"
+    }
   }
   ```
-- **toml 형식:**
+- **toml 설정 형식:**
   ```toml
-  [import.author_map]
-  "Jane Doe <jane@external.com>" = "홍길동 <hong@internal.com>"
-  "Bob Smith <bob@external.com>" = "이철수 <lee@internal.com>"
+  [import]
+  author_map = "C:\\transfer\\author_map.json"
   ```
 - **구현:** `git fast-export | (작성자 치환) | git fast-import` 파이프라인 사용.
 - **미매핑 처리:** 매핑 테이블에 없는 작성자는 원본 그대로 유지 (경고 메시지 출력).
@@ -110,6 +109,16 @@ Phase 1에서 커밋 선택은 아래 방식 중 하나(또는 조합)로 구현
   - `--target-branch <이름>`: import된 커밋을 담을 신규 브랜치명 지정.
   - 미지정 시 기본값: `imported/<소스브랜치명>` (예: `imported/main`, `imported/master`).
   - 해당 브랜치가 타겟에 이미 존재하면 `--on-conflict` 옵션 정책을 따름.
+  - 기존 기본 브랜치에 코드가 있는 경우, `migration/<소스브랜치>` 같은 별도 브랜치에 먼저 import하고 사용자가 검토 후 직접 merge할 수 있어야 함.
+  - 별도 브랜치 import는 기존 기본 브랜치 ref를 이동시키지 않아야 하며, merge 시 동일 파일 충돌은 Git conflict로 드러나 사용자가 해결할 수 있어야 함.
+  - 권장 사용 구조:
+    ```
+    기존 main:        X -> Y
+    import 브랜치:    A -> B -> C  또는  X/Y와 무관한 별도 이력
+    나중에 merge:     X -> Y ---- M
+                             \   /
+                              A-B-C
+    ```
 - **CLI 예시:**
   ```
   gitshuttle import --file shuttle.bundle
@@ -117,6 +126,11 @@ Phase 1에서 커밋 선택은 아래 방식 중 하나(또는 조합)로 구현
 
   gitshuttle import --file shuttle.bundle --target-branch ext-main
   # → 타겟에 ext-main 브랜치 생성
+
+  gitshuttle import --file shuttle.bundle --target-branch migration/source-main
+  git switch main
+  git merge migration/source-main --allow-unrelated-histories
+  # → 기존 main을 보존한 채 검토 후 병합
   ```
 - **구현:** fast-import 시 ref를 `refs/heads/<target-branch>`로 지정.
 
@@ -174,43 +188,6 @@ gitshuttle import \
 
 ---
 
-### 3.7 Direct Sync — 두 GitHub 간 직접 동기화 (Phase 2 추가)
-네트워크가 연결된 단일 망 환경에서 파일 없이 두 GitHub 리포지토리를 직접 동기화한다.
-
-- **`gitshuttle sync` 커맨드:** Source GitHub repo → Target GitHub repo로 선택한 커밋을 직접 전송.
-- **파일 불필요:** `.bundle` 파일 생성 없이 메모리 내에서 직접 fetch → push.
-- **커밋 선택 UI:** export와 동일한 TUI/CSV/HTML/Prompt 인터페이스 재사용.
-- **중복 감지:** Target repo에 이미 존재하는 커밋 자동 감지 후 `[synced]` 표시.
-- **충돌 처리:** export/import와 동일한 `--on-conflict skip/force/abort` 옵션.
-
-#### 인증 방식
-
-| 방식 | 설정 | 특징 |
-|------|------|------|
-| **HTTPS + Token (기본값)** | repo별 PAT 입력 | 가장 단순, 프로그램 자동화에 적합 |
-| **SSH** | SSH 키 파일 경로 지정 | 토큰 만료 없음, 서버 자동화에 적합 |
-
-#### 연결 설정 (`gitshuttle.toml`)
-```toml
-[sync.source]
-url   = "https://github.com/org1/repo"
-auth  = "token"          # token | ssh
-token = ""               # HTTPS+Token 방식: PAT 입력 (또는 환경변수 GS_SOURCE_TOKEN)
-
-[sync.target]
-url   = "https://github.com/org2/repo"
-auth  = "token"
-token = ""               # 또는 환경변수 GS_TARGET_TOKEN
-
-# SSH 방식 사용 시
-# [sync.source]
-# url      = "git@github.com:org1/repo.git"
-# auth     = "ssh"
-# ssh_key  = "~/.ssh/id_rsa_source"
-```
-
-> **보안:** 토큰은 `gitshuttle.toml`에 직접 저장하지 않고 환경변수(`GS_SOURCE_TOKEN`, `GS_TARGET_TOKEN`) 사용을 권장. `gitshuttle.toml`은 `.gitignore`에 등록.
-
 ## 4. 사용자 시나리오 (User Scenario)
 
 ### 시나리오 A — 망분리 환경 (파일 이동)
@@ -220,12 +197,6 @@ token = ""               # 또는 환경변수 GS_TARGET_TOKEN
 4. **[내부망]** 담당자가 `gitshuttle import --file shuttle_240522.bundle` 실행.
 5. **[결과]** 내부 Git 서버에 외부와 동일한 커밋 메시지와 히스토리가 그대로 반영됨.
 
-### 시나리오 B — 단일 망 환경 (GitHub 직접 연결)
-1. **[설정]** `gitshuttle config` 실행 → Source/Target GitHub URL 및 인증 정보 입력.
-2. **[실행]** `gitshuttle sync` 실행 → TUI에서 전송할 커밋 선택.
-3. **[GitShuttle]** Source repo에서 선택 커밋 fetch → Target repo로 직접 push.
-4. **[결과]** 파일 이동 없이 두 GitHub 간 히스토리 동기화 완료.
-
 ## 5. 기술 스펙 (Technical Specification)
 
 | 항목 | 내용 |
@@ -233,8 +204,8 @@ token = ""               # 또는 환경변수 GS_TARGET_TOKEN
 | **운영 환경** | Windows (주 대상) |
 | **지원 Git 버전** | 2.37 이상 (2022년 이후 릴리즈 기준) |
 | **Python 버전** | 3.10 이상 |
-| **TUI 라이브러리** | Textual 또는 Rich + prompt_toolkit (검토 필요) |
-| **패키지 압축** | ZIP 또는 tar.gz |
+| **TUI 라이브러리** | Textual |
+| **패키지 형식** | Git bundle + optional split parts |
 | **무결성 검증** | SHA-256 체크섬 |
 
 ## 6. 배포 및 실행 방식 (Distribution)
@@ -260,18 +231,10 @@ python -m gitshuttle config
 ```
 
 ## 7. 대용량 처리
-- 대규모 리포지토리의 경우 분할 압축(Split archive) 기능 지원.
+- 대규모 리포지토리의 경우 bundle 분할 전송(Split archive) 기능 지원.
 
-## 8. 개발 로드맵 (Phases)
+## 8. 현재 제공 범위
 
-### Phase 1 — CLI + TUI
-- `gitshuttle export`: TUI 커밋 선택 인터페이스 포함
-- `gitshuttle import`: 충돌 처리 옵션, 체크섬 검증 포함
-- 매니페스트 자동 생성
-- SHA-256 체크섬 생성/검증
-
-### Phase 2 — Direct Sync + GUI
-- `gitshuttle sync`: 두 GitHub 간 직접 동기화 (HTTPS Token / SSH)
-- Phase 1의 모든 기능을 데스크탑 GUI로 전환
-- 마우스 기반 커밋 선택, 드래그 범위 선택
-- 시각적 히스토리 그래프 제공
+- `gitshuttle export`: TUI/CSV 커밋 선택, `--recent`, `--full-branch`, bundle/manifest/checksum 생성
+- `gitshuttle import`: SHA-256 검증, 작성자/타임스탬프 rewrite, 대상 브랜치 격리, 충돌 처리
+- 대용량 전송: bundle 분할/병합 지원

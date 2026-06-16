@@ -15,14 +15,13 @@
 7. [import — 커밋 꾸러미 반입하기](#7-import--커밋-꾸러미-반입하기)
    - [7-1. 다른 리포에서 반입할 때 — Rewrite 기능](#7-1-다른-리포에서-반입할-때--rewrite-기능)
 8. [config — 기본 설정 변경하기](#8-config--기본-설정-변경하기)
-9. [커밋 선택 UI 4가지 방식](#9-커밋-선택-ui-4가지-방식)
+9. [커밋 선택 UI 2가지 방식](#9-커밋-선택-ui-2가지-방식)
 10. [대용량 파일 분할 전송](#10-대용량-파일-분할-전송)
-11. [sync — GitHub 직접 동기화 (Phase 2)](#11-sync--github-직접-동기화-phase-2)
-12. [생성 파일 상세 설명](#12-생성-파일-상세-설명)
-13. [충돌 처리 옵션 상세](#13-충돌-처리-옵션-상세)
-14. [자주 묻는 질문 (FAQ)](#14-자주-묻는-질문-faq)
-15. [오류 메시지 해설](#15-오류-메시지-해설)
-16. [기존 GitHub에서 새 GitHub로 이전하기](#16-기존-github에서-새-github로-이전하기)
+11. [생성 파일 상세 설명](#11-생성-파일-상세-설명)
+12. [충돌 처리 옵션 상세](#12-충돌-처리-옵션-상세)
+13. [자주 묻는 질문 (FAQ)](#13-자주-묻는-질문-faq)
+14. [오류 메시지 해설](#14-오류-메시지-해설)
+15. [기존 GitHub에서 새 GitHub로 이전하기](#15-기존-github에서-새-github로-이전하기)
 
 ---
 
@@ -67,7 +66,7 @@ GitShuttle은 Git의 모든 히스토리를 **100% 보존**합니다.
 
 1. 브라우저에서 아래 주소로 이동합니다:
    ```
-   https://github.com/ltw070/gitshuttle/releases
+   https://github.com/PROJECT_OWNER/gitshuttle/releases
    ```
 
 2. 최신 릴리즈의 **Assets** 항목에서 `gitshuttle.exe`를 클릭하여 다운로드합니다.
@@ -77,7 +76,7 @@ GitShuttle은 Git의 모든 히스토리를 **100% 보존**합니다.
 **직접 빌드 (PyInstaller 설치 환경에서):**
 
 ```powershell
-git clone https://github.com/ltw070/gitshuttle.git
+git clone https://github.com/PROJECT_OWNER/gitshuttle.git
 cd gitshuttle
 pip install pyinstaller
 powershell -ExecutionPolicy Bypass -File build.ps1
@@ -95,13 +94,13 @@ Python이 이미 설치된 환경에서 직접 소스를 받아 실행하는 방
 **Git이 있는 경우 — 클론:**
 
 ```
-git clone https://github.com/ltw070/gitshuttle.git
+git clone https://github.com/PROJECT_OWNER/gitshuttle.git
 cd gitshuttle
 ```
 
 **Git이 없는 경우 — ZIP 다운로드:**
 
-1. `https://github.com/ltw070/gitshuttle` 접속
+1. `https://github.com/PROJECT_OWNER/gitshuttle` 접속
 2. 초록색 **Code** 버튼 클릭 → **Download ZIP** 클릭
 3. 다운로드된 ZIP 파일을 압축 해제합니다
 4. 압축 해제된 폴더로 이동합니다
@@ -183,7 +182,6 @@ Commands:
   export  선택한 커밋을 .bundle 파일로 추출합니다.
   import  shuttle 패키지를 현재 리포지토리에 반입합니다.
   config  대화형 마법사로 gitshuttle.toml 설정을 변경합니다.
-  sync    두 GitHub 리포지토리 간 직접 동기화합니다.
 ```
 
 이 화면이 나오면 설치가 완료된 것입니다.
@@ -206,7 +204,7 @@ Commands:
                                                         --file shuttle_260508.bundle
    생성된 파일 3개를 USB에 복사:
    • shuttle_260508.bundle            →→→→
-   • shuttle_260508.sha256            →→→→
+   • shuttle_260508.bundle.sha256     →→→→
    • shuttle_260508_manifest.txt      →→→→
 ```
 
@@ -235,10 +233,8 @@ gitshuttle export [OPTIONS]
 |------|------|------|
 | `--repo PATH` | 원본 Git 리포지토리 경로 지정 | `--repo C:\projects\my-repo` |
 | `--branch TEXT` | 특정 브랜치의 커밋만 추출 | `--branch feature/login` |
-| `--ui [tui\|csv\|html\|prompt]` | 커밋 선택 방식 | `--ui csv` |
+| `--ui [tui\|csv]` | 커밋 선택 방식 | `--ui csv` |
 | `--output TEXT` | 출력 경로 지정 | `--output C:\transfer` |
-| `--format [bundle\|patchset]` | 패키지 형식. `patchset`은 replay/cherry-pick용 | `--format patchset` |
-| `--patchset-compression [fast\|stored\|deflated]` | patchset 압축 방식. `stored`는 무압축이라 빠르지만 파일이 큼 | `--patchset-compression stored` |
 | `--bundle-scope [range\|full]` | bundle 범위 방식. `full`은 선택 tip까지 전체 이력을 포함 | `--bundle-scope full` |
 | `--full-branch` | 현재/지정 브랜치 tip 기준 전체 이력을 TUI 없이 bundle로 추출 | `--full-branch` |
 | `--recent INTEGER` | UI 없이 최신 N개 커밋만 바로 선택 | `--recent 2` |
@@ -264,17 +260,8 @@ gitshuttle export --ui csv
 # 출력 폴더를 직접 지정
 gitshuttle export --output C:\transfer
 
-# 기준점 없이 cherry-pick처럼 붙일 patchset 생성
-gitshuttle export --format patchset --output C:\transfer
-
-# 최신 2개 커밋만 TUI 없이 빠르게 patchset 생성
-gitshuttle export --repo C:\projects\my-repo --branch main --format patchset --recent 2 --output C:\transfer
-
-# patchset 생성 속도 우선: zip 무압축 저장
-gitshuttle export --format patchset --patchset-compression stored --output C:\transfer
-
 # 선택 tip 기준으로 부분 bundle prerequisite 없이 강제 연결 가능한 self-contained bundle 생성
-gitshuttle export --format bundle --recent 2 --bundle-scope full --output C:\transfer
+gitshuttle export --recent 2 --bundle-scope full --output C:\transfer
 ```
 
 `--full-branch`는 브랜치 tip까지 도달 가능한 전체 이력을 포함합니다. merge된 서브브랜치 커밋은 포함되지만, 현재 브랜치에 merge되지 않은 독립 브랜치의 커밋은 포함되지 않습니다.
@@ -299,7 +286,7 @@ export가 완료되면 현재 디렉터리에 파일 3개가 생성됩니다:
 
 ```
 shuttle_260508.bundle        ← 이것이 핵심 파일
-shuttle_260508.sha256        ← 무결성 검증용
+shuttle_260508.bundle.sha256 ← 무결성 검증용
 shuttle_260508_manifest.txt  ← 커밋 목록 요약
 ```
 
@@ -328,13 +315,12 @@ gitshuttle import --file FILE [OPTIONS]
 
 | 옵션 | 설명 | 기본값 |
 |------|------|--------|
-| `--file TEXT` | bundle 또는 patchset 파일 경로 **(필수)** | — |
+| `--file TEXT` | bundle 파일 경로 **(필수)** | — |
 | `--repo PATH` | 대상 Git 리포지토리 경로 | 현재 디렉터리 |
 | `--on-conflict [skip\|force\|abort]` | 충돌 처리 방식 | `skip` |
 | `--author-map FILE` | 작성자 매핑 JSON 파일 경로 | 없음 (원본 유지) |
 | `--target-branch TEXT` | import 커밋을 담을 브랜치명 | `imported/<소스브랜치>` |
 | `--timestamp TEXT` | 커밋 타임스탬프 모드 | `now` |
-| `--mode [auto\|bundle\|replay]` | import 방식. `.patchset`은 `auto`에서 replay로 처리 | `auto` |
 
 ### 실행 예시
 
@@ -353,9 +339,6 @@ gitshuttle import --file shuttle_260508.bundle --on-conflict force
 
 # 중복 커밋 발견 즉시 전체 중단
 gitshuttle import --file shuttle_260508.bundle --on-conflict abort
-
-# patchset을 대상 브랜치 위에 cherry-pick처럼 재생
-gitshuttle import --file shuttle_260508.patchset --mode replay --target-branch main
 ```
 
 ### 실행 흐름
@@ -410,6 +393,30 @@ gitshuttle import --file shuttle_260508.bundle --target-branch ext-main
 git log imported/main --oneline    # 반입된 커밋 확인
 git merge imported/main            # 검토 완료 후 병합
 ```
+
+대상 repo의 `main`에 이미 코드가 있다면, 바로 `main`에 import하지 말고 별도 브랜치로 먼저 가져오는 방식을 권장합니다.
+
+```text
+기존 main:        X -> Y
+import 브랜치:    A -> B -> C  또는  X/Y와 무관한 별도 이력
+나중에 merge:     X -> Y ---- M
+                         \   /
+                          A-B-C
+```
+
+```powershell
+gitshuttle import `
+  --repo C:\repos\target `
+  --file C:\transfer\shuttle_YYMMDD.bundle `
+  --target-branch migration/source-main
+
+git -C C:\repos\target switch main
+git -C C:\repos\target merge migration/source-main --allow-unrelated-histories
+```
+
+이 방식에서는 기존 `main` 커밋이 브랜치 이력에 남고, bundle로 가져온 이력이 `migration/source-main`에 따로 들어갑니다. 병합 시 같은 파일이 양쪽에서 다르게 수정되어 있으면 Git merge conflict가 발생하며, 그때 최종 파일 내용을 직접 선택하면 됩니다.
+
+`--target-branch main --on-conflict force`처럼 기본 브랜치를 직접 대상으로 지정하면 `main` ref가 import 결과로 이동할 수 있습니다. 기존 커밋 object가 즉시 삭제되는 것은 아니지만 `git log main`에서는 보이지 않을 수 있으므로, 기존 코드를 보존하면서 합치려면 별도 브랜치 import 후 merge 흐름을 사용하세요.
 
 rewrite import가 완료되면 GitShuttle은 대상 브랜치로 checkout한 뒤 `reset --hard <브랜치 tip>`을 실행해 작업 폴더의 실제 파일도 import 결과와 맞춥니다.  
 따라서 import 전 대상 repo에 커밋되지 않은 변경 사항이 있으면 먼저 commit/stash 하거나 정리해야 합니다.
@@ -511,46 +518,6 @@ gitshuttle import \
 
 ---
 
-### Replay / Cherry-Pick 방식
-
-기준점 hidden ref 없이 작업자가 책임지고 변경분만 이어 붙이고 싶다면 `patchset` + `replay` 방식을 사용합니다.
-
-```
-gitshuttle export --repo C:\projects\source --branch main --format patchset --recent 2 --output C:\transfer
-
-gitshuttle import ^
-  --repo C:\projects\target ^
-  --file C:\transfer\shuttle_YYMMDD.patchset ^
-  --mode replay ^
-  --target-branch main ^
-  --author-map C:\transfer\author_map.json ^
-  --timestamp original
-```
-
-replay는 원본 커밋 객체를 옮기는 것이 아니라 각 커밋의 diff를 대상 브랜치 현재 HEAD 위에 새 커밋으로 적용합니다.
-따라서 기준점이 없어도 동작할 수 있지만, 커밋 SHA와 merge 구조는 원본과 달라질 수 있고 충돌이 나면 사용자가 직접 정리해야 합니다.
-
-원본 첫 커밋부터 포함된 patchset을 아직 존재하지 않는 `--target-branch`로 replay하면 GitShuttle은 빈 orphan branch에서 시작합니다.
-이 경우 대상 repo에 기존 README/license가 있어도 새 target branch에는 섞이지 않으며, 같은 파일을 여러 커밋에서 반복 수정한 전체 순차 replay도 중간 커밋을 빠뜨리지 않으면 적용됩니다.
-반대로 이미 존재하는 대상 브랜치에 replay하면 그 브랜치의 현재 파일 상태가 patch의 기준 상태와 맞아야 합니다.
-비어 있지 않은 브랜치에 원본 변경 파일을 강제로 덮어쓰려면 `--on-conflict force`를 사용합니다.
-이 모드는 최신 patchset에 포함된 변경 파일 스냅샷을 사용해 해당 커밋의 변경 파일만 source-wins 방식으로 적용합니다.
-기존 patchset에 스냅샷 metadata가 없으면 최신 GitShuttle로 다시 export해야 합니다.
-patchset export는 선택 커밋을 Git topo order로 정렬해 서브브랜치 merge 이력이 날짜순으로 뒤섞여 replay되는 문제를 줄입니다.
-서로 다른 브랜치에서 같은 파일을 바꾼 merge 충돌형 이력은 `--on-conflict force`를 사용해 merge commit의 최종 파일 상태를 반영하세요.
-
-대상 브랜치의 마지막 커밋 메시지와 새로 붙일 첫 replay 커밋 메시지가 같으면 GitShuttle이 한 번만 경고하고 계속 진행 여부를 묻습니다.
-메시지가 다르면 추가 확인 없이 replay를 진행합니다.
-
-이미 같은 변경분이 대상 브랜치에 적용되어 있으면 해당 patch는 자동으로 건너뜁니다.
-하지만 같은 경로의 파일이 이미 있고 내용이 다르면 `patch failed`, `patch does not apply`, `already exists in index` 계열 오류가 날 수 있습니다.
-이 경우 오류 메시지에 실패한 replay 순번, 원본 커밋 hash, 제목, `git apply` 상세 출력이 함께 표시됩니다.
-이미 반영된 커밋은 선택하지 말고 그 이후 커밋만 다시 patchset으로 만들거나, 대상 브랜치에서 충돌 파일을 직접 정리한 뒤 다시 실행하세요. 원본 변경 파일을 우선하려면 `--on-conflict force`로 재실행할 수 있습니다.
-
-patchset export는 metadata를 커밋별로 반복 조회하지 않고 batch로 읽고, parent 정보도 patch 생성에 재사용합니다. 압축은 기본 `fast`이며, CPU 시간이 더 중요하면 `--patchset-compression stored`로 무압축 저장을 선택할 수 있습니다. 연속 선형 first-parent 범위는 `git format-patch --stdout` 기반으로 빠르게 생성하고, merge나 비연속 선택은 기존 커밋별 diff 방식으로 자동 fallback합니다.
-
----
-
 ## 8. config — 기본 설정 변경하기
 
 매번 `--ui csv` 처럼 옵션을 입력하는 것이 번거롭다면, config 마법사로 기본값을 저장할 수 있습니다.
@@ -568,10 +535,8 @@ GitShuttle 설정 마법사
 커밋 선택 UI 기본값을 선택하세요:
   [1] tui    — 터미널 인터랙티브 (현재: tui)
   [2] csv    — Excel/메모장 편집
-  [3] html   — 브라우저에서 선택
-  [4] prompt — 방향키 멀티셀렉트
 
-선택 (1~4, 그냥 Enter는 현재값 유지): 2
+선택 (1~2, 그냥 Enter는 현재값 유지): 2
 
 저장 완료: gitshuttle.toml
 ```
@@ -584,7 +549,7 @@ GitShuttle 설정 마법사
 
 ```toml
 [export]
-ui = "csv"   # tui | csv | html | prompt
+ui = "csv"   # tui | csv
 ```
 
 ### 설정 파일 우선순위
@@ -601,7 +566,7 @@ ui = "csv"   # tui | csv | html | prompt
 
 ---
 
-## 9. 커밋 선택 UI 4가지 방식
+## 9. 커밋 선택 UI 2가지 방식
 
 ### 방식 1: TUI (기본값) — 터미널 인터랙티브
 
@@ -664,49 +629,6 @@ gitshuttle export --ui csv
 
 ---
 
-### 방식 3: HTML — 브라우저에서 선택
-
-```
-gitshuttle export --ui html
-```
-
-1. 명령어를 실행하면 `commits_260508.html` 파일이 생성됩니다.
-
-2. 해당 HTML 파일을 **브라우저(Chrome, Edge 등)로 드래그**하여 열거나 더블클릭합니다.
-
-3. 브라우저 화면에서 체크박스로 전송할 커밋을 선택합니다.
-
-4. **"Export"** 버튼을 클릭하면 `selection.json` 파일이 자동 다운로드됩니다.
-
-5. `selection.json`을 커밋 작업 디렉터리에 놓으면 자동으로 export가 진행됩니다.
-
-> 인터넷 연결이 **전혀 필요 없습니다.** HTML 파일 하나에 모든 기능이 내장되어 있습니다.
-
----
-
-### 방식 4: Prompt — 터미널 방향키 멀티셀렉트
-
-```
-gitshuttle export --ui prompt
-```
-
-터미널에서 방향키와 `Space`로 선택하는 간단한 방식입니다.
-
-```
-? 전송할 커밋을 선택하세요 (Space: 선택/해제, Enter: 확인)
- ❯ ◉ a3f8c2 | 2026-05-08 | Alice  | feat: 결제 모듈 추가
-   ○ b9e4f7 | 2026-05-07 | Bob    | fix: 로그인 버그 수정
-   ○ c2d1e9 | 2026-05-01 | Alice  | [imported] 초기 설정
-```
-
-| 키보드 | 동작 |
-|--------|------|
-| `↑` `↓` | 커서 이동 |
-| `Space` | 선택/해제 |
-| `Enter` | 선택 완료 |
-
----
-
 ## 10. 대용량 파일 분할 전송
 
 USB 용량 제한으로 bundle 파일 하나가 너무 클 때 사용합니다.
@@ -751,76 +673,7 @@ gitshuttle import --file shuttle_260508_merged.bundle
 
 ---
 
-## 11. sync — GitHub 직접 동기화 (Phase 2)
-
-> **네트워크가 연결된 환경에서만 사용합니다.**  
-> 두 GitHub 리포지토리 사이에서 USB 없이 직접 커밋을 동기화합니다.
-
-### 사전 준비
-
-**1단계: 설정 파일 작성**
-
-작업 디렉터리에 `gitshuttle.toml` 파일을 만들거나 `gitshuttle config`로 생성합니다.
-
-```toml
-[sync.source]
-url  = "https://github.com/회사외부/repo"
-auth = "token"
-
-[sync.target]
-url  = "https://github.com/회사내부/repo"
-auth = "token"
-```
-
-**2단계: 토큰 환경변수 설정**
-
-GitHub Personal Access Token을 환경변수로 전달합니다.  
-(**절대 `gitshuttle.toml` 파일에 직접 토큰을 쓰지 마세요.**)
-
-```
-set GS_SOURCE_TOKEN=ghp_xxxxxxxxxxxxxxxxxxxx
-set GS_TARGET_TOKEN=ghp_yyyyyyyyyyyyyyyyyyyy
-```
-
-### 실행
-
-> **현재 `gitshuttle sync` CLI는 Phase 2 준비 중입니다.**  
-> 지금은 Python API로 직접 사용할 수 있습니다.
-
-```python
-import os
-from gitshuttle.sync_ import run_sync
-
-result = run_sync(
-    source_url="https://github.com/org1/repo",
-    target_url="https://github.com/org2/repo",
-    source_token=os.environ["GS_SOURCE_TOKEN"],
-    target_token=os.environ["GS_TARGET_TOKEN"],
-)
-print(f"동기화 완료: {result.synced}개 커밋")
-```
-
-### SSH 방식
-
-토큰 대신 SSH 키를 사용하는 경우:
-
-```toml
-[sync.source]
-url     = "git@github.com:org1/repo.git"
-auth    = "ssh"
-ssh_key = "C:\\Users\\사용자명\\.ssh\\id_rsa_source"
-
-[sync.target]
-url     = "git@github.com:org2/repo.git"
-auth    = "ssh"
-ssh_key = "C:\\Users\\사용자명\\.ssh\\id_rsa_target"
-```
-
-SSH 키 파일 경로의 백슬래시(`\`)는 두 번(`\\`) 씁니다.
-
----
-
-## 12. 생성 파일 상세 설명
+## 11. 생성 파일 상세 설명
 
 export 실행 시 아래 3개 파일이 생성됩니다.
 
@@ -831,7 +684,7 @@ Git bundle 형식의 핵심 파일입니다. 선택한 커밋의 히스토리가
 - `YYMMDD`는 실행 날짜입니다. (예: 260508 = 2026년 5월 8일)
 - `gitshuttle import --file` 명령어에 이 파일을 지정합니다.
 
-### shuttle_YYMMDD.sha256
+### shuttle_YYMMDD.bundle.sha256
 
 bundle 파일의 SHA-256 체크섬(해시값)이 저장된 텍스트 파일입니다.
 
@@ -865,7 +718,7 @@ c2d1e9f3  2026-05-01  Alice  docs: README 갱신          (1 file)
 
 ---
 
-## 13. 충돌 처리 옵션 상세
+## 12. 충돌 처리 옵션 상세
 
 "충돌"이란 import하려는 커밋이 대상 리포지토리에 이미 존재하는 상황을 말합니다.
 
@@ -888,7 +741,7 @@ gitshuttle import --file shuttle.bundle --on-conflict abort
 
 ---
 
-## 14. 자주 묻는 질문 (FAQ)
+## 13. 자주 묻는 질문 (FAQ)
 
 **Q. 실행 시 "Git 2.37 이상이 필요합니다" 오류가 납니다.**
 
@@ -906,7 +759,6 @@ Windows Terminal 또는 PowerShell 7+ 사용을 권장합니다.
 CMD 환경에서는 다른 방식을 사용하세요:
 ```
 gitshuttle export --ui csv
-gitshuttle export --ui prompt
 ```
 
 ---
@@ -1020,8 +872,8 @@ rewrite import는 `git fast-import`로 먼저 ref와 object DB를 갱신합니�
 최신 버전은 import 후 대상 브랜치로 checkout/reset 하여 파일까지 자동 갱신합니다. 이미 이 현상이 발생했다면 아래처럼 수동으로 맞출 수 있습니다:
 
 ```powershell
-git -C C:\repos\target-gitshuttle switch migration/gitshuttle-20260610
-git -C C:\repos\target-gitshuttle reset --hard migration/gitshuttle-20260610
+git -C C:\repos\target-repo switch migration/REPO_NAME-main
+git -C C:\repos\target-repo reset --hard migration/REPO_NAME-main
 ```
 
 작업 중인 변경 사항이 있다면 `reset --hard` 전에 반드시 commit 또는 stash 하세요.
@@ -1047,17 +899,17 @@ git -C C:\repos\target-gitshuttle reset --hard migration/gitshuttle-20260610
 # 기준점 만들기: 필요한 전체 범위를 한 번 export/import
 $env:GITSHUTTLE_HEADLESS = "1"
 python -m gitshuttle export `
-  --repo C:\repos\source-gitshuttle `
+  --repo C:\repos\source-repo `
   --branch main `
   --ui tui `
   --output C:\transfer
 Remove-Item Env:\GITSHUTTLE_HEADLESS
 
 python -m gitshuttle import `
-  --repo C:\repos\target-gitshuttle `
+  --repo C:\repos\target-repo `
   --file C:\transfer\shuttle_YYMMDD.bundle `
   --author-map C:\transfer\author_map.json `
-  --target-branch migration/gitshuttle-full-v2 `
+  --target-branch migration/REPO_NAME-main `
   --timestamp original
 ```
 
@@ -1065,11 +917,11 @@ python -m gitshuttle import `
 
 구버전 GitShuttle로 이미 rewrite import한 repo는 숨김 원본 ref가 없을 수 있습니다. 이 경우 한 번은 전체 또는 필요한 기준 범위를 최신 버전으로 다시 import해야 이후 부분 증분이 안정적으로 이어집니다.
 
-체리픽 형태로 변경분만 대상 브랜치 위에 재생하려면 `--format patchset`으로 export하고 `--mode replay`로 import하세요. 다만 이 방식은 원본 Git bundle 이력 이전과 다르게 커밋 SHA와 merge 구조가 달라질 수 있습니다.
+기존 main을 보존한 채 가져온 이력을 검토하려면 별도 migration 브랜치로 import한 뒤 Git merge로 합치세요. 이 방식은 GitShuttle의 bundle 이력 이전 흐름을 유지하면서, 기존 코드와 새 이력을 Git의 표준 merge 절차로 비교·해결할 수 있습니다.
 
 ---
 
-## 15. 오류 메시지 해설
+## 14. 오류 메시지 해설
 
 | 오류 메시지 | 원인 | 해결 방법 |
 |-------------|------|-----------|
@@ -1083,17 +935,18 @@ python -m gitshuttle import `
 | `bundle unbundle 실패` | bundle 사전 조건(prerequisite)을 만족 못 함 | 전체 히스토리 포함한 bundle로 재export |
 | `Not updating refs/heads/... does not contain ...` | 대상 브랜치가 이미 있고 새 import 이력이 기존 tip을 포함하지 않음 | 다른 `--target-branch` 사용, 기존 로컬 브랜치 삭제, 또는 `--on-conflict force` 사용 |
 | 이력은 있는데 파일이 안 보임 | ref/object는 갱신됐지만 작업 폴더가 target branch tip으로 갱신되지 않음 | 최신 버전 사용. 이미 발생했다면 `git switch <브랜치>` 후 `git reset --hard <브랜치>` |
-| `replay patch 적용 실패`, `patch failed`, `already exists in index` | replay patch가 대상 브랜치의 현재 파일 상태와 충돌함 | 메시지의 실패 순번/원본 커밋/제목/git apply 상세를 확인. 이미 같은 변경분이면 자동 skip. 내용이 다르면 충돌 파일을 정리하거나 원본 변경 파일 우선 시 `--on-conflict force`로 재실행 |
 | `작성자 매핑 파일을 찾을 수 없습니다: ...` | `--author-map` 경로가 잘못됨 | JSON 파일 경로 확인 |
 | `타임스탬프 형식 오류: ...` | `from=` 모드에서 datetime 형식이 틀림 | `YYYY-MM-DDTHH:MM:SS` 형식으로 입력 |
 
 ---
 
-## 16. 기존 GitHub에서 새 GitHub로 이전하기
+## 15. 기존 GitHub에서 새 GitHub로 이전하기
 
 하나의 GitHub 리포지토리에 있는 내용을 새로운 GitHub 리포지토리로 옮기면서, 커밋 작성자를 새 사용자로 바꾸는 절차입니다.
 
 > **주의:** 커밋 사용자 변경은 Git 히스토리 재작성입니다. author/committer가 바뀌면 커밋 SHA도 바뀝니다.
+
+아래 명령의 `OLD_GITHUB_ID`, `NEW_GITHUB_ID`, `REPO_NAME`, `OLD_AUTHOR_EMAIL`, `NEW_AUTHOR_NAME`, `NEW_AUTHOR_EMAIL`은 실제 값으로 바꿔 입력합니다.
 
 ### 목표 흐름
 
@@ -1109,13 +962,7 @@ python -m gitshuttle import `
 ### 1단계. 원본 GitHub 리포지토리 clone
 
 ```powershell
-git clone https://github.com/OLD_OWNER/OLD_REPO.git C:\repos\source-repo
-```
-
-예시:
-
-```powershell
-git clone https://github.com/ltw070/gitshuttle.git C:\repos\source-gitshuttle
+git clone https://github.com/OLD_GITHUB_ID/REPO_NAME.git C:\repos\source-repo
 ```
 
 ### 2단계. 새 GitHub 리포지토리 clone
@@ -1123,19 +970,13 @@ git clone https://github.com/ltw070/gitshuttle.git C:\repos\source-gitshuttle
 GitHub에서 빈 리포지토리를 먼저 만든 뒤 clone합니다.
 
 ```powershell
-git clone https://github.com/NEW_OWNER/NEW_REPO.git C:\repos\target-repo
-```
-
-예시:
-
-```powershell
-git clone https://github.com/ltw070/new-gitshuttle.git C:\repos\target-gitshuttle
+git clone https://github.com/NEW_GITHUB_ID/REPO_NAME.git C:\repos\target-repo
 ```
 
 사내 GitHub 예시:
 
 ```powershell
-git clone https://github.samsungds.net/tw070-lim/gitshuttle.git C:\repos\target-gitshuttle
+git clone https://github.company.example/NEW_GITHUB_ID/REPO_NAME.git C:\repos\target-repo
 ```
 
 ### 3단계. GitShuttle로 원본 export
@@ -1146,7 +987,7 @@ git clone https://github.samsungds.net/tw070-lim/gitshuttle.git C:\repos\target-
 cd D:\cla\03_gitshuttle
 
 python -m gitshuttle export `
-  --repo C:\repos\source-gitshuttle `
+  --repo C:\repos\source-repo `
   --branch main `
   --ui tui `
   --output C:\transfer
@@ -1156,7 +997,7 @@ python -m gitshuttle export `
 
 ```powershell
 python -m gitshuttle export `
-  --repo C:\repos\source-gitshuttle `
+  --repo C:\repos\source-repo `
   --branch main `
   --full-branch `
   --output C:\transfer
@@ -1167,7 +1008,7 @@ TUI 동작을 유지한 채 조회된 커밋 전체를 자동 선택해야 하�
 ```powershell
 $env:GITSHUTTLE_HEADLESS = "1"
 python -m gitshuttle export `
-  --repo C:\repos\source-gitshuttle `
+  --repo C:\repos\source-repo `
   --branch main `
   --ui tui `
   --output C:\transfer
@@ -1187,7 +1028,7 @@ C:\transfer\shuttle_YYMMDD_manifest.txt
 원본 리포지토리에서 기존 커밋 작성자 이메일을 확인합니다.
 
 ```powershell
-git -C C:\repos\source-gitshuttle log --all --format="%an <%ae>" | Sort-Object -Unique
+git -C C:\repos\source-repo log --all --format="%an <%ae>" | Sort-Object -Unique
 ```
 
 ### 5단계. 사용자 변경 매핑 파일 작성
@@ -1196,13 +1037,13 @@ git -C C:\repos\source-gitshuttle log --all --format="%an <%ae>" | Sort-Object -
 
 ```json
 {
-  "old@example.com": {
-    "name": "ltw070",
-    "email": "ltw070@naver.com"
+  "OLD_AUTHOR_EMAIL": {
+    "name": "NEW_AUTHOR_NAME",
+    "email": "NEW_AUTHOR_EMAIL"
   },
-  "another-old@example.com": {
-    "name": "ltw070",
-    "email": "ltw070@naver.com"
+  "ANOTHER_OLD_AUTHOR_EMAIL": {
+    "name": "NEW_AUTHOR_NAME",
+    "email": "NEW_AUTHOR_EMAIL"
   }
 }
 ```
@@ -1213,7 +1054,7 @@ git -C C:\repos\source-gitshuttle log --all --format="%an <%ae>" | Sort-Object -
 
 ```powershell
 python -m gitshuttle import `
-  --repo C:\repos\target-gitshuttle `
+  --repo C:\repos\target-repo `
   --file C:\transfer\shuttle_YYMMDD.bundle `
   --author-map C:\transfer\author_map.json `
   --target-branch imported/main `
@@ -1225,7 +1066,7 @@ python -m gitshuttle import `
 ```powershell
 # 2026-06-10 09:00 KST 기준 → UTC 2026-06-10 00:00 입력
 python -m gitshuttle import `
-  --repo C:\repos\target-gitshuttle `
+  --repo C:\repos\target-repo `
   --file C:\transfer\shuttle_YYMMDD.bundle `
   --author-map C:\transfer\author_map.json `
   --target-branch imported/main `
@@ -1237,7 +1078,7 @@ python -m gitshuttle import `
 ### 7단계. import된 브랜치 확인
 
 ```powershell
-git -C C:\repos\target-gitshuttle log imported/main --format="%h %an <%ae> %cn <%ce> %ad %s" --date=iso
+git -C C:\repos\target-repo log imported/main --format="%h %an <%ae> %cn <%ce> %ad %s" --date=iso
 ```
 
 현재 구현은 GitShuttle bundle의 `refs/gitshuttle/tmp_*` ref도 `--target-branch`로 지정한 브랜치에 맞춰 rewrite합니다.
@@ -1247,7 +1088,7 @@ git -C C:\repos\target-gitshuttle log imported/main --format="%h %an <%ae> %cn <
 새 GitHub 리포지토리의 `main` 브랜치로 올립니다.
 
 ```powershell
-cd C:\repos\target-gitshuttle
+cd C:\repos\target-repo
 git push origin imported/main:main
 ```
 
@@ -1276,4 +1117,4 @@ git push origin imported/main:gitshuttle-import
 ---
 
 *GitShuttle v0.1.0 · Phase 1 (CLI + TUI) 완료*  
-*문의: https://github.com/ltw070/gitshuttle/issues*
+*문의: https://github.com/PROJECT_OWNER/gitshuttle/issues*

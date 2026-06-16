@@ -42,9 +42,7 @@ gitshuttle/
 └── ui/
     ├── __init__.py
     ├── tui.py        # Textual 체크박스 + 테이블 (기본값)
-    ├── csv_ui.py     # commits.csv 생성/파싱
-    ├── html_ui.py    # self-contained HTML 생성, selection.json 파싱
-    └── prompt_ui.py  # InquirerPy 멀티셀렉트
+    └── csv_ui.py     # commits.csv 생성/파싱
 
 tests/
 ├── conftest.py       # 공통 픽스처 (임시 git repo, sample commits)
@@ -57,8 +55,7 @@ tests/
 ├── test_config.py
 └── ui/
     ├── test_csv_ui.py
-    ├── test_html_ui.py
-    └── test_prompt_ui.py
+    └── test_tui.py
 ```
 
 ---
@@ -90,7 +87,7 @@ tests/
 ### SA2 호출 프롬프트
 ```
 Sprint 0: 프로젝트 기반 구조 생성.
-pyproject.toml(Python 3.10+, Typer, Textual, InquirerPy 의존성),
+pyproject.toml(Python 3.10+, Typer, Textual 의존성),
 gitshuttle 패키지 스캐폴딩(__main__.py UTF-8 강제, cli.py Typer app),
 tests/conftest.py(임시 git repo 픽스처) 작성.
 수락 기준: python -m gitshuttle --help 시 커맨드 목록 출력.
@@ -166,14 +163,12 @@ TUI headless 테스트 픽스처 필수.
 
 ---
 
-## Sprint 3 — UI 모드 확장 + Config
+## Sprint 3 — CSV UI + Config
 
-**목표:** CSV / HTML / Prompt 모드 구현 및 설정 마법사
+**목표:** TUI 기본 흐름을 보완하는 CSV 모드와 설정 마법사 구현
 
 ### 구현 대상
 - `ui/csv_ui.py`: `commits.csv` 생성(`utf-8-sig`), `include` 컬럼 파싱
-- `ui/html_ui.py`: 단일 `.html` 생성(인터넷 불필요), `selection.json` 파싱
-- `ui/prompt_ui.py`: InquirerPy 멀티셀렉트
 - `config.py`: `gitshuttle.toml` 읽기/쓰기, `gitshuttle config` 마법사
 - `--ui` 플래그 우선순위 로직 (`--ui` > `toml` > 기본값 tui)
 
@@ -182,12 +177,11 @@ TUI headless 테스트 픽스처 필수.
 | 단계 | SubAgent | 내용 |
 |------|----------|------|
 | 문서 검증 | SA1 | PRD 3.2 UI 옵션표, 설정 파일 스펙 확인 |
-| 구현 | SA2 | 각 UI 모드별 입력→커밋목록 변환 단위 테스트 |
-| 검증 | SA3+SA4 | CSV utf-8-sig, HTML 네트워크 호출 없음 확인 |
+| 구현 | SA2 | CSV 입력→커밋목록 변환 단위 테스트 |
+| 검증 | SA3+SA4 | CSV utf-8-sig 확인 |
 
 ### 수락 기준
 - [x] `gitshuttle export --ui csv` → `commits.csv` 생성, 수정 후 재입력 시 선택 반영
-- [x] `gitshuttle export --ui html` → `.html` 생성, `selection.json` 파싱 후 export
 - [x] `gitshuttle config` → 마법사 실행 후 `gitshuttle.toml` 저장
 - [x] `--ui` 플래그가 toml 기본값보다 우선
 
@@ -195,8 +189,6 @@ TUI headless 테스트 픽스처 필수.
 ```
 Sprint 3: UI 모드 확장 + Config 구현.
 ui/csv_ui.py(utf-8-sig, include 컬럼),
-ui/html_ui.py(self-contained, 외부 CDN 없음, selection.json),
-ui/prompt_ui.py(InquirerPy),
 config.py(toml 읽기/쓰기, 마법사).
 --ui 플래그 우선순위 로직 테스트 필수.
 ```
@@ -256,7 +248,7 @@ import_.py(SHA-256 검증 → 커밋 매칭 → Fast-forward → 충돌 처리).
 - `--author-map <파일>` 옵션 추가
 - `--target-branch <이름>` 옵션 추가 (기본값: `imported/<소스브랜치명>`)
 - `--timestamp now|original|from=<datetime>` 옵션 추가 (기본값: `now`)
-- `gitshuttle.toml` `[import.author_map]`, `[import.timestamp]` 섹션 읽기
+- `gitshuttle.toml` `[import]` 섹션의 `author_map`, `timestamp` 값 읽기
 
 **`tests/test_rewrite.py`**
 - 작성자 치환 / 미매핑 원본 유지 케이스
@@ -280,7 +272,7 @@ import_.py(SHA-256 검증 → 커밋 매칭 → Fast-forward → 충돌 처리).
 - [x] `--timestamp now` (기본): 모든 커밋의 date = import 실행 시각
 - [x] `--timestamp original`: 소스 author date·committer date 그대로 보존
 - [x] `--timestamp from=2024-01-01T09:00:00`: 최초 커밋 = 지정 시각, 이후 상대 간격 유지
-- [x] `gitshuttle.toml` `[import.author_map]`, `[import.timestamp]` 섹션 적용
+- [x] `gitshuttle.toml` `[import]` 섹션의 `author_map`, `timestamp` 값 적용
 - [x] CLI 옵션이 toml 설정보다 우선
 
 ### SA2 호출 프롬프트
@@ -288,16 +280,16 @@ import_.py(SHA-256 검증 → 커밋 매칭 → Fast-forward → 충돌 처리).
 Sprint 4b: Import Rewrite 구현.
 rewrite.py(rewrite_authors, rewrite_branch_ref, rewrite_timestamps — git fast-export/fast-import 파이프라인),
 import_.py 확장(--author-map, --target-branch 기본값 imported/<소스브랜치>, --timestamp now|original|from=<dt>),
-config.py 확장([import.author_map], [import.timestamp]).
+config.py 확장([import] author_map, timestamp).
 타임스탬프 3모드 각각 테스트 필수. from= 모드: 상대 간격 보존 계산 검증.
 미매핑 작성자 원본 유지 + 경고 케이스 테스트 필수.
 ```
 
 ---
 
-## Sprint 5 — 분할 압축 + E2E 통합
+## Sprint 5 — 분할 전송 + E2E 통합
 
-**목표:** 분할 압축 지원 및 E2E 검증 (토큰 사용량 다른 Sprint 수준으로 제한)
+**목표:** 대용량 bundle 분할 전송 지원 및 E2E 검증 (토큰 사용량 다른 Sprint 수준으로 제한)
 
 ### 범위 제약 (변경)
 - 대용량 실제 데이터 생성 금지 — 실제 100MB+ 파일 생성·처리 테스트 제외
@@ -305,7 +297,7 @@ config.py 확장([import.author_map], [import.timestamp]).
 - E2E는 tmp_path 기반 두 임시 repo로 시뮬레이션 (GitHub repo 테스트 없음)
 
 ### 구현 대상
-- 분할 압축 (Split archive) — bundle을 지정 크기(bytes)로 분할/재조립하는 로직
+- 분할 전송 (Split archive) — bundle을 지정 크기(bytes)로 분할/재조립하는 로직
 - E2E 테스트: 두 개의 임시 git repo(외부/내부)로 export→import 전체 흐름
 - 한글 커밋 메시지 E2E 왕복 보존 검증
 
@@ -325,7 +317,7 @@ config.py 확장([import.author_map], [import.timestamp]).
 
 ### SA2 호출 프롬프트
 ```
-Sprint 5: 분할 압축 + E2E 통합 테스트 (토큰 절약 모드).
+Sprint 5: 분할 전송 + E2E 통합 테스트 (토큰 절약 모드).
 split_bundle/merge_bundles는 소형 더미 파일(수KB)로만 테스트.
 E2E는 두 tmp_path git repo로 export→import 전체 흐름 검증.
 실제 대용량 파일 생성 절대 금지.
@@ -365,55 +357,6 @@ exe 실행 + 한글 출력 검증 테스트.
 
 ---
 
-## Sprint 7 — Direct Sync (Phase 2)
-
-**목표:** 네트워크 연결 환경에서 두 GitHub repo 간 파일 없이 직접 동기화
-
-### 구현 대상
-- `sync_.py`: Source fetch → Target push 파이프라인
-- `github_auth.py`: HTTPS+Token / SSH 두 가지 인증 방식
-- `config.py` 확장: `[sync.source]` / `[sync.target]` 섹션 추가
-- 환경변수 지원: `GS_SOURCE_TOKEN`, `GS_TARGET_TOKEN`
-
-### 인증 흐름
-
-```
-HTTPS + Token:
-  URL: https://github.com/org/repo
-  인증: Authorization: Bearer <token>  (git credential helper로 주입)
-
-SSH:
-  URL: git@github.com:org/repo.git
-  인증: GIT_SSH_COMMAND="ssh -i <key_path>"  (subprocess env로 주입)
-```
-
-### TDD 사이클
-
-| 단계 | SubAgent | 내용 |
-|------|----------|------|
-| 문서 검증 | SA1 | PRD 3.6(Direct Sync) 스펙, 인증 방식 확인 |
-| 구현 | SA2 | mock GitHub API로 fetch/push 단위 테스트. 토큰이 로그에 노출되지 않는지 테스트 포함 |
-| 검증 | SA3+SA4 | 토큰 노출 여부 compliance 체크, 네트워크 호출은 mock 처리 확인 |
-
-### 수락 기준
-- [x] `gitshuttle sync` → TUI 커밋 선택 → Source fetch → Target push
-- [x] HTTPS+Token 방식: `GS_SOURCE_TOKEN` 환경변수로 인증
-- [x] SSH 방식: `ssh_key` 경로 지정으로 인증
-- [x] 토큰이 로그·오류 메시지에 노출되지 않음
-- [x] Target에 이미 존재하는 커밋 `[synced]` 표시 및 skip
-- [x] `--on-conflict skip/force/abort` 동작
-
-### SA2 호출 프롬프트
-```
-Sprint 7: Direct Sync 구현.
-github_auth.py(HTTPS+Token, SSH 두 방식 — 토큰 로그 노출 절대 금지),
-sync_.py(Source fetch → Target push, 커밋 선택 UI 재사용),
-config.py 확장([sync.source], [sync.target], 환경변수 GS_SOURCE_TOKEN/GS_TARGET_TOKEN).
-mock GitHub으로 단위 테스트 필수.
-```
-
----
-
 ## 전체 일정 요약
 
 | Sprint | Phase | 내용 | 핵심 산출물 |
@@ -421,12 +364,11 @@ mock GitHub으로 단위 테스트 필수.
 | 0 | 1 | 기반 구조 | pyproject.toml, 패키지 스캐폴딩, conftest.py |
 | 1 | 1 | Git 핵심 레이어 | git_ops.py, bundle.py, checksum.py |
 | 2 | 1 | Export + TUI | ui/tui.py, manifest.py, export_.py |
-| 3 | 1 | UI 모드 + Config | csv/html/prompt ui, config.py |
+| 3 | 1 | CSV UI + Config | csv ui, config.py |
 | 4 | 1 | Import | import_.py, 충돌 처리 3케이스 |
 | 4b | 1 | Import Rewrite | rewrite.py, 작성자 매핑, 브랜치 리네임 |
 | 5 | 1 | 대용량 + E2E | split archive, E2E 테스트 |
 | 6 | 1 | 빌드 | gitshuttle.exe, build.ps1 |
-| 7 | 2 | Direct Sync | github_auth.py, sync_.py, config 확장 |
 
 ---
 
@@ -442,7 +384,6 @@ main          ← 릴리즈 브랜치 (각 Sprint 완료 후 merge)
   └── sprint/4b-import-rewrite
   └── sprint/5-e2e
   └── sprint/6-build
-  └── sprint/7-direct-sync
 ```
 
 각 Sprint 브랜치에서 개발 → SA3+SA4 PASS → `main` merge → 커밋 & push.

@@ -12,15 +12,14 @@
 | 3 | `sprint/3-ui-config` | UI 모드 + Config | ✅ DONE | PASS | PASS | PASS (64/64) | PASS |
 | 4 | `sprint/4-import` | Import | ✅ DONE | PASS | PASS | PASS (71/71) | PASS |
 | 4b | `sprint/4b-import-rewrite` | 작성자 매핑 & 브랜치 리네임 | ✅ DONE | PASS | PASS | PASS (당시 134/134) | PASS |
-| 5 | `sprint/5-e2e` | 분할 압축 + E2E | ✅ DONE | PASS | PASS | PASS (79/79) | PASS |
+| 5 | `sprint/5-e2e` | 분할 전송 + E2E | ✅ DONE | PASS | PASS | PASS (79/79) | PASS |
 | 6 | `sprint/6-build` | PyInstaller 빌드 | ✅ DONE | PASS | PASS | PASS (85/85) | PASS |
-| 7 | `sprint/7-direct-sync` | Direct Sync (Phase 2) | ✅ DONE | PASS | PASS | PASS (102/102) | PASS |
 
 ---
 
 ## 2026-06-14 — 문서 현행화 및 리뷰 관점 보강
 
-### Patchset export 속도 개선
+### Bundle export 선택 범위/속도 정리
 
 **변경 내용:**
 - `gitshuttle/git_ops.py`
@@ -28,52 +27,37 @@
   - CLI `--recent N` 사용 시 `git log --max-count=N`으로 최신 N개만 조회
 - `gitshuttle/cli.py`
   - export `--recent N` 옵션 추가: TUI 없이 최신 N개 커밋을 바로 선택
-  - export `--patchset-compression fast|stored|deflated` 옵션 추가
   - export `--full-branch` 옵션 추가: 현재/지정 브랜치 tip 기준 전체 이력을 TUI 없이 self-contained bundle로 생성
-- `gitshuttle/patchset.py`
-  - 커밋 metadata를 커밋별 3회 조회하던 구조를 `git show --no-patch` batch 조회로 변경
-  - parent 정보를 metadata에서 재사용해 patch 생성 시 `rev-list` 중복 조회 제거
-  - zip 기본 압축을 `fast`로 낮추고, `stored` 무압축 저장을 지원
-  - 연속 선형 first-parent 범위는 `git format-patch --stdout` 기반으로 patch 생성
-  - merge나 비연속 선택은 기존 per-commit diff 방식으로 자동 fallback
-- `tests/test_cli.py`, `tests/test_git_ops.py`, `tests/test_patchset.py`
+  - export/import 명령의 경로 해석, 커밋 선택, 결과 출력을 작은 helper로 분리해 CLI 함수의 책임을 축소
+- `gitshuttle/bundle.py`, `gitshuttle/export_.py`
+  - 선택 tip까지 전체 이력을 포함하는 `--bundle-scope full` 경로 유지
+  - 전체 브랜치 이전은 항상 bundle 파일과 checksum/manifest를 생성
+- `tests/test_cli.py`, `tests/test_git_ops.py`, `tests/test_bundle.py`
   - `--recent N`이 UI를 열지 않고 limit 조회로 이어지는지 검증
-  - patchset metadata/parent 재사용과 `stored` 압축 옵션 검증
+  - full-scope bundle이 빈 repo에서도 검증되는지 확인
 
-**현재 기준 테스트:** 172개 테스트 수집 확인. 신규 속도 개선 관련 테스트 통과.
+**현재 기준 테스트:** 133개 테스트 수집 확인. bundle 선택 범위 관련 테스트 통과.
 
 ---
 
-### Replay / Cherry-Pick patchset 모드 추가
+### Bundle-only CLI 단순화
 
 **변경 내용:**
-- `gitshuttle/patchset.py`
-  - `--format patchset`에서 사용할 `.patchset` zip 포맷 추가
-  - 선택 커밋의 metadata와 binary diff를 old → new 순서로 저장
-  - replay 순서를 Git topo order로 정렬해 서브브랜치/merge 이력 반영 안정성 개선
-  - `--mode replay`에서 대상 브랜치 현재 HEAD 위에 새 커밋으로 재생
-  - author/committer 매핑과 `timestamp original/now/from=` 적용
-  - 대상 HEAD 마지막 커밋 메시지와 첫 replay 커밋 메시지가 같을 때만 확인 콜백 요구
+- 별도 diff 기반 전송 모듈과 전용 테스트 삭제
 - `gitshuttle/export_.py`, `gitshuttle/cli.py`
-  - export `--format bundle|patchset` 옵션 추가
-  - import `--mode auto|bundle|replay` 옵션 추가
-  - `.patchset` 파일은 `auto` 모드에서 replay로 처리
+  - export는 항상 `.bundle`을 만들도록 단순화
+  - export `--format` 및 별도 압축 모드 옵션 제거
+  - 결과 출력도 bundle/checksum/manifest 중심으로 정리
 - `gitshuttle/import_.py`
-  - checksum 검증 이후 replay import 경로로 분기
-- `tests/test_patchset.py`, `tests/test_cli.py`
-  - patchset 생성, replay import author_map 적용, 중복 메시지 확인 중단 테스트 추가
-  - 이미 적용된 patch 자동 skip 테스트 추가
-  - 같은 경로의 다른 내용 충돌 시 복구 안내 테스트 추가
-  - 원본 첫 커밋부터 새 target branch에 replay할 때 빈 orphan branch에서 시작하는 테스트 추가
-  - 같은 파일 반복 변경 전체 순차 replay 테스트 추가
-  - `--on-conflict force`가 파일 스냅샷으로 비어 있지 않은 브랜치에 source-wins 적용되는 테스트 추가
-  - 서브브랜치 merge 충돌 해결 결과가 force replay에서 최종 파일 상태로 반영되는 테스트 추가
-  - CLI `--format patchset`, `--mode replay` 전달 테스트 추가
+  - import는 checksum 검증 후 bundle import/rewrite 경로만 사용
+  - import `--mode` 옵션 제거
+- `tests/test_cli.py`
+  - 제거된 `--format`, `--mode` 옵션이 명확히 실패하는지 회귀 테스트 추가
 - `README.md`, `MANUAL.md`, `EXAMPLE.md`, `PR_REVIEW_POINTS.md`
-  - 기준점 hidden ref 없이 작업자 책임으로 변경분을 붙이는 replay/cherry-pick 사용법 추가
-  - replay는 원본 SHA와 merge topology를 보존하지 않는다는 제약 문서화
+  - 기존 main을 보존해야 할 때 migration 브랜치에 bundle import 후 Git merge하는 가이드로 정리
+  - 현재 전송 방식이 bundle 중심임을 명확화
 
-**현재 기준 테스트:** 172개 테스트 수집 확인. patchset/CLI 관련 테스트 통과.
+**현재 기준 테스트:** 133개 테스트 수집 확인. CLI 제거 옵션 회귀 테스트 통과.
 
 ---
 
@@ -84,12 +68,11 @@
   - 5번 항목: SOLID 원칙 관점 추가
   - 6번 항목: Mock 테스트 관점 추가
 - `PR_REVIEW_POINTS.md`
-  - 현재 테스트 수를 172개 기준으로 업데이트
+  - 현재 테스트 수를 133개 기준으로 업데이트
   - `--repo` 옵션, fast-import 바이너리 입력, fast-export `data N` payload 보존 포인트 반영
   - `author_map.json` 형식을 이메일 키 + `{name,email}` dict 형식으로 정리
 - `README.md`
   - `--repo` 기반 실행, headless 전체 선택, 작성자 매핑 JSON 예시 보강
-  - `sync`는 현재 CLI 직접 동기화가 아니라 Python API 단계임을 명확화
 - `MANUAL.md`
   - `--output`을 파일명이 아닌 출력 폴더 옵션으로 수정
   - 작성자 매핑 JSON 형식과 `gitshuttle.toml`의 `author_map` 파일 경로 설정 수정
@@ -132,9 +115,9 @@
   - `--bundle-scope full` self-contained bundle과 강제 이어붙이기 예시 추가
   - `--full-branch`가 merge된 서브브랜치 이력은 포함하고, merge되지 않은 독립 브랜치는 포함하지 않는다는 범위 문서화
   - 최신 버전의 `refs/gitshuttle/original/...` 기준점 보관 방식과 구버전 repo의 1회 전체 import 필요성 문서화
-  - cherry-pick/replay 방식은 가능하지만 원본 bundle 이력 이전과 달리 SHA/merge 구조가 달라질 수 있음을 안내
+  - 기존 코드가 있는 repo는 migration 브랜치에 bundle import 후 Git merge로 합치는 흐름 문서화
 
-**현재 기준 테스트:** 172개 테스트 수집 확인. 관련 단위/통합 테스트 통과.
+**현재 기준 테스트:** 133개 테스트 수집 확인. 관련 단위/통합 테스트 통과.
 
 ---
 
@@ -145,21 +128,20 @@
 **변경 내용:**
 - `PR_REVIEW_POINTS.md` Sprint 4b 한정 → **GitShuttle v0.1.0 전체 프로젝트** 범위로 재작성
   - PR 제목: `feat: GitShuttle v0.1.0 — 망분리 환경 Git 히스토리 동기화 CLI (Phase 1 완료)`
-  - Sprint 0~7 전체 구현 범위 표 포함
+  - Sprint 0~6 전체 구현 범위 표 포함
   - 핵심 아키텍처 결정 5가지 (bundle 포맷, Rewrite 파이프라인, 브랜치 격리, SHA-256, UTF-8)
   - 🔴 중점 검토 3개 (binary mode CRLF 버그, 정규식 엣지케이스, rewrite_needed 조건)
-  - 🟡 일반 검토 6개 (split archive, checksum 강제화, branch fallback, author_map 키 검증, toml 우선순위, Phase 2 노출)
+  - 🟡 일반 검토 5개 (split archive, checksum 강제화, branch fallback, author_map 키 검증, toml 우선순위)
   - 🟢 확인 완료 항목, exe 빌드 방법 및 제약 명시
 
-**최종 테스트 확인:** 당시 `134/134 PASS` (2026-06-15 현재 문서 기준: 172개 테스트)
+**최종 테스트 확인:** 당시 `134/134 PASS` (2026-06-16 현재 문서 기준: 133개 테스트)
 
 **현재 상태 요약:**
 
 | 항목 | 상태 |
 |------|------|
 | Phase 1 구현 | ✅ 완료 (Sprint 0~6, 4b 포함) |
-| Phase 2 (Direct Sync) | ✅ Python API 구현 완료, CLI 노출 예정 |
-| 전체 테스트 | ✅ 172개 수집 확인 (2026-06-15 기준) |
+| 전체 테스트 | ✅ 133개 수집 확인 (2026-06-16 기준) |
 | gitshuttle.exe | ⚠️ 미빌드 (사내 PyInstaller 설치 불가, spec/build.ps1 준비 완료) |
 | GitHub push | ✅ main 브랜치 최신 |
 | PR #1 | ✅ Sprint 4b feat/PR 병합 완료 |
@@ -171,18 +153,18 @@
 
 ### Import Rewrite 실전 적용 + 문서 업데이트
 
-**실전 시나리오:** `gitshuttle` 초기 10개 커밋 → `gitshuttle_copyTest` 이전
+**실전 시나리오:** `REPO_NAME` 초기 10개 커밋 → `REPO_COPY_NAME` 이전
 
 | 항목 | 값 |
 |------|-----|
-| 소스 리포 | `github.com/ltw070/gitshuttle` (초기 10개 커밋) |
-| 타겟 리포 | `github.com/ltw070/gitshuttle_copyTest` (초기화 후) |
-| 작성자 변경 | `Tim <ltw070@naver.com>` → `tw070-lim <tw070-lim@users.noreply.github.com>` |
+| 소스 리포 | `github.com/OLD_GITHUB_ID/REPO_NAME` (초기 10개 커밋) |
+| 타겟 리포 | `github.com/NEW_GITHUB_ID/REPO_COPY_NAME` (초기화 후) |
+| 작성자 변경 | `OLD_AUTHOR_NAME <OLD_AUTHOR_EMAIL>` → `NEW_AUTHOR_NAME <NEW_AUTHOR_EMAIL>` |
 | 브랜치 | `feat/gitshuttle_1st` (타겟 main 보호, 별도 브랜치 격리) |
 | 타임스탬프 | `2026-05-09 10:23 AM KST` 기준, 상대 간격 유지 |
 
 **발견한 주의사항:**
-- `author_map.json` 키는 이메일 주소만 (`"ltw070@naver.com"`), `"Name <email>"` 형식 불가
+- `author_map.json` 키는 이메일 주소만 (`"OLD_AUTHOR_EMAIL"`), `"Name <email>"` 형식 불가
 - `from=` 타임스탬프는 UTC 기준: 10:23 AM KST = `from=2026-05-09T01:23:00`
 - 리셋 후 `git clean -fdx` 필수 (untracked 파일이 Python 패키지 경로를 덮어씀)
 - `PYTHONPATH` 명시 필요 (타겟 리포와 gitshuttle 소스 디렉터리 다를 때)
@@ -193,7 +175,7 @@
 - `gitshuttle.spec`, `build.ps1` 준비 완료 → 인터넷 연결 환경에서 수동 빌드 필요
 
 **문서 업데이트:**
-- `EXAMPLE.md`: 예제 3 추가 (Import Rewrite 실전 적용 — 6단계 + 주의사항 표)
+- `EXAMPLE.md`: Import Rewrite 실전 예제 추가 (6단계 + 주의사항 표)
 - `MANUAL.md`: exe 빌드 안내 수정 (릴리즈 미존재 명시, 직접 빌드 방법 추가), FAQ 2개 추가 (exe 없을 때, PYTHONPATH 오류)
 - `REPORT.md`: 이 항목
 
@@ -296,8 +278,6 @@
 - A~D 4가지 방식 비교 테이블 작성:
   - **A. TUI (Textual)** — 기본값
   - **B. CSV 편집** — Excel 친화적
-  - **C. Self-contained HTML** — 브라우저 선택 → selection.json
-  - **D. InquirerPy** — 방향키 + Space
 - UI 방식 선택 메커니즘 확정:
   - 설정 파일 `gitshuttle.toml` + `--ui` 플래그 + `gitshuttle config` 마법사 조합
 
@@ -306,9 +286,10 @@
 - 보조 실행: `python -m gitshuttle`
 - 엔트리포인트: `gitshuttle/__main__.py`
 
-### 4. 개발 로드맵 확정
-- Phase 1: CLI + TUI
-- Phase 2: 데스크탑 GUI
+### 4. 개발 범위 확정
+- CLI 기반 bundle export/import
+- 기본 TUI 선택기 + 보조 CSV 선택기
+- 작성자/타임스탬프 rewrite와 대상 브랜치 격리
 
 ### 5. 문서 생성
 - `README.md`: 사용자 대상 — 설치, 명령어, 워크플로우, 설정
@@ -321,7 +302,7 @@
   - `git config i18n.commitEncoding utf-8`
   - `git config i18n.logOutputEncoding utf-8`
   - `.gitattributes` 생성 (UTF-8 + LF)
-- GitHub private repo 생성: `https://github.com/ltw070/gitshuttle`
+- GitHub private repo 생성: `https://github.com/PROJECT_OWNER/gitshuttle`
 - remote 연결 및 push 완료
 
 ### 7. TDD Harness 설계 및 구현
@@ -351,25 +332,9 @@
 
 ---
 
-### 10. Direct Sync 기능 추가 (Phase 2)
-- **배경:** 단일 망 환경에서 두 GitHub repo 간 파일 없이 직접 동기화 요구
-- **PRD 3.6** 신규 추가: Direct Sync 스펙, 인증 방식(HTTPS+Token / SSH), `gitshuttle.toml` 설정 구조
-- **PRD 시나리오 B** 추가: `gitshuttle sync` 워크플로우
-- **PLAN Sprint 7** 추가: `github_auth.py`, `sync_.py`, 환경변수 인증(`GS_SOURCE_TOKEN` / `GS_TARGET_TOKEN`)
-- **README** 업데이트: `sync` 명령어 레퍼런스, HTTPS Token / SSH 설정 예시
-- **CLAUDE.md** 업데이트: 명령어 구조에 `sync` 추가, 패키지 구조에 `sync_.py` / `github_auth.py` 추가
-
-주요 설계 결정:
-- Source / Target 각각 별도 인증 (다른 계정/조직 지원)
-- 토큰은 파일에 저장 금지 → 환경변수(`GS_SOURCE_TOKEN`, `GS_TARGET_TOKEN`)로만 주입
-- export/import와 동일한 커밋 선택 UI 재사용 (코드 중복 없음)
-
----
-
-### 11. 문서 업데이트 규칙 수립
+### 10. 문서 업데이트 규칙 수립
 - `CLAUDE.md` 최상단에 **문서 업데이트 규칙** 섹션 추가
 - 주요 작업 후 커밋 전 README / REPORT / CLAUDE 3개 파일 업데이트 의무화
-- 배경: Direct Sync 작업 시 REPORT.md 누락 사례 발생 → 재발 방지
 
 ---
 
@@ -397,7 +362,7 @@ gitshuttle/
 └── REPORT.md
 ```
 
-GitHub: https://github.com/ltw070/gitshuttle (private)
+GitHub: https://github.com/PROJECT_OWNER/gitshuttle (private)
 
 ---
 
@@ -410,12 +375,12 @@ GitHub: https://github.com/ltw070/gitshuttle (private)
 ### 생성 파일
 | 파일 | 내용 |
 |------|------|
-| `pyproject.toml` | Python 3.10+, typer/textual/InquirerPy 의존성, 빌드 설정 |
+| `pyproject.toml` | Python 3.10+, typer/textual 의존성, 빌드 설정 |
 | `requirements.txt` | 런타임 의존성 |
 | `requirements-dev.txt` | pytest, pytest-cov |
 | `gitshuttle/__init__.py` | 버전 `0.1.0` 정의 |
 | `gitshuttle/__main__.py` | 엔트리포인트, stdout/stderr UTF-8 강제 래핑 |
-| `gitshuttle/cli.py` | Typer app, export/import/config/sync 커맨드 스텁 |
+| `gitshuttle/cli.py` | Typer app, export/import/config 커맨드 스텁 |
 | `gitshuttle/config.py` | `load_config()`, `get_ui_mode()`, 기본값 `tui` |
 | `tests/__init__.py` | 테스트 패키지 초기화 |
 | `tests/conftest.py` | `tmp_git_repo` 픽스처 |
@@ -434,7 +399,7 @@ GitHub: https://github.com/ltw070/gitshuttle (private)
 - SA4 (규약 준수): **PASS** — 인코딩·네트워크·Phase 범위·예약어 전 항목 통과
 
 ### 수락 기준 달성
-- [x] `python -m gitshuttle --help` → export/import/config/sync 커맨드 목록 출력
+- [x] `python -m gitshuttle --help` → export/import/config 커맨드 목록 출력
 - [x] `pytest tests/` → 6 passed, 0 errors
 - [x] `gitshuttle.toml` 없을 때 기본값 `tui` 동작
 
@@ -510,7 +475,7 @@ GitHub: https://github.com/ltw070/gitshuttle (private)
 
 ---
 
-## Sprint 3 — UI 모드 확장 + Config (2026-05-08)
+## Sprint 3 — CSV UI + Config (2026-05-08)
 
 **브랜치:** `sprint/3-ui-config` → `main` merge
 
@@ -519,20 +484,15 @@ GitHub: https://github.com/ltw070/gitshuttle (private)
 | 파일 | 내용 |
 |------|------|
 | `gitshuttle/ui/csv_ui.py` | `generate_csv()` (utf-8-sig), `parse_csv()` |
-| `gitshuttle/ui/html_ui.py` | `generate_html()` (self-contained, 외부URL없음), `parse_selection_json()` |
-| `gitshuttle/ui/prompt_ui.py` | `select_commits_prompt()`, InquirerPy headless 분기 |
 | `gitshuttle/config.py` | `save_config()` 추가, `get_ui_mode(flag=, config_path=)` 시그니처 확장, `run_config_wizard()` 구현, `_parse_simple_toml()` (tomllib 없는 환경 대비) |
-| `gitshuttle/cli.py` | export 커맨드에 UI 모드별 분기 (csv/html/prompt 실제 호출), config 커맨드 `run_config_wizard()` 연결, `get_ui_mode(flag=ui)` 우선순위 로직 |
+| `gitshuttle/cli.py` | export 커맨드에 CSV/TUI 분기, config 커맨드 `run_config_wizard()` 연결, `get_ui_mode(flag=ui)` 우선순위 로직 |
 | `tests/ui/test_csv_ui.py` | csv_ui 테스트 7개 |
-| `tests/ui/test_html_ui.py` | html_ui 테스트 8개 |
 | `tests/test_config.py` | config 테스트 10개 |
 | `tests/test_cli.py` | `test_config_stub` — 실제 마법사 입력 흐름으로 업데이트 |
 
 ### 설계 결정
 
 - `csv_ui.py`: `open(path, 'w', encoding='utf-8-sig', newline='')` — Excel BOM 호환
-- `html_ui.py`: 순수 HTML+CSS+JS만 사용, `Blob` + `URL.createObjectURL` 로 selection.json 다운로드. 외부 CDN/URL 일절 없음.
-- `prompt_ui.py`: InquirerPy import는 함수 내부에서만 — 미설치 환경에서도 모듈 import 오류 없음
 - `config.py save_config()`: tomli_w 미설치 가능성 → 수동 toml 직렬화(`[section]\nkey = "value"`)
 - `get_ui_mode()`: 시그니처에 `flag` 파라미터 추가 → `--ui 플래그 > toml > 기본값` 우선순위
 - `run_config_wizard()`: `EOFError` 처리 — 비인터랙티브 환경(테스트 등)에서 정상 종료
@@ -551,7 +511,6 @@ GitHub: https://github.com/ltw070/gitshuttle (private)
 
 - [x] `pytest tests/ -v` → 64 passed (기존 39 + 신규 25)
 - [x] CSV utf-8-sig BOM 확인 테스트 PASS
-- [x] HTML 외부 URL 없음 확인 테스트 PASS
 - [x] `--ui` 플래그가 toml 기본값보다 우선하는 테스트 PASS
 - [x] `save_config()` 저장 → `load_config()` 재읽기 일치 테스트 PASS
 
@@ -616,7 +575,7 @@ GitHub: https://github.com/ltw070/gitshuttle (private)
 
 ---
 
-## Sprint 5 — 분할 압축 + E2E 통합 테스트 (2026-05-08)
+## Sprint 5 — 분할 전송 + E2E 통합 테스트 (2026-05-08)
 
 **브랜치:** `sprint/5-e2e` → `main` merge 완료
 
@@ -720,73 +679,11 @@ GitHub: https://github.com/ltw070/gitshuttle (private)
 
 ---
 
-## Sprint 7 — Direct Sync (Phase 2) (2026-05-08)
-
-**브랜치:** `sprint/7-direct-sync` → `main` merge 완료
-
-### 생성/수정 파일
-
-| 파일 | 내용 |
-|------|------|
-| `gitshuttle/github_auth.py` | `build_authenticated_url()`, `get_ssh_env()`, `mask_token_in_url()` |
-| `gitshuttle/sync_.py` | `run_sync()`, `SyncResult` 데이터클래스 |
-| `gitshuttle/config.py` | `get_sync_config()`, `_parse_sync_toml()` 추가 |
-| `tests/test_sync.py` | Direct Sync 테스트 17개 (신규) |
-
-### 설계 결정
-
-**토큰 보안 — 마스킹 레이어 구현**
-- `mask_token_in_url(url)`: `https://<token>@host` 패턴을 `https://***@host`로 정규식 치환
-- `_run_git_cmd()`: RuntimeError 발생 시 stderr에 포함된 URL도 `mask_token_in_url()` 통과 후 메시지 생성
-- 테스트 `test_run_sync_token_not_in_error`: 실제 토큰 문자열이 예외 메시지에 없음을 단언
-
-**인증 방식 추상화 — `_build_url()` 헬퍼**
-- HTTPS+Token: `build_authenticated_url(url, token)` → 인증 URL 반환, 추가 env 없음
-- SSH: URL 그대로, `get_ssh_env(ssh_key)` → `GIT_SSH_COMMAND` env dict 반환
-- `_run_git_cmd(extra_env=)` 파라미터로 SSH env 주입
-
-**`get_sync_config()` — 중첩 섹션 파싱**
-- `[sync.source]`, `[sync.target]` 같은 점(`.`) 구분 중첩 섹션을 수동 파싱으로 지원
-- `tomllib` 있으면 그것을 사용, 없으면 `_parse_sync_toml()` fallback
-- 반환: `{'source': {...}, 'target': {...}}` — `[sync]` 루트는 제거하고 하위만 반환
-
-**`run_sync()` 흐름**
-1. `work_dir / clone` 경로에 `git clone --bare <source_url>` 실행
-2. `git rev-list --count --all`로 커밋 수 측정
-3. `git push <target_url> --all` (force 옵션은 `on_conflict="force"` 시 추가)
-4. `SyncResult(synced=N, skipped=0, total=N)` 반환
-
-**모든 subprocess 호출 규약 준수**
-- `encoding='utf-8'` 명시
-- `env`에 `PYTHONIOENCODING='utf-8'` 포함 (`_sync_env()` 헬퍼로 일괄 적용)
-
-### TDD Harness 결과
-
-- SA2 (TDD): **PASS**
-  - RED: 17개 테스트 실패 (모듈 없음, ImportError)
-  - GREEN: 17/17 테스트 통과
-  - 전체 suite: **102 passed** (기존 85 + 신규 17), 0 failed, 회귀 없음
-
-### 수락 기준 달성
-
-- [x] `build_authenticated_url(url, token)` → `https://<token>@host/...` 형식
-- [x] `get_ssh_env(key_path)` → `{'GIT_SSH_COMMAND': 'ssh -i <path> -o StrictHostKeyChecking=no'}`
-- [x] `mask_token_in_url()` → 토큰 부분 `***` 치환
-- [x] `get_sync_config()` — 파일 없거나 [sync] 없으면 `{}` 반환
-- [x] `get_sync_config()` — `[sync.source]`, `[sync.target]` 중첩 섹션 파싱
-- [x] `run_sync()` → subprocess mock 시 `encoding='utf-8'` 및 `PYTHONIOENCODING='utf-8'` 준수
-- [x] 오류 발생 시 source/target 토큰 예외 메시지에 미노출
-- [x] `run_sync()` → `SyncResult` 반환, 필드 `synced/skipped/total` 정수 타입
-- [x] 기존 85개 테스트 회귀 없음 (102 passed)
-
----
-
 ## Phase 1 완료 (2026-05-08)
 
-모든 Sprint(0~7)가 완료되었습니다. 당시 최종 테스트는 **106 passed**, 0 failed였고, 이후 기능 보강을 포함한 2026-06-15 기준 테스트 수는 172개입니다.
+모든 Sprint(0~6)가 완료되었습니다. 당시 최종 테스트는 **85 passed**, 0 failed였고, 이후 기능 보강과 bundle-only 단순화를 반영한 2026-06-16 기준 테스트 수는 133개입니다.
 
-### 남은 작업 (Phase 2 이후)
+### 남은 작업
 
 - [ ] `gitshuttle.exe` 실제 빌드 및 수동 검증 (`build.ps1` 실행)
 - [ ] GitHub Releases에 `gitshuttle.exe` 업로드
-- [ ] Phase 2: 데스크탑 GUI (마우스 기반, 히스토리 그래프)

@@ -19,6 +19,17 @@ def test_help_shows_commands():
     assert "config" in result.output
 
 
+def test_direct_command_removed():
+    """직접 동기화 명령은 더 이상 제공하지 않는다."""
+    from gitshuttle.cli import app
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["sync"])
+
+    assert result.exit_code != 0
+    assert "No such command" in result.output
+
+
 def test_version():
     """--version 실행 시 버전 문자열이 출력되어야 한다."""
     from gitshuttle.cli import app
@@ -82,7 +93,7 @@ def test_export_accepts_repo_option(tmp_path, monkeypatch):
         hash="a" * 40,
         short_hash="aaaaaaa",
         date="2026-06-10 09:00:00 +0900",
-        author="ltw070",
+        author="New Author",
         message="test commit",
         files_changed=1,
     )
@@ -101,15 +112,11 @@ def test_export_accepts_repo_option(tmp_path, monkeypatch):
         commits,
         output_dir,
         branch,
-        package_format="bundle",
-        patchset_compression="fast",
         bundle_scope="range",
     ):
         captured["run_export_repo"] = repo_path
         captured["output_dir"] = output_dir
         captured["export_branch"] = branch
-        captured["package_format"] = package_format
-        captured["patchset_compression"] = patchset_compression
         captured["bundle_scope"] = bundle_scope
         return ExportResult(
             bundle=output_dir / "test.bundle",
@@ -141,59 +148,15 @@ def test_export_accepts_repo_option(tmp_path, monkeypatch):
     assert captured["branch"] == "main"
     assert captured["limit"] is None
     assert captured["output_dir"] == output_dir
-    assert captured["package_format"] == "bundle"
-    assert captured["patchset_compression"] == "fast"
     assert captured["bundle_scope"] == "range"
 
 
-def test_export_accepts_patchset_format(tmp_path, monkeypatch):
-    """export --format patchset 은 run_export에 patchset 형식을 전달한다."""
+def test_export_rejects_removed_format_option(tmp_path):
+    """별도 재생 모드 제거 후 export --format 옵션은 제공하지 않는다."""
     from gitshuttle.cli import app
-    from gitshuttle.export_ import ExportResult
-    from gitshuttle.git_ops import Commit
-    import gitshuttle.export_ as export_module
-    import gitshuttle.git_ops as git_ops_module
-    import gitshuttle.ui.tui as tui_module
 
     repo_dir = tmp_path / "source_repo"
     repo_dir.mkdir()
-    output_dir = tmp_path / "out"
-    captured = {}
-    fake_commit = Commit(
-        hash="a" * 40,
-        short_hash="aaaaaaa",
-        date="2026-06-10 09:00:00 +0900",
-        author="ltw070",
-        message="test commit",
-        files_changed=1,
-    )
-
-    monkeypatch.setattr(
-        git_ops_module,
-        "get_commits",
-        lambda repo_path, branch="HEAD", limit=None: [fake_commit],
-    )
-    monkeypatch.setattr(tui_module, "select_commits_tui", lambda commits: commits)
-
-    def fake_run_export(
-        repo_path,
-        commits,
-        output_dir,
-        branch,
-        package_format="bundle",
-        patchset_compression="fast",
-        bundle_scope="range",
-    ):
-        captured["package_format"] = package_format
-        captured["patchset_compression"] = patchset_compression
-        captured["bundle_scope"] = bundle_scope
-        return ExportResult(
-            bundle=output_dir / "test.patchset",
-            sha256=output_dir / "test.patchset.sha256",
-            manifest=output_dir / "test_manifest.txt",
-        )
-
-    monkeypatch.setattr(export_module, "run_export", fake_run_export)
 
     runner = CliRunner()
     result = runner.invoke(
@@ -202,20 +165,13 @@ def test_export_accepts_patchset_format(tmp_path, monkeypatch):
             "export",
             "--repo",
             str(repo_dir),
-            "--output",
-            str(output_dir),
             "--format",
-            "patchset",
-            "--patchset-compression",
-            "stored",
+            "bundle",
         ],
     )
 
-    assert result.exit_code == 0, f"exit code {result.exit_code}: {result.output}"
-    assert captured["package_format"] == "patchset"
-    assert captured["patchset_compression"] == "stored"
-    assert captured["bundle_scope"] == "range"
-    assert "patchset" in result.output
+    assert result.exit_code == 2
+    assert "No such option: --format" in result.output
 
 
 def test_export_recent_selects_latest_without_ui(tmp_path, monkeypatch):
@@ -236,7 +192,7 @@ def test_export_recent_selects_latest_without_ui(tmp_path, monkeypatch):
             hash=str(index) * 40,
             short_hash=str(index) * 7,
             date="2026-06-10 09:00:00 +0900",
-            author="ltw070",
+            author="New Author",
             message=f"commit {index}",
             files_changed=1,
         )
@@ -255,8 +211,6 @@ def test_export_recent_selects_latest_without_ui(tmp_path, monkeypatch):
         commits,
         output_dir,
         branch,
-        package_format="bundle",
-        patchset_compression="fast",
         bundle_scope="range",
     ):
         captured["selected"] = commits
@@ -309,7 +263,7 @@ def test_export_accepts_bundle_scope_full(tmp_path, monkeypatch):
         hash="a" * 40,
         short_hash="aaaaaaa",
         date="2026-06-10 09:00:00 +0900",
-        author="ltw070",
+        author="New Author",
         message="test commit",
         files_changed=1,
     )
@@ -326,8 +280,6 @@ def test_export_accepts_bundle_scope_full(tmp_path, monkeypatch):
         commits,
         output_dir,
         branch,
-        package_format="bundle",
-        patchset_compression="fast",
         bundle_scope="range",
     ):
         captured["bundle_scope"] = bundle_scope
@@ -374,7 +326,7 @@ def test_export_full_branch_selects_tip_as_full_bundle_without_ui(tmp_path, monk
         hash="b" * 40,
         short_hash="bbbbbbb",
         date="2026-06-10 09:00:00 +0900",
-        author="ltw070",
+        author="New Author",
         message="branch tip",
         files_changed=1,
     )
@@ -392,12 +344,9 @@ def test_export_full_branch_selects_tip_as_full_bundle_without_ui(tmp_path, monk
         commits,
         output_dir,
         branch,
-        package_format="bundle",
-        patchset_compression="fast",
         bundle_scope="range",
     ):
         captured["selected"] = commits
-        captured["package_format"] = package_format
         captured["bundle_scope"] = bundle_scope
         return ExportResult(
             bundle=output_dir / "test.bundle",
@@ -428,9 +377,33 @@ def test_export_full_branch_selects_tip_as_full_bundle_without_ui(tmp_path, monk
     assert captured["branch"] == "main"
     assert captured["limit"] == 1
     assert captured["selected"] == [tip_commit]
-    assert captured["package_format"] == "bundle"
     assert captured["bundle_scope"] == "full"
     assert "전체 이력" in result.output
+
+
+def test_export_full_branch_rejects_recent(tmp_path):
+    """export --full-branch 는 --recent 와 함께 사용할 수 없다."""
+    from gitshuttle.cli import app
+
+    repo_dir = tmp_path / "source_repo"
+    repo_dir.mkdir()
+
+    runner = CliRunner()
+    result = runner.invoke(
+        app,
+        [
+            "export",
+            "--repo",
+            str(repo_dir),
+            "--full-branch",
+            "--recent",
+            "2",
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "--full-branch" in result.output
+    assert "--recent" in result.output
 
 
 def test_import_stub():
@@ -463,14 +436,11 @@ def test_import_accepts_repo_option(tmp_path, monkeypatch):
         author_map_path=None,
         target_branch=None,
         timestamp_mode="now",
-        import_mode="auto",
-        confirm_duplicate_message=None,
     ):
         captured["bundle_path"] = bundle_path
         captured["repo_path"] = repo_path
         captured["on_conflict"] = on_conflict
         captured["timestamp_mode"] = timestamp_mode
-        captured["import_mode"] = import_mode
         return import_module.ImportResult(imported=1, skipped=0, total=1)
 
     monkeypatch.setattr(import_module, "run_import", fake_run_import)
@@ -493,36 +463,16 @@ def test_import_accepts_repo_option(tmp_path, monkeypatch):
     assert captured["bundle_path"] == bundle_path
     assert captured["repo_path"] == repo_dir.resolve()
     assert captured["timestamp_mode"] == "original"
-    assert captured["import_mode"] == "auto"
 
 
-def test_import_accepts_replay_mode(tmp_path, monkeypatch):
-    """import --mode replay 는 run_import에 replay 모드를 전달한다."""
+def test_import_rejects_removed_mode_option(tmp_path):
+    """별도 재생 모드 제거 후 import --mode 옵션은 제공하지 않는다."""
     from gitshuttle.cli import app
-    import gitshuttle.import_ as import_module
 
-    patchset_path = tmp_path / "test.patchset"
-    patchset_path.write_bytes(b"fake patchset")
+    bundle_path = tmp_path / "test.bundle"
+    bundle_path.write_bytes(b"fake bundle")
     repo_dir = tmp_path / "target_repo"
     repo_dir.mkdir()
-    captured = {}
-
-    def fake_run_import(
-        bundle_path,
-        repo_path,
-        on_conflict="skip",
-        sha256_path=None,
-        author_map_path=None,
-        target_branch=None,
-        timestamp_mode="now",
-        import_mode="auto",
-        confirm_duplicate_message=None,
-    ):
-        captured["import_mode"] = import_mode
-        captured["has_confirm_callback"] = confirm_duplicate_message is not None
-        return import_module.ImportResult(imported=1, skipped=0, total=1)
-
-    monkeypatch.setattr(import_module, "run_import", fake_run_import)
 
     runner = CliRunner()
     result = runner.invoke(
@@ -530,17 +480,16 @@ def test_import_accepts_replay_mode(tmp_path, monkeypatch):
         [
             "import",
             "--file",
-            str(patchset_path),
+            str(bundle_path),
             "--repo",
             str(repo_dir),
             "--mode",
-            "replay",
+            "bundle",
         ],
     )
 
-    assert result.exit_code == 0, f"exit code {result.exit_code}: {result.output}"
-    assert captured["import_mode"] == "replay"
-    assert captured["has_confirm_callback"] is True
+    assert result.exit_code == 2
+    assert "No such option: --mode" in result.output
 
 
 def test_config_stub():
