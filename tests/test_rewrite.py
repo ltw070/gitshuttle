@@ -93,6 +93,29 @@ class TestLoadAuthorMap:
         result = load_author_map(map_file)
         assert result["x@a.com"]["name"] == "X"
 
+    def test_invalid_json_has_file_and_line_hint(self, tmp_path):
+        """JSON 문법 오류는 파일/라인/검증 명령을 포함해 안내한다."""
+        import pytest
+        from gitshuttle.rewrite import load_author_map
+
+        map_file = tmp_path / "author_map.json"
+        map_file.write_text(
+            '{\n'
+            '  "old@example.com": {"name": "New", "email": "new@example.com"}\n'
+            '  "other@example.com": {"name": "New", "email": "new@example.com"}\n'
+            '}\n',
+            encoding="utf-8",
+        )
+
+        with pytest.raises(ValueError) as exc_info:
+            load_author_map(map_file)
+
+        message = str(exc_info.value)
+        assert "author-map JSON 문법 오류" in message
+        assert str(map_file) in message
+        assert "line 3" in message
+        assert "python -m json.tool" in message
+
 
 # ---------------------------------------------------------------------------
 # rewrite_authors 테스트

@@ -147,8 +147,22 @@ def load_author_map(path: str | Path) -> dict:
     if not path.exists():
         return {}
 
-    with open(path, encoding='utf-8') as f:
-        return json.load(f)
+    try:
+        with open(path, encoding='utf-8') as f:
+            return json.load(f)
+    except json.JSONDecodeError as exc:
+        raise ValueError(_format_author_map_json_error(path, exc)) from exc
+
+
+def _format_author_map_json_error(path: Path, exc: json.JSONDecodeError) -> str:
+    return (
+        f"author-map JSON 문법 오류: {path}\n"
+        f"- 위치: line {exc.lineno}, column {exc.colno}\n"
+        f"- 원인: {exc.msg}\n"
+        "- 확인: 해당 줄 바로 위 항목 끝에 쉼표(,)가 빠졌는지, "
+        "중괄호/따옴표가 맞는지 확인하세요.\n"
+        f"- 검증 명령: python -m json.tool \"{path}\""
+    )
 
 
 def rewrite_authors(
