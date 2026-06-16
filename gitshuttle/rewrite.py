@@ -39,6 +39,8 @@ _REF_LINE_RE = re.compile(
     re.MULTILINE,
 )
 
+_PARENT_LINE_RE = re.compile(r'^(from|merge)\s+([0-9a-fA-F]{40})$')
+
 _DATA_LINE_RE = re.compile(r'^data\s+(\d+)$')
 
 
@@ -217,6 +219,33 @@ def rewrite_branch_ref(stream: str, target_branch: str) -> str:
 
         verb = m.group(1)   # "commit" or "reset"
         return f"{verb} refs/heads/{target_branch}{ending}"
+
+    return _rewrite_control_lines(stream, _rewrite_line)
+
+
+def rewrite_parent_refs(stream: str, parent_map: dict[str, str]) -> str:
+    """fast-export stream의 from/merge 부모 SHA를 치환한다.
+
+    부분 bundle을 rewrite import할 때 원본 prerequisite SHA를 대상 브랜치의
+    현재 tip SHA로 연결하기 위해 사용한다. data payload 안의 동일 문자열은
+    파일 내용이므로 변경하지 않는다.
+    """
+    normalized = {source.lower(): target for source, target in parent_map.items()}
+    if not normalized:
+        return stream
+
+    def _rewrite_line(line: str) -> str:
+        body, ending = _line_body_and_ending(line)
+        m = _PARENT_LINE_RE.match(body)
+        if not m:
+            return line
+
+        verb = m.group(1)
+        parent = m.group(2)
+        replacement = normalized.get(parent.lower())
+        if replacement is None:
+            return line
+        return f"{verb} {replacement}{ending}"
 
     return _rewrite_control_lines(stream, _rewrite_line)
 

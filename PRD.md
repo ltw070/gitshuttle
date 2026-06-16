@@ -236,6 +236,6 @@ python -m gitshuttle config
 
 ## 8. 현재 제공 범위
 
-- `gitshuttle export`: TUI/CSV 커밋 선택, `--recent`, `--full-branch`, bundle/manifest/checksum 생성
-- `gitshuttle import`: SHA-256 검증, 일반 merge import, 작성자/타임스탬프 rewrite, rewrite 기반 대상 브랜치 반입, 충돌 처리
+- `gitshuttle export`: TUI/CSV 커밋 선택, `--recent`, `--full-branch`, `--base-branch` 기반 branch delta, bundle/manifest/checksum 생성
+- `gitshuttle import`: SHA-256 검증, 일반 merge import, 작성자/타임스탬프 rewrite, 부분 bundle prerequisite 제외 반입, rewrite 기반 대상 브랜치 반입, 충돌 처리
 - 대용량 전송: bundle 분할/병합 지원

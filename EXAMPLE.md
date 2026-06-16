@@ -212,6 +212,28 @@ python -m gitshuttle export `
 
 `--bundle-scope full`은 선택한 tip까지 필요한 이력을 함께 담아 부분 bundle prerequisite 실패를 줄입니다.
 
+`main`에서 딴 feature 브랜치의 신규 커밋만 옮기려면 기준 브랜치를 명시합니다.
+
+```powershell
+python -m gitshuttle export `
+  --repo C:\repos\source-repo `
+  --branch feature/work `
+  --base-branch main `
+  --full-branch `
+  --output C:\transfer
+
+git -C C:\repos\target-repo switch -c migration/feature-work main
+
+python -m gitshuttle import `
+  --repo C:\repos\target-repo `
+  --file C:\transfer\shuttle_YYMMDD.bundle `
+  --author-map C:\transfer\author_map.json `
+  --target-branch migration/feature-work `
+  --timestamp original
+```
+
+이 흐름에서는 `main..feature/work` 커밋만 bundle에 담기며, import는 이미 존재하는 `migration/feature-work` tip 위에 신규 커밋만 이어붙입니다.
+
 ---
 
 ## 참고 2 — CSV로 커밋 선택

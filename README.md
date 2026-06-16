@@ -78,6 +78,7 @@ gitshuttle export [OPTIONS]
 Options:
   --repo PATH                    원본 Git 리포지토리 경로 (기본값: 현재 디렉터리)
   --branch TEXT                  대상 브랜치 (기본값: 현재 브랜치)
+  --base-branch TEXT             기준 브랜치. 지정하면 base..branch 커밋만 추출
   --ui [tui|csv]                 커밋 선택 UI 방식 (기본값: 설정 파일 또는 tui)
   --output TEXT                  출력 경로 (기본값: 원본 리포지토리 경로)
   --bundle-scope TEXT            bundle 범위 방식 (range|full)
@@ -95,6 +96,12 @@ gitshuttle export --repo C:\repos\external-repo --branch main --output C:\transf
 
 ```
 gitshuttle export --repo C:\repos\external-repo --branch main --full-branch --output C:\transfer
+```
+
+이미 `main`에서 딴 feature 브랜치의 신규 커밋만 옮기려면 `--base-branch`를 함께 사용합니다. 이 경우 `main..feature/...` 범위만 조회하고, `--full-branch`는 그 범위의 커밋 전체를 TUI 없이 선택한다는 뜻입니다.
+
+```
+gitshuttle export --repo C:\repos\external-repo --branch feature/work --base-branch main --full-branch --output C:\transfer
 ```
 
 최근 커밋 몇 개만 빠르게 옮길 때는 `--recent N`을 사용하면 TUI 선택 없이 최신 N개만 읽고 바로 bundle을 만듭니다.
@@ -188,6 +195,7 @@ import 시 SHA-256 체크섬이 자동 검증됩니다. 불일치 시 작업이 
 작성자/날짜 rewrite를 적용한 대상 repo는 커밋 SHA가 바뀌므로, 이런 증분 bundle이 `bundle 검증 실패`가 될 수 있습니다.
 최신 GitShuttle은 rewrite import 시 원본 bundle refs를 `refs/gitshuttle/original/...` 아래 숨겨 보관해 다음 부분 bundle의 기준점으로 사용합니다.
 따라서 이 버전으로 한 번 전체 또는 필요한 기준 범위를 import한 뒤에는 이후 최신 커밋 몇 개만 export/import하는 증분 흐름을 사용할 수 있습니다.
+부분 bundle rewrite import는 bundle의 prerequisite 조상을 다시 펼치지 않고, 이미 존재하는 target branch tip 위에 신규 커밋만 이어붙입니다.
 구버전으로 이미 이전한 대상 repo는 한 번 전체 범위를 다시 import해 기준점을 만든 뒤 부분 증분을 이어가세요.
 
 대상 repo의 기준점 상태와 관계없이 bundle을 강제로 가져와야 한다면 export 단계에서 self-contained bundle을 만듭니다. 현재 브랜치 전체를 가져올 때는 `--full-branch`가 가장 간단합니다. 그래도 기존 main에 직접 force import하지 말고 migration 브랜치에 받은 뒤 merge하는 흐름을 권장합니다.
@@ -208,7 +216,7 @@ gitshuttle import --repo C:\repos\target --file C:\transfer\shuttle_YYMMDD.bundl
 
 GitShuttle은 bundle 기반 이력 이전에 집중합니다. 기존 코드가 있는 repo에는 별도 migration 브랜치로 import한 뒤 Git merge로 합치는 흐름을 사용하세요.
 
-`--full-branch`와 `--recent`는 함께 사용할 수 없습니다. 전체 브랜치를 가져오려면 `--full-branch`, 최신 일부만 가져오려면 `--recent N`을 선택하세요.
+`--full-branch`와 `--recent`는 함께 사용할 수 없습니다. 전체 브랜치를 가져오려면 `--full-branch`, 최신 일부만 가져오려면 `--recent N`을 선택하세요. 단, `--base-branch`와 `--full-branch`를 함께 쓰면 전체 이력이 아니라 `base..branch` 범위 전체를 선택합니다.
 
 **작성자 매핑 JSON 형식:**
 

@@ -381,6 +381,92 @@ def test_export_full_branch_selects_tip_as_full_bundle_without_ui(tmp_path, monk
     assert "전체 이력" in result.output
 
 
+def test_export_base_branch_full_branch_selects_branch_delta_without_ui(tmp_path, monkeypatch):
+    """--base-branch 와 --full-branch 조합은 base..branch 전체를 UI 없이 선택한다."""
+    from gitshuttle.cli import app
+    from gitshuttle.export_ import ExportResult
+    from gitshuttle.git_ops import Commit
+    import gitshuttle.export_ as export_module
+    import gitshuttle.git_ops as git_ops_module
+    import gitshuttle.ui.tui as tui_module
+
+    repo_dir = tmp_path / "source_repo"
+    repo_dir.mkdir()
+    output_dir = tmp_path / "out"
+    captured = {}
+    selected_commits = [
+        Commit(
+            hash="c" * 40,
+            short_hash="ccccccc",
+            date="2026-06-10 09:30:00 +0900",
+            author="New Author",
+            message="feature 2",
+            files_changed=1,
+        ),
+        Commit(
+            hash="b" * 40,
+            short_hash="bbbbbbb",
+            date="2026-06-10 09:00:00 +0900",
+            author="New Author",
+            message="feature 1",
+            files_changed=1,
+        ),
+    ]
+
+    def fake_get_commits(repo_path, branch="HEAD", limit=None):
+        captured["branch"] = branch
+        captured["limit"] = limit
+        return selected_commits
+
+    def fail_select_commits(commits):
+        raise AssertionError("base branch full export should not open TUI")
+
+    def fake_run_export(
+        repo_path,
+        commits,
+        output_dir,
+        branch,
+        bundle_scope="range",
+    ):
+        captured["selected"] = commits
+        captured["export_branch"] = branch
+        captured["bundle_scope"] = bundle_scope
+        return ExportResult(
+            bundle=output_dir / "test.bundle",
+            sha256=output_dir / "test.bundle.sha256",
+            manifest=output_dir / "test_manifest.txt",
+        )
+
+    monkeypatch.setattr(git_ops_module, "get_commits", fake_get_commits)
+    monkeypatch.setattr(tui_module, "select_commits_tui", fail_select_commits)
+    monkeypatch.setattr(export_module, "run_export", fake_run_export)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        app,
+        [
+            "export",
+            "--repo",
+            str(repo_dir),
+            "--branch",
+            "feature/work",
+            "--base-branch",
+            "main",
+            "--output",
+            str(output_dir),
+            "--full-branch",
+        ],
+    )
+
+    assert result.exit_code == 0, f"exit code {result.exit_code}: {result.output}"
+    assert captured["branch"] == "main..feature/work"
+    assert captured["limit"] is None
+    assert captured["selected"] == selected_commits
+    assert captured["export_branch"] == "main..feature/work"
+    assert captured["bundle_scope"] == "range"
+    assert "기준 브랜치 이후" in result.output
+
+
 def test_export_full_branch_rejects_recent(tmp_path):
     """export --full-branch 는 --recent 와 함께 사용할 수 없다."""
     from gitshuttle.cli import app

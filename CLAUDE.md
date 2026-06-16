@@ -105,7 +105,8 @@ build.ps1             # Windows PowerShell 빌드 자동화
 ## 명령어 구조
 
 ```
-gitshuttle export   [--repo <path>] [--branch <name>] [--ui tui|csv]
+gitshuttle export   [--repo <path>] [--branch <name>] [--base-branch <name>]
+                    [--ui tui|csv]
                     [--output <path>] [--bundle-scope range|full]
                     [--full-branch] [--recent N]
 gitshuttle import   --file <path> [--repo <path>]
@@ -126,7 +127,7 @@ gitshuttle config   (대화형 마법사 — gitshuttle.toml 수정)
 | `tui` | Textual 체크박스 + 테이블. 방향키, Space, A, E/Enter, Q. |
 | `csv` | `commits.csv` 생성 → 사용자가 `include` 컬럼 Y/N 편집 → 재입력 |
 
-`--full-branch`와 `--recent`는 동시에 사용할 수 없다. `--full-branch`는 브랜치 tip 1개만 조회하고 `bundle_scope=full`로 self-contained bundle을 만든다.
+`--full-branch`와 `--recent`는 동시에 사용할 수 없다. `--full-branch` 단독은 브랜치 tip 1개를 `bundle_scope=full`로 묶고, `--base-branch`와 함께 쓰면 `base..branch` 범위 전체를 `bundle_scope=range`로 묶는다.
 
 ---
 

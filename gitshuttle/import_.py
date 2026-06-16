@@ -58,6 +58,14 @@ class RewriteOptions:
     from_dt: object | None
 
 
+@dataclass(frozen=True)
+class BundleExportSpec:
+    """rewrite import에서 fast-export에 전달할 bundle 범위."""
+
+    args: list[str]
+    prerequisites: list[str]
+
+
 def _decode_process_output(output: bytes | str | None) -> str:
     """subprocess 출력값을 UTF-8 텍스트로 변환한다."""
     if output is None:
@@ -65,6 +73,10 @@ def _decode_process_output(output: bytes | str | None) -> str:
     if isinstance(output, bytes):
         return output.decode('utf-8', errors='surrogateescape')
     return output
+
+
+def _looks_like_sha(value: str) -> bool:
+    return len(value) == 40 and all(ch in "0123456789abcdefABCDEF" for ch in value)
 
 
 # ---------------------------------------------------------------------------
@@ -514,6 +526,98 @@ def _detect_source_branch(bundle_path: Path) -> str:
     return "main"
 
 
+def _list_bundle_head_refs(bundle_path: Path) -> list[str]:
+    """bundle에 포함된 head ref 이름을 반환한다."""
+    result = subprocess.run(
+        ["git", "bundle", "list-heads", str(bundle_path)],
+        capture_output=True,
+        encoding='utf-8',
+        env=_git_env(),
+    )
+    if result.returncode != 0:
+        return []
+
+    refs: list[str] = []
+    for line in result.stdout.splitlines():
+        parts = line.strip().split(None, 1)
+        if not parts:
+            continue
+        if len(parts) > 1 and parts[1]:
+            refs.append(parts[1].strip())
+        elif _looks_like_sha(parts[0]):
+            refs.append(parts[0])
+    return refs
+
+
+def _list_bundle_prerequisites(bundle_path: Path, repo_path: Path) -> list[str]:
+    """git bundle verify 출력에서 prerequisite SHA 목록을 추출한다."""
+    result = subprocess.run(
+        ["git", "bundle", "verify", str(bundle_path)],
+        cwd=repo_path,
+        capture_output=True,
+        encoding='utf-8',
+        env=_git_env(),
+    )
+    output = "\n".join(
+        part for part in (result.stdout, result.stderr) if part
+    )
+
+    prerequisites: list[str] = []
+    in_requires_section = False
+    for raw_line in output.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        if line.startswith("The bundle requires"):
+            in_requires_section = True
+            continue
+        if line.startswith("The bundle contains") or line.startswith("The bundle uses"):
+            in_requires_section = False
+            continue
+        if line.endswith(" is okay") or line.endswith(" is okay."):
+            in_requires_section = False
+            continue
+        if not in_requires_section:
+            continue
+
+        candidate = line.split()[0]
+        if _looks_like_sha(candidate):
+            prerequisites.append(candidate)
+
+    return prerequisites
+
+
+def _build_bundle_export_spec(bundle_path: Path, repo_path: Path) -> BundleExportSpec:
+    """bundle 자체에 포함된 커밋만 fast-export하도록 revision 범위를 만든다."""
+    heads = _list_bundle_head_refs(bundle_path)
+    prerequisites = _list_bundle_prerequisites(bundle_path, repo_path)
+
+    if not heads:
+        return BundleExportSpec(args=["--all"], prerequisites=prerequisites)
+
+    args: list[str] = []
+    if prerequisites:
+        args.append("--reference-excluded-parents")
+    args.extend(heads)
+    args.extend(f"^{commit_hash}" for commit_hash in prerequisites)
+    return BundleExportSpec(args=args, prerequisites=prerequisites)
+
+
+def _get_branch_tip(repo_path: Path, branch: str) -> str | None:
+    """로컬 브랜치 tip SHA를 반환한다. 없으면 None."""
+    result = subprocess.run(
+        ["git", "rev-parse", "--verify", f"refs/heads/{branch}"],
+        cwd=repo_path,
+        capture_output=True,
+        encoding='utf-8',
+        env=_git_env(),
+    )
+    if result.returncode != 0:
+        return None
+    tip = result.stdout.strip()
+    return tip if _looks_like_sha(tip) else None
+
+
 def _parse_from_datetime(dt_str: str):
     """'from=YYYY-MM-DDTHH:MM:SS' 형식의 문자열을 datetime으로 파싱한다.
 
@@ -562,10 +666,12 @@ def _rewrite_and_import(
     """
     import tempfile
     import shutil
-    from .rewrite import apply_rewrites
+    from .rewrite import apply_rewrites, rewrite_parent_refs
 
     tmp_dir = Path(tempfile.mkdtemp(prefix="gs_rewrite_"))
     try:
+        target_branch_tip = _get_branch_tip(repo_path, target_branch)
+
         # 임시 bare repo 초기화
         subprocess.run(
             ["git", "init", "--bare", str(tmp_dir)],
@@ -588,13 +694,14 @@ def _rewrite_and_import(
         if fetch_result.returncode != 0:
             raise ValueError(f"bundle fetch 실패:\n{fetch_result.stderr}")
 
+        export_spec = _build_bundle_export_spec(bundle_path, tmp_dir)
         _delete_original_shadow_refs(tmp_dir)
 
         # 임시 bare repo에서 fast-export 스트림 추출
         # fast-export stream은 blob payload를 포함하므로 text mode로 받으면
         # Windows에서 CRLF가 LF로 변환되어 data N 길이가 깨질 수 있다.
         export_result = subprocess.run(
-            ["git", "fast-export", "--all"],
+            ["git", "fast-export", *export_spec.args],
             cwd=tmp_dir,
             capture_output=True,
             env=_git_env(),
@@ -613,6 +720,11 @@ def _rewrite_and_import(
             timestamp_mode=timestamp_mode,
             from_dt=from_dt,
         )
+        if export_spec.prerequisites and target_branch_tip:
+            rewritten_stream = rewrite_parent_refs(
+                rewritten_stream,
+                {commit_hash: target_branch_tip for commit_hash in export_spec.prerequisites},
+            )
 
         _ensure_clean_worktree(repo_path)
 

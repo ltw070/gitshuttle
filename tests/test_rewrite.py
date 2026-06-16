@@ -416,6 +416,35 @@ class TestRewritePreservesDataBlocks:
         assert rewritten.count("Alice <alice@example.com>") == 1
         assert "re.findall(pattern, stream, re.MULTILINE)" in rewritten
 
+    def test_rewrite_parent_refs_does_not_modify_blob_payload(self):
+        from gitshuttle.rewrite import rewrite_parent_refs
+
+        original_parent = "a" * 40
+        target_parent = "b" * 40
+        payload = f"from {original_parent}\n"
+        payload_size = len(payload.encode("utf-8"))
+        stream = (
+            "blob\n"
+            "mark :1\n"
+            f"data {payload_size}\n"
+            f"{payload}"
+            "commit refs/heads/main\n"
+            "mark :2\n"
+            "author A <a@example.com> 1 +0000\n"
+            "committer A <a@example.com> 1 +0000\n"
+            "data 4\n"
+            "msg\n"
+            f"from {original_parent}\n"
+            "M 100644 :1 note.txt\n"
+            "\n"
+        )
+
+        rewritten = rewrite_parent_refs(stream, {original_parent: target_parent})
+
+        assert f"data {payload_size}\n{payload}" in rewritten
+        assert f"from {target_parent}\n" in rewritten
+        assert rewritten.count(f"from {original_parent}") == 1
+
 
 # ---------------------------------------------------------------------------
 # CLI 옵션 존재 확인 (소스 코드 파싱 방식 — typer 미설치 환경 호환)
