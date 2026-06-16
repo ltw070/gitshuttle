@@ -99,6 +99,7 @@ gitshuttle export --repo C:\repos\external-repo --branch main --full-branch --ou
 ```
 
 이미 `main`에서 딴 feature 브랜치의 신규 커밋만 옮기려면 `--base-branch`를 함께 사용합니다. 이 경우 `main..feature/...` 범위만 조회하고, `--full-branch`는 그 범위의 커밋 전체를 TUI 없이 선택한다는 뜻입니다.
+bundle은 검증을 위해 기준점 metadata를 함께 담지만, import 때는 기준점 이전 이력을 대상 브랜치에 반영하지 않고 `base..branch` 커밋만 target branch tip 위에 이어붙입니다. 따라서 대상 repo가 원본 base SHA를 갖고 있지 않아도 사용할 수 있습니다.
 
 ```
 gitshuttle export --repo C:\repos\external-repo --branch feature/work --base-branch main --full-branch --output C:\transfer
@@ -191,12 +192,14 @@ git -C C:\repos\target merge migration/source-main --allow-unrelated-histories
 
 import 시 SHA-256 체크섬이 자동 검증됩니다. 불일치 시 작업이 중단되며 재export 방법이 안내됩니다.
 
-최근 1~2개처럼 일부 커밋만 export한 bundle은 대상 repo에 그 직전 **원본 부모 커밋 SHA**가 있어야 검증됩니다.
+최근 1~2개처럼 일부 커밋만 export한 일반 range bundle은 대상 repo에 그 직전 **원본 부모 커밋 SHA**가 있어야 검증됩니다.
 작성자/날짜 rewrite를 적용한 대상 repo는 커밋 SHA가 바뀌므로, 이런 증분 bundle이 `bundle 검증 실패`가 될 수 있습니다.
 최신 GitShuttle은 rewrite import 시 원본 bundle refs를 `refs/gitshuttle/original/...` 아래 숨겨 보관해 다음 부분 bundle의 기준점으로 사용합니다.
 따라서 이 버전으로 한 번 전체 또는 필요한 기준 범위를 import한 뒤에는 이후 최신 커밋 몇 개만 export/import하는 증분 흐름을 사용할 수 있습니다.
 부분 bundle rewrite import는 bundle의 prerequisite 조상을 다시 펼치지 않고, 이미 존재하는 target branch tip 위에 신규 커밋만 이어붙입니다.
 구버전으로 이미 이전한 대상 repo는 한 번 전체 범위를 다시 import해 기준점을 만든 뒤 부분 증분을 이어가세요.
+
+feature 브랜치처럼 기준점 이후 변경만 가져오려면 최신 버전의 `--base-branch` + `--full-branch` 조합을 권장합니다. 이 조합은 bundle 안에 기준점 metadata를 같이 넣어 검증 실패를 피하고, import 시에는 기준점 이전 이력을 제외합니다. 예전 버전으로 이미 만든 `--base-branch` bundle은 이 metadata가 없으므로 같은 오류가 나면 다시 export해야 합니다.
 
 대상 repo의 기준점 상태와 관계없이 bundle을 강제로 가져와야 한다면 export 단계에서 self-contained bundle을 만듭니다. 현재 브랜치 전체를 가져올 때는 `--full-branch`가 가장 간단합니다. 그래도 기존 main에 직접 force import하지 말고 migration 브랜치에 받은 뒤 merge하는 흐름을 권장합니다.
 

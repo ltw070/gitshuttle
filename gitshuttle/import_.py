@@ -23,6 +23,8 @@ from .checksum import _compute_sha256
 from .bundle import verify_bundle_detailed
 from .git_ops import run_git, _git_env
 
+_BASE_METADATA_REF_PREFIX = "refs/gitshuttle/base/"
+
 
 # ---------------------------------------------------------------------------
 # Exceptions
@@ -63,7 +65,15 @@ class BundleExportSpec:
     """rewrite import에서 fast-export에 전달할 bundle 범위."""
 
     args: list[str]
-    prerequisites: list[str]
+    excluded_parents: list[str]
+
+
+@dataclass(frozen=True)
+class BundleHead:
+    """bundle list-heads의 commit/ref 한 줄."""
+
+    commit_hash: str
+    ref: str
 
 
 def _decode_process_output(output: bytes | str | None) -> str:
@@ -313,10 +323,12 @@ def _format_bundle_verify_failure(bundle_path: Path, detail: str) -> str:
         "가능한 원인:",
         "- 최근 1~2개처럼 일부 커밋만 export한 bundle은 대상 repo에 그 직전 원본 부모 커밋 SHA가 있어야 합니다.",
         "- 대상 repo에 이전 이력이 없거나, 작성자/날짜 rewrite로 기존 커밋 SHA가 바뀐 경우 prerequisite 검증에 실패합니다.",
+        "- 구버전 또는 이전 실행으로 만든 --base-branch bundle은 기준 SHA를 bundle 안에 담지 않아 대상 repo에서 검증되지 않을 수 있습니다.",
         "- 최신 GitShuttle은 rewrite import 시 원본 SHA를 refs/gitshuttle/original 아래 보관해 이후 증분 import를 지원합니다.",
         "",
         "해결 방법:",
-        "- 대상 repo에 원본 부모 커밋이 있는지 확인하세요.",
+        "- base..branch 범위를 옮기는 경우 최신 GitShuttle로 --base-branch와 --full-branch를 함께 사용해 다시 export하세요.",
+        "- 기존 부분 bundle을 그대로 써야 한다면 대상 repo에 원본 부모 커밋이 있는지 확인하세요.",
         "- 기존 버전으로 이미 rewrite import한 repo라면, 한 번은 필요한 전체 범위를 다시 export/import해 증분 기준점을 만드세요.",
         "- 안전하게는 새 --target-branch 이름으로 전체 이력을 다시 import한 뒤 검토하세요.",
     ])
@@ -526,8 +538,8 @@ def _detect_source_branch(bundle_path: Path) -> str:
     return "main"
 
 
-def _list_bundle_head_refs(bundle_path: Path) -> list[str]:
-    """bundle에 포함된 head ref 이름을 반환한다."""
+def _list_bundle_heads(bundle_path: Path) -> list[BundleHead]:
+    """bundle에 포함된 head commit/ref 목록을 반환한다."""
     result = subprocess.run(
         ["git", "bundle", "list-heads", str(bundle_path)],
         capture_output=True,
@@ -537,16 +549,22 @@ def _list_bundle_head_refs(bundle_path: Path) -> list[str]:
     if result.returncode != 0:
         return []
 
-    refs: list[str] = []
+    heads: list[BundleHead] = []
     for line in result.stdout.splitlines():
         parts = line.strip().split(None, 1)
         if not parts:
             continue
-        if len(parts) > 1 and parts[1]:
-            refs.append(parts[1].strip())
-        elif _looks_like_sha(parts[0]):
-            refs.append(parts[0])
-    return refs
+        commit_hash = parts[0]
+        if not _looks_like_sha(commit_hash):
+            continue
+        ref = parts[1].strip() if len(parts) > 1 and parts[1] else commit_hash
+        heads.append(BundleHead(commit_hash=commit_hash, ref=ref))
+    return heads
+
+
+def _list_bundle_head_refs(bundle_path: Path) -> list[str]:
+    """bundle에 포함된 head ref 이름을 반환한다."""
+    return [head.ref for head in _list_bundle_heads(bundle_path)]
 
 
 def _list_bundle_prerequisites(bundle_path: Path, repo_path: Path) -> list[str]:
@@ -589,18 +607,40 @@ def _list_bundle_prerequisites(bundle_path: Path, repo_path: Path) -> list[str]:
 
 def _build_bundle_export_spec(bundle_path: Path, repo_path: Path) -> BundleExportSpec:
     """bundle 자체에 포함된 커밋만 fast-export하도록 revision 범위를 만든다."""
-    heads = _list_bundle_head_refs(bundle_path)
+    heads = _list_bundle_heads(bundle_path)
+    data_heads = [
+        head.ref
+        for head in heads
+        if not head.ref.startswith(_BASE_METADATA_REF_PREFIX)
+    ]
+    base_exclusions = [
+        head.commit_hash
+        for head in heads
+        if head.ref.startswith(_BASE_METADATA_REF_PREFIX)
+    ]
     prerequisites = _list_bundle_prerequisites(bundle_path, repo_path)
+    exclusions = _dedupe_preserving_order([*base_exclusions, *prerequisites])
 
-    if not heads:
-        return BundleExportSpec(args=["--all"], prerequisites=prerequisites)
+    if not data_heads:
+        return BundleExportSpec(args=["--all"], excluded_parents=exclusions)
 
     args: list[str] = []
-    if prerequisites:
+    if exclusions:
         args.append("--reference-excluded-parents")
-    args.extend(heads)
-    args.extend(f"^{commit_hash}" for commit_hash in prerequisites)
-    return BundleExportSpec(args=args, prerequisites=prerequisites)
+    args.extend(data_heads)
+    args.extend(f"^{commit_hash}" for commit_hash in exclusions)
+    return BundleExportSpec(args=args, excluded_parents=exclusions)
+
+
+def _dedupe_preserving_order(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for value in values:
+        if value in seen:
+            continue
+        seen.add(value)
+        result.append(value)
+    return result
 
 
 def _get_branch_tip(repo_path: Path, branch: str) -> str | None:
@@ -720,10 +760,10 @@ def _rewrite_and_import(
             timestamp_mode=timestamp_mode,
             from_dt=from_dt,
         )
-        if export_spec.prerequisites and target_branch_tip:
+        if export_spec.excluded_parents and target_branch_tip:
             rewritten_stream = rewrite_parent_refs(
                 rewritten_stream,
-                {commit_hash: target_branch_tip for commit_hash in export_spec.prerequisites},
+                {commit_hash: target_branch_tip for commit_hash in export_spec.excluded_parents},
             )
 
         _ensure_clean_worktree(repo_path)

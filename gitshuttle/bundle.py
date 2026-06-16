@@ -8,6 +8,8 @@ git bundle create 동작 방식:
   - 반드시 ref(브랜치명, HEAD, refs/...) 를 포함해야 한다.
   - 전략: 임시 ref (refs/gitshuttle/tmp_<newest_short>) 를 생성 후
     bundle 완료 시 즉시 삭제한다. 부분 범위는 exclusion ref(^parent) 사용.
+  - base_refs 가 있으면 base metadata ref 도 함께 담아 self-contained bundle을
+    만든다. import 단계는 metadata ref를 기준으로 delta만 다시 export한다.
 """
 from __future__ import annotations
 
@@ -21,6 +23,7 @@ from .git_ops import run_git, Commit, _git_env
 
 # 임시 ref 네임스페이스 — 다른 refs 와 충돌하지 않도록
 _TMP_REF_NS = "refs/gitshuttle/tmp"
+_BASE_REF_NS = "refs/gitshuttle/base"
 
 
 @dataclass
@@ -36,6 +39,7 @@ def create_bundle(
     output_dir: Path | str,
     filename: str | None = None,
     scope: str = "range",
+    base_refs: list[str] | None = None,
 ) -> Path:
     """선택한 커밋들을 .bundle 파일로 생성한다.
 
@@ -45,6 +49,8 @@ def create_bundle(
         output_dir: bundle 파일을 저장할 디렉토리.
         filename:   출력 파일명. 미지정 시 shuttle_YYMMDD.bundle.
         scope:      "range"는 선택 범위만, "full"은 tip까지 전체 이력을 포함.
+        base_refs:  base..branch export 기준점. 지정 시 bundle은 검증 가능하도록
+                    self-contained로 만들고, base commit을 metadata ref로 표시한다.
 
     Returns:
         생성된 bundle 파일의 절대 Path.
@@ -76,10 +82,23 @@ def create_bundle(
 
     # 임시 ref 등록
     run_git(["update-ref", tmp_ref, newest.hash], cwd=repo_path)
+    base_ref_names: list[str] = []
 
     try:
+        base_ref_names = _create_base_metadata_refs(
+            repo_path=repo_path,
+            base_refs=base_refs or [],
+            namespace_suffix=newest.short_hash,
+        )
+
         # bundle 범위 인자 계산
-        bundle_args = _build_bundle_args(repo_path, oldest.hash, tmp_ref, scope=scope)
+        bundle_args = _build_bundle_args(
+            repo_path,
+            oldest.hash,
+            tmp_ref,
+            scope=scope,
+            base_ref_names=base_ref_names,
+        )
 
         run_git(
             ["bundle", "create", str(bundle_path)] + bundle_args,
@@ -87,10 +106,7 @@ def create_bundle(
         )
     finally:
         # 임시 ref 반드시 삭제
-        try:
-            run_git(["update-ref", "-d", tmp_ref], cwd=repo_path)
-        except RuntimeError:
-            pass  # 삭제 실패는 무시
+        _delete_refs(repo_path, [tmp_ref, *base_ref_names])
 
     return bundle_path
 
@@ -100,6 +116,7 @@ def _build_bundle_args(
     oldest_hash: str,
     tmp_ref: str,
     scope: str = "range",
+    base_ref_names: list[str] | None = None,
 ) -> list[str]:
     """git bundle create 에 전달할 인자 목록을 반환한다.
 
@@ -108,6 +125,9 @@ def _build_bundle_args(
     일반 경우:
       → [^<oldest_parent>, tmp_ref]  (범위 지정)
     """
+    if base_ref_names:
+        return [tmp_ref, *base_ref_names]
+
     if scope == "full":
         return [tmp_ref]
 
@@ -129,6 +149,36 @@ def _build_bundle_args(
         # 부분 범위: 가장 오래된 커밋의 부모들을 제외
         exclude_args = [f"^{p}" for p in parents]
         return exclude_args + [tmp_ref]
+
+
+def _create_base_metadata_refs(
+    repo_path: Path,
+    base_refs: list[str],
+    namespace_suffix: str,
+) -> list[str]:
+    """base refs를 임시 metadata ref로 등록하고 ref 이름 목록을 반환한다."""
+    created: list[str] = []
+    try:
+        for index, base_ref in enumerate(base_refs):
+            commit_hash = run_git(
+                ["rev-parse", "--verify", f"{base_ref}^{{commit}}"],
+                cwd=repo_path,
+            ).strip()
+            metadata_ref = f"{_BASE_REF_NS}/{namespace_suffix}_{index}_{commit_hash[:12]}"
+            run_git(["update-ref", metadata_ref, commit_hash], cwd=repo_path)
+            created.append(metadata_ref)
+        return created
+    except RuntimeError:
+        _delete_refs(repo_path, created)
+        raise
+
+
+def _delete_refs(repo_path: Path, refs: list[str]) -> None:
+    for ref in refs:
+        try:
+            run_git(["update-ref", "-d", ref], cwd=repo_path)
+        except RuntimeError:
+            pass
 
 
 def split_bundle(bundle_path: Path | str, chunk_bytes: int) -> list[Path]:

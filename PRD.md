@@ -189,6 +189,18 @@ gitshuttle import \
 
 ---
 
+#### 3.6.6 기준 브랜치 이후 변경분 이전 (Base Branch Delta)
+
+- **목표:** 이미 존재하는 기본 브랜치에서 파생된 feature 브랜치의 신규 커밋만 대상 repo 브랜치 위에 이어붙인다.
+- **CLI:** `gitshuttle export --branch <feature> --base-branch <base> --full-branch`
+- **선택 범위:** `<base>..<feature>` 커밋 전체를 UI 없이 선택한다.
+- **bundle 구조:**
+  - 대상 repo가 원본 `<base>` SHA를 갖고 있지 않아도 `git bundle verify`가 통과해야 한다.
+  - 이를 위해 export는 기준점 metadata ref(`refs/gitshuttle/base/...`)를 bundle에 함께 담은 self-contained bundle을 만든다.
+  - import는 metadata ref를 fast-export 대상에서 제외하고, 제외된 parent SHA를 대상 브랜치의 현재 tip SHA로 치환한다.
+- **결과:** bundle 파일은 일반 range bundle보다 커질 수 있지만, 대상 브랜치에는 `<base>..<feature>` 신규 커밋만 반영된다.
+- **호환성:** metadata가 없는 구버전 `--base-branch` bundle은 대상 repo가 원본 base SHA를 갖고 있지 않으면 검증 실패할 수 있으며, 최신 버전으로 다시 export해야 한다.
+
 ## 4. 사용자 시나리오 (User Scenario)
 
 ### 시나리오 A — 망분리 환경 (파일 이동)
@@ -236,6 +248,6 @@ python -m gitshuttle config
 
 ## 8. 현재 제공 범위
 
-- `gitshuttle export`: TUI/CSV 커밋 선택, `--recent`, `--full-branch`, `--base-branch` 기반 branch delta, bundle/manifest/checksum 생성
-- `gitshuttle import`: SHA-256 검증, 일반 merge import, 작성자/타임스탬프 rewrite, 부분 bundle prerequisite 제외 반입, rewrite 기반 대상 브랜치 반입, 충돌 처리
+- `gitshuttle export`: TUI/CSV 커밋 선택, `--recent`, `--full-branch`, `--base-branch` 기반 self-contained branch delta, bundle/manifest/checksum 생성
+- `gitshuttle import`: SHA-256 검증, 일반 merge import, 작성자/타임스탬프 rewrite, 부분 bundle prerequisite/base metadata 제외 반입, rewrite 기반 대상 브랜치 반입, 충돌 처리
 - 대용량 전송: bundle 분할/병합 지원

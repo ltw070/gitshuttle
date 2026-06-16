@@ -232,7 +232,8 @@ python -m gitshuttle import `
   --timestamp original
 ```
 
-이 흐름에서는 `main..feature/work` 커밋만 bundle에 담기며, import는 이미 존재하는 `migration/feature-work` tip 위에 신규 커밋만 이어붙입니다.
+이 흐름에서는 `main..feature/work` 커밋을 선택합니다. bundle은 대상 repo 검증을 위해 기준점 metadata도 함께 담지만, import는 기준점 이전 이력을 반영하지 않고 이미 존재하는 `migration/feature-work` tip 위에 신규 커밋만 이어붙입니다.
+대상 repo가 원본 `main`의 기준 SHA를 갖고 있지 않아도 이 방식으로 import할 수 있습니다. 단, 예전 버전으로 만든 bundle은 기준점 metadata가 없으므로 같은 검증 오류가 나면 최신 버전으로 다시 export하세요.
 
 ---
 
@@ -279,4 +280,4 @@ git -C C:\repos\target-test-repo log migration/test --oneline
 | 사내 GitHub URL을 `https:/...`처럼 슬래시 하나만 작성 | `https://github.company.example/...`처럼 슬래시 두 개 사용 |
 | 기존 `main`에 바로 force import | `migration/...` 브랜치에 import 후 검토/merge |
 | bundle만 옮기고 `.bundle.sha256`을 누락 | 가능하면 bundle, checksum, manifest 세 파일을 함께 이동 |
-| 부분 bundle 검증 실패 | 최초 전체 import 후 다시 시도하거나 `--bundle-scope full` 사용 |
+| 부분 bundle 검증 실패 | feature delta는 최신 버전으로 `--base-branch` + `--full-branch` 재export, 단순 최신 N개는 최초 전체 import 후 재시도하거나 `--bundle-scope full` 사용 |

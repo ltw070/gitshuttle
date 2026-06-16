@@ -546,6 +546,172 @@ def test_rewrite_import_exports_only_bundle_range_and_links_existing_target_tip(
     assert f"from {base_parent}\n".encode("utf-8") not in fast_import_inputs[0]
 
 
+def test_rewrite_import_uses_base_metadata_ref_as_excluded_parent(tmp_path, monkeypatch):
+    """base metadata ref가 있으면 prerequisite 없이도 delta만 target tip에 이어붙인다."""
+    import gitshuttle.import_ as import_module
+
+    base_parent = "a" * 40
+    target_tip = "b" * 40
+    bundle_tip = "c" * 40
+    fast_export_args = []
+    fast_import_inputs = []
+
+    def fake_run(args, **kwargs):
+        if args[:3] == ["git", "rev-parse", "--verify"]:
+            return SimpleNamespace(returncode=0, stdout=f"{target_tip}\n", stderr="")
+        if args[:3] == ["git", "bundle", "list-heads"]:
+            return SimpleNamespace(
+                returncode=0,
+                stdout=(
+                    f"{bundle_tip} refs/gitshuttle/tmp_feature\n"
+                    f"{base_parent} refs/gitshuttle/base/{base_parent[:12]}\n"
+                ),
+                stderr="",
+            )
+        if args[:3] == ["git", "bundle", "verify"]:
+            return SimpleNamespace(
+                returncode=0,
+                stdout=(
+                    "The bundle contains these refs:\n"
+                    f"{bundle_tip} refs/gitshuttle/tmp_feature\n"
+                    f"{base_parent} refs/gitshuttle/base/{base_parent[:12]}\n"
+                    "The bundle uses this hash algorithm: sha1\n"
+                    f"{tmp_path / 'test.bundle'} is okay\n"
+                ),
+                stderr="",
+            )
+        if args[:2] == ["git", "fast-export"]:
+            fast_export_args.append(args)
+            return SimpleNamespace(
+                returncode=0,
+                stdout=(
+                    "commit refs/gitshuttle/tmp_feature\n"
+                    "mark :1\n"
+                    "author A <a@example.com> 1 +0000\n"
+                    "committer A <a@example.com> 1 +0000\n"
+                    "data 4\n"
+                    "msg\n"
+                    f"from {base_parent}\n"
+                    "M 100644 inline f.txt\n"
+                    "data 2\n"
+                    "x\n"
+                    "\n"
+                ).encode("utf-8"),
+                stderr=b"",
+            )
+        if args[:2] == ["git", "fast-import"]:
+            fast_import_inputs.append(kwargs["input"])
+            return SimpleNamespace(returncode=0, stdout=b"", stderr=b"")
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(import_module.subprocess, "run", fake_run)
+    monkeypatch.setattr(import_module, "_fetch_original_shadow_refs", lambda repo_path, tmp_dir: None)
+    monkeypatch.setattr(import_module, "_delete_original_shadow_refs", lambda tmp_dir: None)
+    monkeypatch.setattr(import_module, "_store_original_bundle_refs", lambda bundle_path, repo_path, target_branch: None)
+    monkeypatch.setattr(import_module, "_ensure_clean_worktree", lambda repo_path: None)
+    monkeypatch.setattr(
+        import_module,
+        "_checkout_or_create_branch",
+        lambda repo_path, branch: [bundle_tip],
+    )
+
+    import_module._rewrite_and_import(
+        bundle_path=tmp_path / "test.bundle",
+        repo_path=tmp_path,
+        author_map={},
+        target_branch="feat/gitshuttle",
+        timestamp_mode="original",
+        from_dt=None,
+    )
+
+    assert fast_export_args == [
+        [
+            "git",
+            "fast-export",
+            "--reference-excluded-parents",
+            "refs/gitshuttle/tmp_feature",
+            f"^{base_parent}",
+        ]
+    ]
+    assert f"from {target_tip}\n".encode("utf-8") in fast_import_inputs[0]
+    assert f"from {base_parent}\n".encode("utf-8") not in fast_import_inputs[0]
+
+
+def test_rewrite_import_base_ref_bundle_appends_without_original_base(two_git_repos, tmp_path):
+    """target repo에 원본 base SHA가 없어도 base_refs bundle은 delta만 반입한다."""
+    from gitshuttle.export_ import run_export
+    from gitshuttle.git_ops import get_commits
+    from gitshuttle.import_ import run_import
+
+    source, target = two_git_repos
+    env = _git_env()
+
+    _add_commit(source, "base.txt", "source base", "feat: source base")
+    source_base = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=source,
+        check=True,
+        capture_output=True,
+        encoding="utf-8",
+        env=env,
+    ).stdout.strip()
+    subprocess.run(["git", "checkout", "-b", "feature/work"], cwd=source, check=True, env=env)
+    _add_commit(source, "feature.txt", "feature change", "feat: feature only")
+
+    target_main = subprocess.run(
+        ["git", "branch", "--show-current"],
+        cwd=target,
+        check=True,
+        capture_output=True,
+        encoding="utf-8",
+        env=env,
+    ).stdout.strip()
+    subprocess.run(
+        ["git", "checkout", "-b", "migration/feature"],
+        cwd=target,
+        check=True,
+        capture_output=True,
+        encoding="utf-8",
+        env=env,
+    )
+
+    feature_commits = get_commits(source, branch=f"{source_base}..feature/work")
+    bundle_path = run_export(
+        repo_path=source,
+        commits=feature_commits,
+        output_dir=tmp_path,
+        branch=f"{source_base}..feature/work",
+        filename="feature_delta_with_base",
+        base_refs=[source_base],
+    ).bundle
+
+    result = run_import(
+        bundle_path,
+        target,
+        target_branch="migration/feature",
+        timestamp_mode="original",
+    )
+
+    ahead_count = subprocess.run(
+        ["git", "rev-list", "--count", "migration/feature", "--not", target_main],
+        cwd=target,
+        check=True,
+        capture_output=True,
+        encoding="utf-8",
+        env=env,
+    ).stdout.strip()
+    source_base_reachable = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", source_base, "migration/feature"],
+        cwd=target,
+        env=env,
+    ).returncode == 0
+
+    assert result.imported == 1
+    assert ahead_count == "1"
+    assert not source_base_reachable
+    assert (target / "feature.txt").read_text(encoding="utf-8") == "feature change"
+
+
 def test_rewrite_import_non_ff_error_has_recovery_hint(tmp_path, monkeypatch):
     """fast-import non-fast-forward 오류에는 target branch 해결 안내를 포함한다."""
     import gitshuttle.import_ as import_module

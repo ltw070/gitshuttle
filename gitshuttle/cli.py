@@ -313,6 +313,7 @@ def export(
         output_dir=paths.output_dir,
         branch=paths.commit_range,
         bundle_scope=export_options.bundle_scope,
+        base_refs=[base_branch] if base_branch else None,
     )
 
     _print_export_result(result)

@@ -113,6 +113,7 @@ def test_export_accepts_repo_option(tmp_path, monkeypatch):
         output_dir,
         branch,
         bundle_scope="range",
+        base_refs=None,
     ):
         captured["run_export_repo"] = repo_path
         captured["output_dir"] = output_dir
@@ -212,6 +213,7 @@ def test_export_recent_selects_latest_without_ui(tmp_path, monkeypatch):
         output_dir,
         branch,
         bundle_scope="range",
+        base_refs=None,
     ):
         captured["selected"] = commits
         captured["bundle_scope"] = bundle_scope
@@ -281,6 +283,7 @@ def test_export_accepts_bundle_scope_full(tmp_path, monkeypatch):
         output_dir,
         branch,
         bundle_scope="range",
+        base_refs=None,
     ):
         captured["bundle_scope"] = bundle_scope
         return ExportResult(
@@ -345,6 +348,7 @@ def test_export_full_branch_selects_tip_as_full_bundle_without_ui(tmp_path, monk
         output_dir,
         branch,
         bundle_scope="range",
+        base_refs=None,
     ):
         captured["selected"] = commits
         captured["bundle_scope"] = bundle_scope
@@ -427,10 +431,12 @@ def test_export_base_branch_full_branch_selects_branch_delta_without_ui(tmp_path
         output_dir,
         branch,
         bundle_scope="range",
+        base_refs=None,
     ):
         captured["selected"] = commits
         captured["export_branch"] = branch
         captured["bundle_scope"] = bundle_scope
+        captured["base_refs"] = base_refs
         return ExportResult(
             bundle=output_dir / "test.bundle",
             sha256=output_dir / "test.bundle.sha256",
@@ -464,6 +470,7 @@ def test_export_base_branch_full_branch_selects_branch_delta_without_ui(tmp_path
     assert captured["selected"] == selected_commits
     assert captured["export_branch"] == "main..feature/work"
     assert captured["bundle_scope"] == "range"
+    assert captured["base_refs"] == ["main"]
     assert "기준 브랜치 이후" in result.output
 
 
