@@ -158,6 +158,7 @@ gitshuttle import --file C:\transfer\shuttle_260612.bundle --repo C:\repos\inter
 
 **브랜치 동작:** `--target-branch`, `--author-map`, `--timestamp original`, `--timestamp from=...`처럼 rewrite 경로를 쓰면 import 결과가 지정 브랜치로 들어갑니다. `--target-branch`를 생략한 rewrite import는 `imported/<소스브랜치>`를 사용합니다. 반대로 아무 rewrite 옵션 없이 `gitshuttle import --file ...`만 실행하면 현재 브랜치로 merge를 시도합니다.
 rewrite import 후에는 대상 브랜치로 checkout/reset 되어 작업 폴더의 실제 파일도 import 결과와 맞춰집니다.
+부분 bundle이나 `--base-branch` delta import에서 지정한 target branch가 아직 없으면, 현재 checkout된 HEAD 위에 새 target branch를 만들어 이어붙입니다.
 
 기존 코드가 있는 대상 repo에 bundle을 가져올 때는 바로 `main`에 반영하지 말고, 먼저 `migration/...` 같은 별도 브랜치에 import하는 흐름을 권장합니다. 이 경우 기존 `main` 이력은 그대로 두고, bundle 이력은 별도 브랜치에 들어갑니다. 이후 검토가 끝나면 Git merge로 두 이력을 합칩니다. 같은 파일을 양쪽에서 다르게 수정했다면 merge conflict가 발생할 수 있으며, 이때 사람이 최종 내용을 결정합니다.
 

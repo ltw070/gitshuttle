@@ -233,6 +233,7 @@ python -m gitshuttle import `
 ```
 
 이 흐름에서는 `main..feature/work` 커밋을 선택합니다. bundle은 대상 repo 검증을 위해 기준점 metadata도 함께 담지만, import는 기준점 이전 이력을 반영하지 않고 이미 존재하는 `migration/feature-work` tip 위에 신규 커밋만 이어붙입니다.
+`migration/feature-work` 브랜치를 미리 만들지 않았다면 import 시점의 현재 HEAD 위에 새 브랜치가 만들어집니다. 어떤 기준에 붙일지 명확히 하려면 import 전에 `git switch main` 또는 `git switch -c migration/feature-work main`을 먼저 실행하세요.
 대상 repo가 원본 `main`의 기준 SHA를 갖고 있지 않아도 이 방식으로 import할 수 있습니다. 단, 예전 버전으로 만든 bundle은 기준점 metadata가 없으므로 같은 검증 오류가 나면 최신 버전으로 다시 export하세요.
 
 ---
