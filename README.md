@@ -22,7 +22,7 @@
 
 ### 방법 1 — 실행 파일 (권장, Python 불필요)
 
-`gitshuttle.exe` 릴리즈가 등록된 경우 [GitHub Releases](https://github.com/ltw070/gitshuttle/releases)에서 다운로드하여 원하는 경로에 배치합니다.
+`gitshuttle.exe` 릴리즈가 등록된 경우 GitHub Releases에서 다운로드하여 원하는 경로에 배치합니다.
 현재 릴리즈 파일이 없다면 아래 Python 직접 실행 또는 PyInstaller 직접 빌드 방식을 사용하세요.
 
 ```
@@ -42,11 +42,13 @@ powershell -ExecutionPolicy Bypass -File build.ps1
 ### 방법 2 — Python 직접 실행
 
 ```
-git clone https://github.com/ltw070/gitshuttle.git
+git clone https://github.com/PROJECT_OWNER/gitshuttle.git
 cd gitshuttle
 pip install -r requirements.txt
 python -m gitshuttle --help
 ```
+
+`PROJECT_OWNER`는 실제 GitShuttle 저장소 owner로 바꿉니다.
 
 ---
 
@@ -206,9 +208,9 @@ GitShuttle은 bundle 기반 이력 이전에 집중합니다. 기존 코드가 �
 
 ```json
 {
-  "old@example.com": {
-    "name": "ltw070",
-    "email": "ltw070@naver.com"
+  "OLD_AUTHOR_EMAIL": {
+    "name": "NEW_AUTHOR_NAME",
+    "email": "NEW_AUTHOR_EMAIL"
   }
 }
 ```

@@ -66,7 +66,7 @@ GitShuttle은 Git의 모든 히스토리를 **100% 보존**합니다.
 
 1. 브라우저에서 아래 주소로 이동합니다:
    ```
-   https://github.com/ltw070/gitshuttle/releases
+   https://github.com/PROJECT_OWNER/gitshuttle/releases
    ```
 
 2. 최신 릴리즈의 **Assets** 항목에서 `gitshuttle.exe`를 클릭하여 다운로드합니다.
@@ -76,7 +76,7 @@ GitShuttle은 Git의 모든 히스토리를 **100% 보존**합니다.
 **직접 빌드 (PyInstaller 설치 환경에서):**
 
 ```powershell
-git clone https://github.com/ltw070/gitshuttle.git
+git clone https://github.com/PROJECT_OWNER/gitshuttle.git
 cd gitshuttle
 pip install pyinstaller
 powershell -ExecutionPolicy Bypass -File build.ps1
@@ -94,13 +94,13 @@ Python이 이미 설치된 환경에서 직접 소스를 받아 실행하는 방
 **Git이 있는 경우 — 클론:**
 
 ```
-git clone https://github.com/ltw070/gitshuttle.git
+git clone https://github.com/PROJECT_OWNER/gitshuttle.git
 cd gitshuttle
 ```
 
 **Git이 없는 경우 — ZIP 다운로드:**
 
-1. `https://github.com/ltw070/gitshuttle` 접속
+1. `https://github.com/PROJECT_OWNER/gitshuttle` 접속
 2. 초록색 **Code** 버튼 클릭 → **Download ZIP** 클릭
 3. 다운로드된 ZIP 파일을 압축 해제합니다
 4. 압축 해제된 폴더로 이동합니다
@@ -872,8 +872,8 @@ rewrite import는 `git fast-import`로 먼저 ref와 object DB를 갱신합니�
 최신 버전은 import 후 대상 브랜치로 checkout/reset 하여 파일까지 자동 갱신합니다. 이미 이 현상이 발생했다면 아래처럼 수동으로 맞출 수 있습니다:
 
 ```powershell
-git -C C:\repos\target-gitshuttle switch migration/gitshuttle-20260610
-git -C C:\repos\target-gitshuttle reset --hard migration/gitshuttle-20260610
+git -C C:\repos\target-repo switch migration/REPO_NAME-main
+git -C C:\repos\target-repo reset --hard migration/REPO_NAME-main
 ```
 
 작업 중인 변경 사항이 있다면 `reset --hard` 전에 반드시 commit 또는 stash 하세요.
@@ -899,17 +899,17 @@ git -C C:\repos\target-gitshuttle reset --hard migration/gitshuttle-20260610
 # 기준점 만들기: 필요한 전체 범위를 한 번 export/import
 $env:GITSHUTTLE_HEADLESS = "1"
 python -m gitshuttle export `
-  --repo C:\repos\source-gitshuttle `
+  --repo C:\repos\source-repo `
   --branch main `
   --ui tui `
   --output C:\transfer
 Remove-Item Env:\GITSHUTTLE_HEADLESS
 
 python -m gitshuttle import `
-  --repo C:\repos\target-gitshuttle `
+  --repo C:\repos\target-repo `
   --file C:\transfer\shuttle_YYMMDD.bundle `
   --author-map C:\transfer\author_map.json `
-  --target-branch migration/gitshuttle-full-v2 `
+  --target-branch migration/REPO_NAME-main `
   --timestamp original
 ```
 
@@ -946,6 +946,8 @@ python -m gitshuttle import `
 
 > **주의:** 커밋 사용자 변경은 Git 히스토리 재작성입니다. author/committer가 바뀌면 커밋 SHA도 바뀝니다.
 
+아래 명령의 `OLD_GITHUB_ID`, `NEW_GITHUB_ID`, `REPO_NAME`, `OLD_AUTHOR_EMAIL`, `NEW_AUTHOR_NAME`, `NEW_AUTHOR_EMAIL`은 실제 값으로 바꿔 입력합니다.
+
 ### 목표 흐름
 
 ```
@@ -960,13 +962,7 @@ python -m gitshuttle import `
 ### 1단계. 원본 GitHub 리포지토리 clone
 
 ```powershell
-git clone https://github.com/OLD_OWNER/OLD_REPO.git C:\repos\source-repo
-```
-
-예시:
-
-```powershell
-git clone https://github.com/ltw070/gitshuttle.git C:\repos\source-gitshuttle
+git clone https://github.com/OLD_GITHUB_ID/REPO_NAME.git C:\repos\source-repo
 ```
 
 ### 2단계. 새 GitHub 리포지토리 clone
@@ -974,19 +970,13 @@ git clone https://github.com/ltw070/gitshuttle.git C:\repos\source-gitshuttle
 GitHub에서 빈 리포지토리를 먼저 만든 뒤 clone합니다.
 
 ```powershell
-git clone https://github.com/NEW_OWNER/NEW_REPO.git C:\repos\target-repo
-```
-
-예시:
-
-```powershell
-git clone https://github.com/ltw070/new-gitshuttle.git C:\repos\target-gitshuttle
+git clone https://github.com/NEW_GITHUB_ID/REPO_NAME.git C:\repos\target-repo
 ```
 
 사내 GitHub 예시:
 
 ```powershell
-git clone https://github.samsungds.net/tw070-lim/gitshuttle.git C:\repos\target-gitshuttle
+git clone https://github.company.example/NEW_GITHUB_ID/REPO_NAME.git C:\repos\target-repo
 ```
 
 ### 3단계. GitShuttle로 원본 export
@@ -997,7 +987,7 @@ git clone https://github.samsungds.net/tw070-lim/gitshuttle.git C:\repos\target-
 cd D:\cla\03_gitshuttle
 
 python -m gitshuttle export `
-  --repo C:\repos\source-gitshuttle `
+  --repo C:\repos\source-repo `
   --branch main `
   --ui tui `
   --output C:\transfer
@@ -1007,7 +997,7 @@ python -m gitshuttle export `
 
 ```powershell
 python -m gitshuttle export `
-  --repo C:\repos\source-gitshuttle `
+  --repo C:\repos\source-repo `
   --branch main `
   --full-branch `
   --output C:\transfer
@@ -1018,7 +1008,7 @@ TUI 동작을 유지한 채 조회된 커밋 전체를 자동 선택해야 하�
 ```powershell
 $env:GITSHUTTLE_HEADLESS = "1"
 python -m gitshuttle export `
-  --repo C:\repos\source-gitshuttle `
+  --repo C:\repos\source-repo `
   --branch main `
   --ui tui `
   --output C:\transfer
@@ -1038,7 +1028,7 @@ C:\transfer\shuttle_YYMMDD_manifest.txt
 원본 리포지토리에서 기존 커밋 작성자 이메일을 확인합니다.
 
 ```powershell
-git -C C:\repos\source-gitshuttle log --all --format="%an <%ae>" | Sort-Object -Unique
+git -C C:\repos\source-repo log --all --format="%an <%ae>" | Sort-Object -Unique
 ```
 
 ### 5단계. 사용자 변경 매핑 파일 작성
@@ -1047,13 +1037,13 @@ git -C C:\repos\source-gitshuttle log --all --format="%an <%ae>" | Sort-Object -
 
 ```json
 {
-  "old@example.com": {
-    "name": "ltw070",
-    "email": "ltw070@naver.com"
+  "OLD_AUTHOR_EMAIL": {
+    "name": "NEW_AUTHOR_NAME",
+    "email": "NEW_AUTHOR_EMAIL"
   },
-  "another-old@example.com": {
-    "name": "ltw070",
-    "email": "ltw070@naver.com"
+  "ANOTHER_OLD_AUTHOR_EMAIL": {
+    "name": "NEW_AUTHOR_NAME",
+    "email": "NEW_AUTHOR_EMAIL"
   }
 }
 ```
@@ -1064,7 +1054,7 @@ git -C C:\repos\source-gitshuttle log --all --format="%an <%ae>" | Sort-Object -
 
 ```powershell
 python -m gitshuttle import `
-  --repo C:\repos\target-gitshuttle `
+  --repo C:\repos\target-repo `
   --file C:\transfer\shuttle_YYMMDD.bundle `
   --author-map C:\transfer\author_map.json `
   --target-branch imported/main `
@@ -1076,7 +1066,7 @@ python -m gitshuttle import `
 ```powershell
 # 2026-06-10 09:00 KST 기준 → UTC 2026-06-10 00:00 입력
 python -m gitshuttle import `
-  --repo C:\repos\target-gitshuttle `
+  --repo C:\repos\target-repo `
   --file C:\transfer\shuttle_YYMMDD.bundle `
   --author-map C:\transfer\author_map.json `
   --target-branch imported/main `
@@ -1088,7 +1078,7 @@ python -m gitshuttle import `
 ### 7단계. import된 브랜치 확인
 
 ```powershell
-git -C C:\repos\target-gitshuttle log imported/main --format="%h %an <%ae> %cn <%ce> %ad %s" --date=iso
+git -C C:\repos\target-repo log imported/main --format="%h %an <%ae> %cn <%ce> %ad %s" --date=iso
 ```
 
 현재 구현은 GitShuttle bundle의 `refs/gitshuttle/tmp_*` ref도 `--target-branch`로 지정한 브랜치에 맞춰 rewrite합니다.
@@ -1098,7 +1088,7 @@ git -C C:\repos\target-gitshuttle log imported/main --format="%h %an <%ae> %cn <
 새 GitHub 리포지토리의 `main` 브랜치로 올립니다.
 
 ```powershell
-cd C:\repos\target-gitshuttle
+cd C:\repos\target-repo
 git push origin imported/main:main
 ```
 
@@ -1127,4 +1117,4 @@ git push origin imported/main:gitshuttle-import
 ---
 
 *GitShuttle v0.1.0 · Phase 1 (CLI + TUI) 완료*  
-*문의: https://github.com/ltw070/gitshuttle/issues*
+*문의: https://github.com/PROJECT_OWNER/gitshuttle/issues*

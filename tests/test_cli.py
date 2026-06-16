@@ -93,7 +93,7 @@ def test_export_accepts_repo_option(tmp_path, monkeypatch):
         hash="a" * 40,
         short_hash="aaaaaaa",
         date="2026-06-10 09:00:00 +0900",
-        author="ltw070",
+        author="New Author",
         message="test commit",
         files_changed=1,
     )
@@ -192,7 +192,7 @@ def test_export_recent_selects_latest_without_ui(tmp_path, monkeypatch):
             hash=str(index) * 40,
             short_hash=str(index) * 7,
             date="2026-06-10 09:00:00 +0900",
-            author="ltw070",
+            author="New Author",
             message=f"commit {index}",
             files_changed=1,
         )
@@ -263,7 +263,7 @@ def test_export_accepts_bundle_scope_full(tmp_path, monkeypatch):
         hash="a" * 40,
         short_hash="aaaaaaa",
         date="2026-06-10 09:00:00 +0900",
-        author="ltw070",
+        author="New Author",
         message="test commit",
         files_changed=1,
     )
@@ -326,7 +326,7 @@ def test_export_full_branch_selects_tip_as_full_bundle_without_ui(tmp_path, monk
         hash="b" * 40,
         short_hash="bbbbbbb",
         date="2026-06-10 09:00:00 +0900",
-        author="ltw070",
+        author="New Author",
         message="branch tip",
         files_changed=1,
     )

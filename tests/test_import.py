@@ -469,8 +469,8 @@ def test_rewrite_import_partial_bundle_continues_from_hidden_original_refs(two_g
     author_map_path.write_text(
         json.dumps({
             "test@test.com": {
-                "name": "ltw070",
-                "email": "ltw070@naver.com",
+                "name": "New Author",
+                "email": "new.author@example.com",
             },
         }),
         encoding="utf-8",
@@ -526,7 +526,7 @@ def test_rewrite_import_partial_bundle_continues_from_hidden_original_refs(two_g
     ).stdout.strip()
 
     assert commit_count == "3"
-    assert latest_author == "ltw070 <ltw070@naver.com>"
+    assert latest_author == "New Author <new.author@example.com>"
 
 
 def test_checkout_or_create_branch_updates_worktree(tmp_path, monkeypatch):

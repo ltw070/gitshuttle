@@ -294,7 +294,7 @@ bundle에 named ref가 없으면 `"main"` 을 fallback으로 반환합니다.
 
 #### Y4. `author_map.json` 키 형식 (`rewrite.py:46~68`)
 
-매핑 키는 **이메일 주소 단독** (`"ltw070@naver.com"`)이어야 합니다.
+매핑 키는 **이메일 주소 단독** (`"OLD_AUTHOR_EMAIL"`)이어야 합니다.
 `"Name <email>"` 형식으로 입력하면 해당 이메일이 매칭되지 않아 미매핑 경고가 출력됩니다.
 입력 검증 로직 추가 또는 문서화 수준으로 처리할지 결정이 필요합니다.
 
@@ -330,14 +330,14 @@ python -m pytest tests/ -v --tb=short
 # Sprint 4b (Rewrite) 단위 테스트만
 python -m pytest tests/test_rewrite.py -v
 
-# 기본 export → import 흐름 (EXAMPLE.md 예제 1 참고)
+# 기본 export → import 흐름 (EXAMPLE.md 대표 예제 참고)
 cd <source-repo>
 python -m gitshuttle export --ui csv
 
 cd <target-repo>
 python -m gitshuttle import --file /path/to/shuttle.bundle
 
-# Import Rewrite 실전 (EXAMPLE.md 예제 3 참고)
+# Import Rewrite 실전 (EXAMPLE.md 대표 예제 참고)
 PYTHONPATH=D:/cla/03_gitshuttle python -m gitshuttle import \
   --file /tmp/first10.bundle \
   --author-map /tmp/author_map.json \
@@ -369,6 +369,6 @@ powershell -ExecutionPolicy Bypass -File build.ps1
 | `PLAN.md` | Sprint 0~6 계획 및 수락 기준 |
 | `README.md` | 사용자 빠른 시작 가이드 |
 | `MANUAL.md` | 전체 사용자 매뉴얼 (섹션 7-1 Rewrite 포함) |
-| `EXAMPLE.md` | 4가지 실전 시나리오 (최초 이전, 증분 업데이트, Import Rewrite, GitHub 간 이력 이전) |
+| `EXAMPLE.md` | 대표 이전 시나리오와 참고 흐름 |
 | `REPORT.md` | 세션별 작업 기록 및 설계 결정 이유 |
 | `CRA_REPORT.md` | Agents / TDD / Clean Code / Refactoring / SOLID / Mock 관점 분석 |
