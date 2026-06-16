@@ -115,19 +115,6 @@ def _select_commits_by_ui(ui_mode: str, commits, output_dir: Path) -> list:
         input()
         return parse_csv(csv_path, commits)
 
-    if ui_mode == "html":
-        from gitshuttle.ui.html_ui import generate_html, parse_selection_json
-        html_path = output_dir / "commits.html"
-        generate_html(commits, html_path)
-        typer.echo(f"HTML 생성: {html_path}")
-        typer.echo("브라우저에서 열어 커밋을 선택하고 selection.json 을 다운로드하세요.")
-        json_path_str = input("selection.json 경로 입력: ").strip()
-        return parse_selection_json(json_path_str, commits)
-
-    if ui_mode == "prompt":
-        from gitshuttle.ui.prompt_ui import select_commits_prompt
-        return select_commits_prompt(commits)
-
     typer.echo(f"알 수 없는 UI 모드 '{ui_mode}'. tui 로 대체합니다.")
     from gitshuttle.ui.tui import select_commits_tui
     return select_commits_tui(commits)
@@ -233,7 +220,7 @@ def export(
         resolve_path=True,
         help="원본 Git 리포지토리 경로 (기본값: 현재 디렉터리)",
     ),
-    ui: Optional[str] = typer.Option(None, "--ui", help="UI 모드 (tui|csv|html|prompt)"),
+    ui: Optional[str] = typer.Option(None, "--ui", help="UI 모드 (tui|csv)"),
     output: Optional[str] = typer.Option(None, "--output", "-o", help="출력 경로"),
     bundle_scope: str = typer.Option(
         "range",

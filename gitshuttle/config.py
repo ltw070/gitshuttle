@@ -20,7 +20,7 @@ else:
 DEFAULT_UI = "tui"
 CONFIG_FILENAME = "gitshuttle.toml"
 
-_VALID_UI_MODES = ("tui", "csv", "html", "prompt")
+_VALID_UI_MODES = ("tui", "csv")
 
 
 def load_config(config_path: Optional[Path] = None) -> dict:
@@ -113,14 +113,10 @@ def run_config_wizard(config_path: Optional[Path] = None) -> None:
     menu = {
         "1": "tui",
         "2": "csv",
-        "3": "html",
-        "4": "prompt",
     }
     labels = {
         "tui": "TUI      — 터미널 인터랙티브",
         "csv": "CSV      — Excel 편집",
-        "html": "HTML     — 브라우저",
-        "prompt": "Prompt   — 방향키 멀티셀렉트",
     }
 
     print("\n커밋 선택 UI 기본값을 선택하세요:")

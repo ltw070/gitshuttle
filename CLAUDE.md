@@ -33,7 +33,7 @@ PRD 전체 내용은 `PRD.md` 참고.
 |------|-----------|
 | Language | Python 3.10+ |
 | Git 지원 범위 | 2.37 이상 |
-| TUI | Textual (우선 검토), 대안: Rich + prompt_toolkit |
+| TUI | Textual |
 | CLI 프레임워크 | Typer 또는 Click |
 | 배포 | PyInstaller → `gitshuttle.exe` 단일 파일 |
 | 압축 | ZIP 또는 tar.gz |
@@ -69,9 +69,7 @@ gitshuttle/
 └── ui/
     ├── __init__.py
     ├── tui.py        # Textual 체크박스+테이블 (기본값)
-    ├── csv_ui.py     # commits.csv 생성/파싱 (utf-8-sig)
-    ├── html_ui.py    # self-contained HTML, selection.json 파싱
-    └── prompt_ui.py  # InquirerPy 멀티셀렉트
+    └── csv_ui.py     # commits.csv 생성/파싱 (utf-8-sig)
 
 tests/
 ├── conftest.py       # 임시 git repo 픽스처
@@ -87,8 +85,7 @@ tests/
 ├── test_e2e.py       # 실제 git repo 기반 end-to-end 테스트
 └── ui/
     ├── test_csv_ui.py
-    ├── test_html_ui.py
-    └── test_prompt_ui.py
+    └── test_tui.py
 
 # 빌드 파일 (프로젝트 루트)
 gitshuttle.spec       # PyInstaller 스펙 (onefile, PYTHONUTF8=1)
@@ -117,7 +114,7 @@ main
 ## 명령어 구조
 
 ```
-gitshuttle export   [--branch] [--ui tui|csv|html|prompt] [--output]   # Phase 1
+gitshuttle export   [--branch] [--ui tui|csv] [--output]               # Phase 1
 gitshuttle import   --file <path> [--on-conflict skip|force|abort]
                     [--author-map <json>] [--target-branch <name>]
                     [--timestamp now|original|from=<datetime>]     # Phase 1
@@ -134,8 +131,6 @@ gitshuttle config   (대화형 마법사 — gitshuttle.toml 수정)            
 |------|-----------|
 | `tui` | Textual 체크박스 + 테이블. Shift 범위선택, 작성자/파일/날짜 필터. |
 | `csv` | `commits.csv` 생성 → 사용자가 `include` 컬럼 Y/N 편집 → 재입력 |
-| `html` | 단일 `.html` 생성(인터넷 불필요) → 브라우저 선택 → `selection.json` → export |
-| `prompt` | InquirerPy 방향키 + Space 멀티셀렉트 |
 
 공통: 이미 타겟에 반영된 커밋은 `[imported]` 태그로 표시.
 

@@ -23,23 +23,19 @@ Phase 1에서 커밋 선택은 아래 방식 중 하나(또는 조합)로 구현
 |---|------|------|------|------|
 | **A** ⭐ | **TUI (Textual)** — 기본값 | 터미널 안에서 체크박스·테이블 인터랙션 | 외부 앱 불필요, Shift 범위선택·필터 가능 | Windows 터미널 호환성 이슈 가능 |
 | B | **CSV 편집** | `gitshuttle list > commits.csv` 생성 → Excel에서 `include` 컬럼 Y/N 수정 → `gitshuttle export --from commits.csv` | Excel 친화적, 비개발자도 직관적 | 파일 열고 저장하는 별도 단계 필요 |
-| C | **Self-contained HTML** | 단일 `.html` 파일 생성 → 브라우저에서 열어 체크박스 선택 → "Export" 버튼으로 `selection.json` 다운로드 → `gitshuttle export --from selection.json` | 마우스 Shift 클릭·필터 완전 지원, 인터넷 불필요, Phase 2 GUI의 프리뷰 역할 | 2단계(브라우저 → CLI) 워크플로우 |
-| D | **InquirerPy 멀티셀렉트** | 터미널에서 방향키 + Space로 선택 | 의존성 최소, 설치 간단 | 커밋 수 많을 때 불편, 필터 없음 |
 
 **UI 방식 선택 메커니즘 — 2+3 조합:**
 
 1. **설정 파일 (`gitshuttle.toml`)** — 기본값 고정. 미설정 시 A(TUI).
    ```toml
    [export]
-   ui = "tui"   # tui | csv | html | prompt
+   ui = "tui"   # tui | csv
    ```
 
 2. **`--ui` 플래그** — 1회성 오버라이드. 설정 파일보다 항상 우선.
    ```
    gitshuttle export                  # 설정 파일 기본값 사용
    gitshuttle export --ui csv         # 이번 실행만 B
-   gitshuttle export --ui html        # 이번 실행만 C
-   gitshuttle export --ui prompt      # 이번 실행만 D
    ```
 
 3. **`gitshuttle config` 마법사** — 언제든 실행해 설정 파일의 기본값을 변경.
@@ -49,10 +45,8 @@ Phase 1에서 커밋 선택은 아래 방식 중 하나(또는 조합)로 구현
    커밋 선택 UI 기본값을 선택하세요:
      [1] TUI      — 터미널 인터랙티브 ← 현재 설정
      [2] CSV      — Excel 편집
-     [3] HTML     — 브라우저
-     [4] Prompt   — 방향키 멀티셀렉트
 
-   선택 (1~4): _
+   선택 (1~2): _
    ```
    선택 결과는 `gitshuttle.toml`에 저장.
 
@@ -205,7 +199,7 @@ gitshuttle import \
 | **운영 환경** | Windows (주 대상) |
 | **지원 Git 버전** | 2.37 이상 (2022년 이후 릴리즈 기준) |
 | **Python 버전** | 3.10 이상 |
-| **TUI 라이브러리** | Textual 또는 Rich + prompt_toolkit (검토 필요) |
+| **TUI 라이브러리** | Textual |
 | **패키지 압축** | ZIP 또는 tar.gz |
 | **무결성 검증** | SHA-256 체크섬 |
 

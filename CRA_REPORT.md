@@ -168,7 +168,7 @@ Sprint 4  →  71 passed   ← import_.py
 Sprint 5  →  79 passed
 Sprint 6  →  85 passed
 최종 정리 → 106 passed  (0 failed)
-기능 보강 → 145 collected  (hidden refs, TUI 단축키, full-branch export, bundle-only CLI 리팩토링 포함)
+기능 보강 → 133 collected  (hidden refs, TUI 단축키, CSV 보조 UI, full-branch export, bundle-only CLI 리팩토링 포함)
 ```
 
 **최근 TDD 사례 — bundle-only CLI 단순화:**
@@ -638,4 +638,4 @@ Mock 테스트는 "명령 호출 방식", "오류 처리", "CLI 옵션 전달"�
 
 ---
 
-*GitShuttle · Sprint 0~6 완료 + 기능 보강 · 145 tests collected · hidden refs, full-branch export, bundle-only CLI 리팩토링 포함*
+*GitShuttle · Sprint 0~6 완료 + 기능 보강 · 133 tests collected · hidden refs, CSV 보조 UI, full-branch export, bundle-only CLI 리팩토링 포함*

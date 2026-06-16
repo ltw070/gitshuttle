@@ -42,9 +42,7 @@ gitshuttle/
 └── ui/
     ├── __init__.py
     ├── tui.py        # Textual 체크박스 + 테이블 (기본값)
-    ├── csv_ui.py     # commits.csv 생성/파싱
-    ├── html_ui.py    # self-contained HTML 생성, selection.json 파싱
-    └── prompt_ui.py  # InquirerPy 멀티셀렉트
+    └── csv_ui.py     # commits.csv 생성/파싱
 
 tests/
 ├── conftest.py       # 공통 픽스처 (임시 git repo, sample commits)
@@ -57,8 +55,7 @@ tests/
 ├── test_config.py
 └── ui/
     ├── test_csv_ui.py
-    ├── test_html_ui.py
-    └── test_prompt_ui.py
+    └── test_tui.py
 ```
 
 ---
@@ -90,7 +87,7 @@ tests/
 ### SA2 호출 프롬프트
 ```
 Sprint 0: 프로젝트 기반 구조 생성.
-pyproject.toml(Python 3.10+, Typer, Textual, InquirerPy 의존성),
+pyproject.toml(Python 3.10+, Typer, Textual 의존성),
 gitshuttle 패키지 스캐폴딩(__main__.py UTF-8 강제, cli.py Typer app),
 tests/conftest.py(임시 git repo 픽스처) 작성.
 수락 기준: python -m gitshuttle --help 시 커맨드 목록 출력.
@@ -166,14 +163,12 @@ TUI headless 테스트 픽스처 필수.
 
 ---
 
-## Sprint 3 — UI 모드 확장 + Config
+## Sprint 3 — CSV UI + Config
 
-**목표:** CSV / HTML / Prompt 모드 구현 및 설정 마법사
+**목표:** TUI 기본 흐름을 보완하는 CSV 모드와 설정 마법사 구현
 
 ### 구현 대상
 - `ui/csv_ui.py`: `commits.csv` 생성(`utf-8-sig`), `include` 컬럼 파싱
-- `ui/html_ui.py`: 단일 `.html` 생성(인터넷 불필요), `selection.json` 파싱
-- `ui/prompt_ui.py`: InquirerPy 멀티셀렉트
 - `config.py`: `gitshuttle.toml` 읽기/쓰기, `gitshuttle config` 마법사
 - `--ui` 플래그 우선순위 로직 (`--ui` > `toml` > 기본값 tui)
 
@@ -182,12 +177,11 @@ TUI headless 테스트 픽스처 필수.
 | 단계 | SubAgent | 내용 |
 |------|----------|------|
 | 문서 검증 | SA1 | PRD 3.2 UI 옵션표, 설정 파일 스펙 확인 |
-| 구현 | SA2 | 각 UI 모드별 입력→커밋목록 변환 단위 테스트 |
-| 검증 | SA3+SA4 | CSV utf-8-sig, HTML 네트워크 호출 없음 확인 |
+| 구현 | SA2 | CSV 입력→커밋목록 변환 단위 테스트 |
+| 검증 | SA3+SA4 | CSV utf-8-sig 확인 |
 
 ### 수락 기준
 - [x] `gitshuttle export --ui csv` → `commits.csv` 생성, 수정 후 재입력 시 선택 반영
-- [x] `gitshuttle export --ui html` → `.html` 생성, `selection.json` 파싱 후 export
 - [x] `gitshuttle config` → 마법사 실행 후 `gitshuttle.toml` 저장
 - [x] `--ui` 플래그가 toml 기본값보다 우선
 
@@ -195,8 +189,6 @@ TUI headless 테스트 픽스처 필수.
 ```
 Sprint 3: UI 모드 확장 + Config 구현.
 ui/csv_ui.py(utf-8-sig, include 컬럼),
-ui/html_ui.py(self-contained, 외부 CDN 없음, selection.json),
-ui/prompt_ui.py(InquirerPy),
 config.py(toml 읽기/쓰기, 마법사).
 --ui 플래그 우선순위 로직 테스트 필수.
 ```
@@ -372,7 +364,7 @@ exe 실행 + 한글 출력 검증 테스트.
 | 0 | 1 | 기반 구조 | pyproject.toml, 패키지 스캐폴딩, conftest.py |
 | 1 | 1 | Git 핵심 레이어 | git_ops.py, bundle.py, checksum.py |
 | 2 | 1 | Export + TUI | ui/tui.py, manifest.py, export_.py |
-| 3 | 1 | UI 모드 + Config | csv/html/prompt ui, config.py |
+| 3 | 1 | CSV UI + Config | csv ui, config.py |
 | 4 | 1 | Import | import_.py, 충돌 처리 3케이스 |
 | 4b | 1 | Import Rewrite | rewrite.py, 작성자 매핑, 브랜치 리네임 |
 | 5 | 1 | 대용량 + E2E | split archive, E2E 테스트 |

@@ -119,5 +119,5 @@ else:
             raise RuntimeError(
                 "Textual 이 설치되어 있지 않습니다. "
                 "'pip install textual' 로 설치하거나 "
-                "'--ui csv' / '--ui prompt' 모드를 사용하세요."
+                "'--ui csv' 모드를 사용하세요."
             )

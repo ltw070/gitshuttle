@@ -233,7 +233,7 @@ gitshuttle export [OPTIONS]
 |------|------|------|
 | `--repo PATH` | 원본 Git 리포지토리 경로 지정 | `--repo C:\projects\my-repo` |
 | `--branch TEXT` | 특정 브랜치의 커밋만 추출 | `--branch feature/login` |
-| `--ui [tui\|csv\|html\|prompt]` | 커밋 선택 방식 | `--ui csv` |
+| `--ui [tui\|csv]` | 커밋 선택 방식 | `--ui csv` |
 | `--output TEXT` | 출력 경로 지정 | `--output C:\transfer` |
 | `--bundle-scope [range\|full]` | bundle 범위 방식. `full`은 선택 tip까지 전체 이력을 포함 | `--bundle-scope full` |
 | `--full-branch` | 현재/지정 브랜치 tip 기준 전체 이력을 TUI 없이 bundle로 추출 | `--full-branch` |
@@ -535,10 +535,8 @@ GitShuttle 설정 마법사
 커밋 선택 UI 기본값을 선택하세요:
   [1] tui    — 터미널 인터랙티브 (현재: tui)
   [2] csv    — Excel/메모장 편집
-  [3] html   — 브라우저에서 선택
-  [4] prompt — 방향키 멀티셀렉트
 
-선택 (1~4, 그냥 Enter는 현재값 유지): 2
+선택 (1~2, 그냥 Enter는 현재값 유지): 2
 
 저장 완료: gitshuttle.toml
 ```
@@ -551,7 +549,7 @@ GitShuttle 설정 마법사
 
 ```toml
 [export]
-ui = "csv"   # tui | csv | html | prompt
+ui = "csv"   # tui | csv
 ```
 
 ### 설정 파일 우선순위
@@ -568,7 +566,7 @@ ui = "csv"   # tui | csv | html | prompt
 
 ---
 
-## 9. 커밋 선택 UI 4가지 방식
+## 9. 커밋 선택 UI 2가지 방식
 
 ### 방식 1: TUI (기본값) — 터미널 인터랙티브
 
@@ -628,49 +626,6 @@ gitshuttle export --ui csv
 4. 터미널로 돌아와 `Enter`를 누르면 export가 진행됩니다.
 
 > Windows Terminal이 불편한 환경에서 특히 유용합니다.
-
----
-
-### 방식 3: HTML — 브라우저에서 선택
-
-```
-gitshuttle export --ui html
-```
-
-1. 명령어를 실행하면 `commits_260508.html` 파일이 생성됩니다.
-
-2. 해당 HTML 파일을 **브라우저(Chrome, Edge 등)로 드래그**하여 열거나 더블클릭합니다.
-
-3. 브라우저 화면에서 체크박스로 전송할 커밋을 선택합니다.
-
-4. **"Export"** 버튼을 클릭하면 `selection.json` 파일이 자동 다운로드됩니다.
-
-5. `selection.json`을 커밋 작업 디렉터리에 놓으면 자동으로 export가 진행됩니다.
-
-> 인터넷 연결이 **전혀 필요 없습니다.** HTML 파일 하나에 모든 기능이 내장되어 있습니다.
-
----
-
-### 방식 4: Prompt — 터미널 방향키 멀티셀렉트
-
-```
-gitshuttle export --ui prompt
-```
-
-터미널에서 방향키와 `Space`로 선택하는 간단한 방식입니다.
-
-```
-? 전송할 커밋을 선택하세요 (Space: 선택/해제, Enter: 확인)
- ❯ ◉ a3f8c2 | 2026-05-08 | Alice  | feat: 결제 모듈 추가
-   ○ b9e4f7 | 2026-05-07 | Bob    | fix: 로그인 버그 수정
-   ○ c2d1e9 | 2026-05-01 | Alice  | [imported] 초기 설정
-```
-
-| 키보드 | 동작 |
-|--------|------|
-| `↑` `↓` | 커서 이동 |
-| `Space` | 선택/해제 |
-| `Enter` | 선택 완료 |
 
 ---
 
@@ -804,7 +759,6 @@ Windows Terminal 또는 PowerShell 7+ 사용을 권장합니다.
 CMD 환경에서는 다른 방식을 사용하세요:
 ```
 gitshuttle export --ui csv
-gitshuttle export --ui prompt
 ```
 
 ---

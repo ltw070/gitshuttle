@@ -76,7 +76,7 @@ gitshuttle export [OPTIONS]
 Options:
   --repo PATH                    원본 Git 리포지토리 경로 (기본값: 현재 디렉터리)
   --branch TEXT                  대상 브랜치 (기본값: 현재 브랜치)
-  --ui [tui|csv|html|prompt]     커밋 선택 UI 방식 (기본값: 설정 파일 또는 tui)
+  --ui [tui|csv]                 커밋 선택 UI 방식 (기본값: 설정 파일 또는 tui)
   --output TEXT                  출력 경로 (기본값: 원본 리포지토리 경로)
   --bundle-scope TEXT            bundle 범위 방식 (range|full)
   --full-branch                  현재/지정 브랜치 tip 기준 전체 이력을 TUI 없이 bundle로 추출
@@ -115,8 +115,6 @@ Remove-Item Env:\GITSHUTTLE_HEADLESS
 |------|------|------|
 | `tui` | TUI (기본값) | 터미널 인터랙티브 체크박스·테이블 |
 | `csv` | CSV 편집 | `commits.csv` 생성 → Excel에서 `include` 컬럼 Y/N 수정 |
-| `html` | Self-contained HTML | 브라우저에서 선택 → `selection.json` 다운로드 |
-| `prompt` | InquirerPy | 방향키 + Space 멀티셀렉트 |
 
 이미 타겟 리포지토리에 반영된 커밋은 `[imported]`로 표시됩니다.
 
@@ -233,7 +231,7 @@ gitshuttle config
 
 ```toml
 [export]
-ui = "tui"   # tui | csv | html | prompt
+ui = "tui"   # tui | csv
 
 [import]
 timestamp = "now"   # now | original | from=2024-01-01T09:00:00

@@ -36,7 +36,7 @@
   - `--recent N`이 UI를 열지 않고 limit 조회로 이어지는지 검증
   - full-scope bundle이 빈 repo에서도 검증되는지 확인
 
-**현재 기준 테스트:** 145개 테스트 수집 확인. bundle 선택 범위 관련 테스트 통과.
+**현재 기준 테스트:** 133개 테스트 수집 확인. bundle 선택 범위 관련 테스트 통과.
 
 ---
 
@@ -57,7 +57,7 @@
   - 기존 main을 보존해야 할 때 migration 브랜치에 bundle import 후 Git merge하는 가이드로 정리
   - 현재 전송 방식이 bundle 중심임을 명확화
 
-**현재 기준 테스트:** 145개 테스트 수집 확인. CLI 제거 옵션 회귀 테스트 통과.
+**현재 기준 테스트:** 133개 테스트 수집 확인. CLI 제거 옵션 회귀 테스트 통과.
 
 ---
 
@@ -68,7 +68,7 @@
   - 5번 항목: SOLID 원칙 관점 추가
   - 6번 항목: Mock 테스트 관점 추가
 - `PR_REVIEW_POINTS.md`
-  - 현재 테스트 수를 145개 기준으로 업데이트
+  - 현재 테스트 수를 133개 기준으로 업데이트
   - `--repo` 옵션, fast-import 바이너리 입력, fast-export `data N` payload 보존 포인트 반영
   - `author_map.json` 형식을 이메일 키 + `{name,email}` dict 형식으로 정리
 - `README.md`
@@ -117,7 +117,7 @@
   - 최신 버전의 `refs/gitshuttle/original/...` 기준점 보관 방식과 구버전 repo의 1회 전체 import 필요성 문서화
   - 기존 코드가 있는 repo는 migration 브랜치에 bundle import 후 Git merge로 합치는 흐름 문서화
 
-**현재 기준 테스트:** 145개 테스트 수집 확인. 관련 단위/통합 테스트 통과.
+**현재 기준 테스트:** 133개 테스트 수집 확인. 관련 단위/통합 테스트 통과.
 
 ---
 
@@ -134,14 +134,14 @@
   - 🟡 일반 검토 5개 (split archive, checksum 강제화, branch fallback, author_map 키 검증, toml 우선순위)
   - 🟢 확인 완료 항목, exe 빌드 방법 및 제약 명시
 
-**최종 테스트 확인:** 당시 `134/134 PASS` (2026-06-16 현재 문서 기준: 145개 테스트)
+**최종 테스트 확인:** 당시 `134/134 PASS` (2026-06-16 현재 문서 기준: 133개 테스트)
 
 **현재 상태 요약:**
 
 | 항목 | 상태 |
 |------|------|
 | Phase 1 구현 | ✅ 완료 (Sprint 0~6, 4b 포함) |
-| 전체 테스트 | ✅ 145개 수집 확인 (2026-06-16 기준) |
+| 전체 테스트 | ✅ 133개 수집 확인 (2026-06-16 기준) |
 | gitshuttle.exe | ⚠️ 미빌드 (사내 PyInstaller 설치 불가, spec/build.ps1 준비 완료) |
 | GitHub push | ✅ main 브랜치 최신 |
 | PR #1 | ✅ Sprint 4b feat/PR 병합 완료 |
@@ -278,8 +278,6 @@
 - A~D 4가지 방식 비교 테이블 작성:
   - **A. TUI (Textual)** — 기본값
   - **B. CSV 편집** — Excel 친화적
-  - **C. Self-contained HTML** — 브라우저 선택 → selection.json
-  - **D. InquirerPy** — 방향키 + Space
 - UI 방식 선택 메커니즘 확정:
   - 설정 파일 `gitshuttle.toml` + `--ui` 플래그 + `gitshuttle config` 마법사 조합
 
@@ -376,7 +374,7 @@ GitHub: https://github.com/ltw070/gitshuttle (private)
 ### 생성 파일
 | 파일 | 내용 |
 |------|------|
-| `pyproject.toml` | Python 3.10+, typer/textual/InquirerPy 의존성, 빌드 설정 |
+| `pyproject.toml` | Python 3.10+, typer/textual 의존성, 빌드 설정 |
 | `requirements.txt` | 런타임 의존성 |
 | `requirements-dev.txt` | pytest, pytest-cov |
 | `gitshuttle/__init__.py` | 버전 `0.1.0` 정의 |
@@ -476,7 +474,7 @@ GitHub: https://github.com/ltw070/gitshuttle (private)
 
 ---
 
-## Sprint 3 — UI 모드 확장 + Config (2026-05-08)
+## Sprint 3 — CSV UI + Config (2026-05-08)
 
 **브랜치:** `sprint/3-ui-config` → `main` merge
 
@@ -485,20 +483,15 @@ GitHub: https://github.com/ltw070/gitshuttle (private)
 | 파일 | 내용 |
 |------|------|
 | `gitshuttle/ui/csv_ui.py` | `generate_csv()` (utf-8-sig), `parse_csv()` |
-| `gitshuttle/ui/html_ui.py` | `generate_html()` (self-contained, 외부URL없음), `parse_selection_json()` |
-| `gitshuttle/ui/prompt_ui.py` | `select_commits_prompt()`, InquirerPy headless 분기 |
 | `gitshuttle/config.py` | `save_config()` 추가, `get_ui_mode(flag=, config_path=)` 시그니처 확장, `run_config_wizard()` 구현, `_parse_simple_toml()` (tomllib 없는 환경 대비) |
-| `gitshuttle/cli.py` | export 커맨드에 UI 모드별 분기 (csv/html/prompt 실제 호출), config 커맨드 `run_config_wizard()` 연결, `get_ui_mode(flag=ui)` 우선순위 로직 |
+| `gitshuttle/cli.py` | export 커맨드에 CSV/TUI 분기, config 커맨드 `run_config_wizard()` 연결, `get_ui_mode(flag=ui)` 우선순위 로직 |
 | `tests/ui/test_csv_ui.py` | csv_ui 테스트 7개 |
-| `tests/ui/test_html_ui.py` | html_ui 테스트 8개 |
 | `tests/test_config.py` | config 테스트 10개 |
 | `tests/test_cli.py` | `test_config_stub` — 실제 마법사 입력 흐름으로 업데이트 |
 
 ### 설계 결정
 
 - `csv_ui.py`: `open(path, 'w', encoding='utf-8-sig', newline='')` — Excel BOM 호환
-- `html_ui.py`: 순수 HTML+CSS+JS만 사용, `Blob` + `URL.createObjectURL` 로 selection.json 다운로드. 외부 CDN/URL 일절 없음.
-- `prompt_ui.py`: InquirerPy import는 함수 내부에서만 — 미설치 환경에서도 모듈 import 오류 없음
 - `config.py save_config()`: tomli_w 미설치 가능성 → 수동 toml 직렬화(`[section]\nkey = "value"`)
 - `get_ui_mode()`: 시그니처에 `flag` 파라미터 추가 → `--ui 플래그 > toml > 기본값` 우선순위
 - `run_config_wizard()`: `EOFError` 처리 — 비인터랙티브 환경(테스트 등)에서 정상 종료
@@ -688,7 +681,7 @@ GitHub: https://github.com/ltw070/gitshuttle (private)
 
 ## Phase 1 완료 (2026-05-08)
 
-모든 Sprint(0~6)가 완료되었습니다. 당시 최종 테스트는 **85 passed**, 0 failed였고, 이후 기능 보강과 bundle-only 단순화를 반영한 2026-06-16 기준 테스트 수는 145개입니다.
+모든 Sprint(0~6)가 완료되었습니다. 당시 최종 테스트는 **85 passed**, 0 failed였고, 이후 기능 보강과 bundle-only 단순화를 반영한 2026-06-16 기준 테스트 수는 133개입니다.
 
 ### 남은 작업 (Phase 2 이후)
 

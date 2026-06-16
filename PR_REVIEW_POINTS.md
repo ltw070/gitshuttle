@@ -43,7 +43,7 @@ gitshuttle export                  USB →       gitshuttle import
 ### 파일 구조 및 역할
 
 ```
-gitshuttle/                   15개 모듈
+gitshuttle/                   13개 모듈
 ├── __init__.py               버전 상수
 ├── __main__.py               엔트리포인트 (UTF-8 강제)
 ├── cli.py                    Typer app (export/import/config 커맨드)
@@ -57,11 +57,9 @@ gitshuttle/                   15개 모듈
 ├── config.py                 gitshuttle.toml 읽기·쓰기·마법사
 └── ui/
     ├── tui.py                Textual 체크박스 + 테이블 (기본값)
-    ├── csv_ui.py             commits.csv 생성·파싱 (utf-8-sig)
-    ├── html_ui.py            단일 HTML (인터넷 불필요), selection.json 파싱
-    └── prompt_ui.py          InquirerPy 방향키 멀티셀렉트
+    └── csv_ui.py             commits.csv 생성·파싱 (utf-8-sig)
 
-tests/                        14개 테스트 파일, 145개 테스트
+tests/                        12개 테스트 파일, 133개 테스트
 ├── conftest.py               임시 git repo 픽스처
 ├── test_git_ops.py
 ├── test_bundle.py
@@ -74,8 +72,6 @@ tests/                        14개 테스트 파일, 145개 테스트
 ├── test_build.py
 └── ui/
     ├── test_csv_ui.py
-    ├── test_html_ui.py
-    ├── test_prompt_ui.py
     └── test_tui.py             TUI A/E 키 바인딩 검증
 ```
 
@@ -128,7 +124,7 @@ import 시 자동 검증 — 불일치 시 `ChecksumError`를 raise해 손상·�
 ### 커맨드 요약
 
 ```
-gitshuttle export   [--repo <path>] [--branch] [--ui tui|csv|html|prompt] [--output]
+gitshuttle export   [--repo <path>] [--branch] [--ui tui|csv] [--output]
                     [--bundle-scope range|full]
                     [--full-branch]
                     [--recent <N>]
@@ -146,9 +142,9 @@ gitshuttle config   (대화형 마법사)
 ### 테스트 현황
 
 ```
-현재 수집 테스트: 145개
+현재 수집 테스트: 133개
 커버리지 대상 모듈: git_ops, bundle, checksum, manifest, export_, import_,
-                   rewrite, config, ui(csv/html/prompt), build
+                   rewrite, config, ui(tui/csv), build
 ```
 
 ```bash
@@ -314,7 +310,7 @@ CLI와 toml이 동시에 설정된 경우 CLI 옵션이 우선합니다.
 
 ### 🟢 확인 완료
 
-- **테스트 145개 수집 확인** — 전체 suite는 환경에 따라 장시간 실행될 수 있음
+- **테스트 133개 수집 확인** — 전체 suite는 환경에 따라 장시간 실행될 수 있음
 - **UTF-8 / 한글 처리** — 모든 파일 I/O, subprocess, TUI에 인코딩 명시
 - **망분리 제약** — 외부 네트워크 호출 코드 없음
 - **Breaking Changes 없음** — 기존 `gitshuttle import --file <bundle>` 호환 유지
