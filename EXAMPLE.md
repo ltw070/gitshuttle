@@ -163,12 +163,12 @@ git -C C:\repos\target-repo push origin migration/REPO_NAME-main:main
 이미 `main`에 코드가 있다면 migration 브랜치를 push한 뒤 PR 또는 merge로 합칩니다.
 
 ```text
-기존 main:        X -> Y
-import 브랜치:    A -> B -> C
-나중에 merge:     X -> Y ---- M
-                         \   /
-                          A-B-C
+main 쪽:       X -> Y -------- M
+                            /
+import 쪽:        A -> B -> C
 ```
+
+`Y`와 `A`가 직접 이어지는 것이 아니라, merge commit `M`이 `Y`와 `C`를 부모로 갖습니다.
 
 ```powershell
 git -C C:\repos\target-repo switch main

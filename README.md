@@ -4,7 +4,7 @@
 
 단순 소스 복사와 달리 커밋 메시지, 작성자, 상세 설명, 태그, 브랜치 히스토리를 그대로 유지합니다.
 
-자세한 사용법은 **[MANUAL.md](MANUAL.md)** 를, 단계별 실습 예제는 **[EXAMPLE.md](EXAMPLE.md)** 를 참고하세요.
+실전 명령 예제는 **[EXAMPLE.md](EXAMPLE.md)** 를 참고하세요.
 
 ---
 
@@ -154,12 +154,12 @@ rewrite import 후에는 대상 브랜치로 checkout/reset 되어 작업 폴더
 기존 코드가 있는 대상 repo에 bundle을 가져올 때는 바로 `main`에 반영하지 말고, 먼저 `migration/...` 같은 별도 브랜치에 import하는 흐름을 권장합니다. 이 경우 기존 `main` 이력은 그대로 두고, bundle 이력은 별도 브랜치에 들어갑니다. 이후 검토가 끝나면 Git merge로 두 이력을 합칩니다. 같은 파일을 양쪽에서 다르게 수정했다면 merge conflict가 발생할 수 있으며, 이때 사람이 최종 내용을 결정합니다.
 
 ```text
-기존 main:        X -> Y
-import 브랜치:    A -> B -> C  또는  X/Y와 무관한 별도 이력
-나중에 merge:     X -> Y ---- M
-                         \   /
-                          A-B-C
+main 쪽:       X -> Y -------- M
+                            /
+import 쪽:        A -> B -> C
 ```
+
+`Y`와 `A`가 직접 연결되는 것이 아닙니다. merge commit `M`이 기존 main의 tip `Y`와 import 브랜치의 tip `C`를 부모로 가지면서 두 이력을 묶습니다. 그래서 공통 조상이 없는 경우 `--allow-unrelated-histories`가 필요합니다.
 
 ```
 gitshuttle import --repo C:\repos\target --file C:\transfer\shuttle_YYMMDD.bundle --target-branch migration/source-main
@@ -178,6 +178,8 @@ git -C C:\repos\target merge migration/source-main --allow-unrelated-histories
 | `original` | 소스 원본 author/committer date 그대로 보존 |
 | `from=YYYY-MM-DDTHH:MM:SS` | 최초 커밋 = 지정 시각, 이후 커밋은 원본 상대 간격 유지 |
 
+기존 `main`의 최신 커밋 시간이 현재라면, `original` 또는 과거 `from=`으로 import한 커밋은 merge 그래프상 나중에 합쳐졌더라도 커밋 날짜는 과거로 보일 수 있습니다. 이게 어색하면 `--timestamp now`를 쓰거나, `from=` 값을 기존 main의 최신 커밋보다 뒤 시각으로 지정하세요.
+
 import 시 SHA-256 체크섬이 자동 검증됩니다. 불일치 시 작업이 중단되며 재export 방법이 안내됩니다.
 
 최근 1~2개처럼 일부 커밋만 export한 bundle은 대상 repo에 그 직전 **원본 부모 커밋 SHA**가 있어야 검증됩니다.
@@ -186,18 +188,18 @@ import 시 SHA-256 체크섬이 자동 검증됩니다. 불일치 시 작업이 
 따라서 이 버전으로 한 번 전체 또는 필요한 기준 범위를 import한 뒤에는 이후 최신 커밋 몇 개만 export/import하는 증분 흐름을 사용할 수 있습니다.
 구버전으로 이미 이전한 대상 repo는 한 번 전체 범위를 다시 import해 기준점을 만든 뒤 부분 증분을 이어가세요.
 
-대상 repo의 기준점 상태와 관계없이 bundle을 강제로 이어붙여야 한다면 export 단계에서 self-contained bundle을 만듭니다. 현재 브랜치 전체를 가져올 때는 `--full-branch`가 가장 간단합니다.
+대상 repo의 기준점 상태와 관계없이 bundle을 강제로 가져와야 한다면 export 단계에서 self-contained bundle을 만듭니다. 현재 브랜치 전체를 가져올 때는 `--full-branch`가 가장 간단합니다. 그래도 기존 main에 직접 force import하지 말고 migration 브랜치에 받은 뒤 merge하는 흐름을 권장합니다.
 
 ```
 gitshuttle export --repo C:\repos\source --branch main --full-branch --output C:\transfer
-gitshuttle import --repo C:\repos\target --file C:\transfer\shuttle_YYMMDD.bundle --target-branch main --on-conflict force
+gitshuttle import --repo C:\repos\target --file C:\transfer\shuttle_YYMMDD.bundle --target-branch migration/source-main --on-conflict force
 ```
 
 선택 커밋 기준으로 직접 제어해야 한다면 `--bundle-scope full`을 사용할 수 있습니다.
 
 ```
 gitshuttle export --repo C:\repos\source --branch main --recent 2 --bundle-scope full --output C:\transfer
-gitshuttle import --repo C:\repos\target --file C:\transfer\shuttle_YYMMDD.bundle --target-branch main --on-conflict force
+gitshuttle import --repo C:\repos\target --file C:\transfer\shuttle_YYMMDD.bundle --target-branch migration/source-main --on-conflict force
 ```
 
 `--bundle-scope full`은 선택한 최신 tip까지 전체 이력을 포함하므로 파일은 커질 수 있지만, 부분 bundle prerequisite 실패를 피할 수 있습니다.

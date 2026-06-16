@@ -113,12 +113,11 @@ GitShuttle은 서로 연결되지 않은 두 네트워크(내부망/외부망) �
   - 별도 브랜치 import는 기존 기본 브랜치 ref를 이동시키지 않아야 하며, merge 시 동일 파일 충돌은 Git conflict로 드러나 사용자가 해결할 수 있어야 함.
   - 권장 사용 구조:
     ```
-    기존 main:        X -> Y
-    import 브랜치:    A -> B -> C  또는  X/Y와 무관한 별도 이력
-    나중에 merge:     X -> Y ---- M
-                             \   /
-                              A-B-C
+    main 쪽:       X -> Y -------- M
+                                /
+    import 쪽:        A -> B -> C
     ```
+  - `Y`와 `A`가 직접 연결되는 것이 아니라, merge commit `M`이 `Y`와 `C`를 부모로 가지면서 두 이력을 연결함.
 - **CLI 예시:**
   ```
   gitshuttle import --file shuttle.bundle
