@@ -247,14 +247,14 @@ CLI 옵션은 설정 파일보다 항상 우선합니다.
 | 파일 | 설명 |
 |------|------|
 | `shuttle_YYMMDD.bundle` | Git bundle 패키지 (히스토리 보존) |
-| `shuttle_YYMMDD.sha256` | SHA-256 체크섬 (무결성 검증용) |
+| `shuttle_YYMMDD.bundle.sha256` | SHA-256 체크섬 (무결성 검증용) |
 | `shuttle_YYMMDD_manifest.txt` | 포함된 커밋 목록 요약 (반출입 심사용) |
 
 **3개 파일을 항상 함께 이동하세요.**
 
 ---
 
-## 대용량 bundle 분할 압축
+## 대용량 bundle 분할 전송
 
 USB 용량 제한 시 bundle을 여러 파트로 분할할 수 있습니다.
 

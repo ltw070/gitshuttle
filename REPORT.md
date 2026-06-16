@@ -12,7 +12,7 @@
 | 3 | `sprint/3-ui-config` | UI 모드 + Config | ✅ DONE | PASS | PASS | PASS (64/64) | PASS |
 | 4 | `sprint/4-import` | Import | ✅ DONE | PASS | PASS | PASS (71/71) | PASS |
 | 4b | `sprint/4b-import-rewrite` | 작성자 매핑 & 브랜치 리네임 | ✅ DONE | PASS | PASS | PASS (당시 134/134) | PASS |
-| 5 | `sprint/5-e2e` | 분할 압축 + E2E | ✅ DONE | PASS | PASS | PASS (79/79) | PASS |
+| 5 | `sprint/5-e2e` | 분할 전송 + E2E | ✅ DONE | PASS | PASS | PASS (79/79) | PASS |
 | 6 | `sprint/6-build` | PyInstaller 빌드 | ✅ DONE | PASS | PASS | PASS (85/85) | PASS |
 
 ---
@@ -286,9 +286,10 @@
 - 보조 실행: `python -m gitshuttle`
 - 엔트리포인트: `gitshuttle/__main__.py`
 
-### 4. 개발 로드맵 확정
-- Phase 1: CLI + TUI
-- Phase 2: 데스크탑 GUI
+### 4. 개발 범위 확정
+- CLI 기반 bundle export/import
+- 기본 TUI 선택기 + 보조 CSV 선택기
+- 작성자/타임스탬프 rewrite와 대상 브랜치 격리
 
 ### 5. 문서 생성
 - `README.md`: 사용자 대상 — 설치, 명령어, 워크플로우, 설정
@@ -510,7 +511,6 @@ GitHub: https://github.com/ltw070/gitshuttle (private)
 
 - [x] `pytest tests/ -v` → 64 passed (기존 39 + 신규 25)
 - [x] CSV utf-8-sig BOM 확인 테스트 PASS
-- [x] HTML 외부 URL 없음 확인 테스트 PASS
 - [x] `--ui` 플래그가 toml 기본값보다 우선하는 테스트 PASS
 - [x] `save_config()` 저장 → `load_config()` 재읽기 일치 테스트 PASS
 
@@ -575,7 +575,7 @@ GitHub: https://github.com/ltw070/gitshuttle (private)
 
 ---
 
-## Sprint 5 — 분할 압축 + E2E 통합 테스트 (2026-05-08)
+## Sprint 5 — 분할 전송 + E2E 통합 테스트 (2026-05-08)
 
 **브랜치:** `sprint/5-e2e` → `main` merge 완료
 
@@ -683,8 +683,7 @@ GitHub: https://github.com/ltw070/gitshuttle (private)
 
 모든 Sprint(0~6)가 완료되었습니다. 당시 최종 테스트는 **85 passed**, 0 failed였고, 이후 기능 보강과 bundle-only 단순화를 반영한 2026-06-16 기준 테스트 수는 133개입니다.
 
-### 남은 작업 (Phase 2 이후)
+### 남은 작업
 
 - [ ] `gitshuttle.exe` 실제 빌드 및 수동 검증 (`build.ps1` 실행)
 - [ ] GitHub Releases에 `gitshuttle.exe` 업로드
-- [ ] Phase 2: 데스크탑 GUI (마우스 기반, 히스토리 그래프)

@@ -248,7 +248,7 @@ import_.py(SHA-256 검증 → 커밋 매칭 → Fast-forward → 충돌 처리).
 - `--author-map <파일>` 옵션 추가
 - `--target-branch <이름>` 옵션 추가 (기본값: `imported/<소스브랜치명>`)
 - `--timestamp now|original|from=<datetime>` 옵션 추가 (기본값: `now`)
-- `gitshuttle.toml` `[import.author_map]`, `[import.timestamp]` 섹션 읽기
+- `gitshuttle.toml` `[import]` 섹션의 `author_map`, `timestamp` 값 읽기
 
 **`tests/test_rewrite.py`**
 - 작성자 치환 / 미매핑 원본 유지 케이스
@@ -272,7 +272,7 @@ import_.py(SHA-256 검증 → 커밋 매칭 → Fast-forward → 충돌 처리).
 - [x] `--timestamp now` (기본): 모든 커밋의 date = import 실행 시각
 - [x] `--timestamp original`: 소스 author date·committer date 그대로 보존
 - [x] `--timestamp from=2024-01-01T09:00:00`: 최초 커밋 = 지정 시각, 이후 상대 간격 유지
-- [x] `gitshuttle.toml` `[import.author_map]`, `[import.timestamp]` 섹션 적용
+- [x] `gitshuttle.toml` `[import]` 섹션의 `author_map`, `timestamp` 값 적용
 - [x] CLI 옵션이 toml 설정보다 우선
 
 ### SA2 호출 프롬프트
@@ -280,16 +280,16 @@ import_.py(SHA-256 검증 → 커밋 매칭 → Fast-forward → 충돌 처리).
 Sprint 4b: Import Rewrite 구현.
 rewrite.py(rewrite_authors, rewrite_branch_ref, rewrite_timestamps — git fast-export/fast-import 파이프라인),
 import_.py 확장(--author-map, --target-branch 기본값 imported/<소스브랜치>, --timestamp now|original|from=<dt>),
-config.py 확장([import.author_map], [import.timestamp]).
+config.py 확장([import] author_map, timestamp).
 타임스탬프 3모드 각각 테스트 필수. from= 모드: 상대 간격 보존 계산 검증.
 미매핑 작성자 원본 유지 + 경고 케이스 테스트 필수.
 ```
 
 ---
 
-## Sprint 5 — 분할 압축 + E2E 통합
+## Sprint 5 — 분할 전송 + E2E 통합
 
-**목표:** 분할 압축 지원 및 E2E 검증 (토큰 사용량 다른 Sprint 수준으로 제한)
+**목표:** 대용량 bundle 분할 전송 지원 및 E2E 검증 (토큰 사용량 다른 Sprint 수준으로 제한)
 
 ### 범위 제약 (변경)
 - 대용량 실제 데이터 생성 금지 — 실제 100MB+ 파일 생성·처리 테스트 제외
@@ -297,7 +297,7 @@ config.py 확장([import.author_map], [import.timestamp]).
 - E2E는 tmp_path 기반 두 임시 repo로 시뮬레이션 (GitHub repo 테스트 없음)
 
 ### 구현 대상
-- 분할 압축 (Split archive) — bundle을 지정 크기(bytes)로 분할/재조립하는 로직
+- 분할 전송 (Split archive) — bundle을 지정 크기(bytes)로 분할/재조립하는 로직
 - E2E 테스트: 두 개의 임시 git repo(외부/내부)로 export→import 전체 흐름
 - 한글 커밋 메시지 E2E 왕복 보존 검증
 
@@ -317,7 +317,7 @@ config.py 확장([import.author_map], [import.timestamp]).
 
 ### SA2 호출 프롬프트
 ```
-Sprint 5: 분할 압축 + E2E 통합 테스트 (토큰 절약 모드).
+Sprint 5: 분할 전송 + E2E 통합 테스트 (토큰 절약 모드).
 split_bundle/merge_bundles는 소형 더미 파일(수KB)로만 테스트.
 E2E는 두 tmp_path git repo로 export→import 전체 흐름 검증.
 실제 대용량 파일 생성 절대 금지.

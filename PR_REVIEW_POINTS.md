@@ -32,7 +32,7 @@ gitshuttle export                  USB →       gitshuttle import
 | 0 | `sprint/0-scaffold` | 프로젝트 기반 구조 (pyproject.toml, 패키지 골격, CI) |
 | 1 | `sprint/1-git-core` | git 서브프로세스 레이어 (log, bundle, verify, checksum, manifest) |
 | 2 | `sprint/2-export-tui` | export 오케스트레이션 + Textual TUI 커밋 선택기 |
-| 3 | `sprint/3-ui-config` | CSV·HTML·Prompt UI + config 마법사 (gitshuttle.toml) |
+| 3 | `sprint/3-ui-config` | CSV 보조 UI + config 마법사 (gitshuttle.toml) |
 | 4 | `sprint/4-import` | import 오케스트레이션 (SHA-256 검증, unbundle, fast-forward) |
 | 4b | `sprint/4b-import-rewrite` | Import Rewrite (작성자 매핑·브랜치 격리·타임스탬프 재작성) |
 | 5 | `sprint/5-e2e` | E2E 테스트 (실제 git repo 대상, 분할 전송 포함) |
@@ -366,9 +366,9 @@ powershell -ExecutionPolicy Bypass -File build.ps1
 | 문서 | 내용 |
 |------|------|
 | `PRD.md` | 전체 기능 스펙 (섹션 3.6 Import-time Rewrite 포함) |
-| `PLAN.md` | Sprint 0~7 계획 및 수락 기준 |
+| `PLAN.md` | Sprint 0~6 계획 및 수락 기준 |
 | `README.md` | 사용자 빠른 시작 가이드 |
 | `MANUAL.md` | 전체 사용자 매뉴얼 (섹션 7-1 Rewrite 포함) |
-| `EXAMPLE.md` | 3가지 실전 시나리오 (최초 이전, 증분 업데이트, Import Rewrite) |
+| `EXAMPLE.md` | 4가지 실전 시나리오 (최초 이전, 증분 업데이트, Import Rewrite, GitHub 간 이력 이전) |
 | `REPORT.md` | 세션별 작업 기록 및 설계 결정 이유 |
 | `CRA_REPORT.md` | Agents / TDD / Clean Code / Refactoring / SOLID / Mock 관점 분석 |

@@ -15,14 +15,14 @@ GitShuttle은 서로 연결되지 않은 두 네트워크(내부망/외부망) �
 - **메타데이터 포함:** 각 커밋의 메시지(Subject), 상세 내용(Body), 작성자 정보, 커밋 시각을 그대로 유지.
 - **커밋 단위 선택 추출:** 전체 브랜치 또는 특정 커밋을 개별 선택하여 패키징.
 
-### 3.2 커밋 선택 인터페이스 (Phase 1 — 방식 비교)
+### 3.2 커밋 선택 인터페이스
 
-Phase 1에서 커밋 선택은 아래 방식 중 하나(또는 조합)로 구현한다. 최종 방식은 구현 단계에서 확정.
+커밋 선택은 주력 TUI와 보조 CSV 방식으로 제공한다.
 
 | # | 방식 | 설명 | 장점 | 단점 |
 |---|------|------|------|------|
 | **A** ⭐ | **TUI (Textual)** — 기본값 | 터미널 안에서 체크박스·테이블 인터랙션 | 외부 앱 불필요, Shift 범위선택·필터 가능 | Windows 터미널 호환성 이슈 가능 |
-| B | **CSV 편집** | `gitshuttle list > commits.csv` 생성 → Excel에서 `include` 컬럼 Y/N 수정 → `gitshuttle export --from commits.csv` | Excel 친화적, 비개발자도 직관적 | 파일 열고 저장하는 별도 단계 필요 |
+| B | **CSV 편집** | `commits.csv` 생성 → Excel에서 `include` 컬럼 Y/N 수정 | Excel 친화적, 비개발자도 직관적 | 파일 열고 저장하는 별도 단계 필요 |
 
 **UI 방식 선택 메커니즘 — 2+3 조합:**
 
@@ -56,7 +56,7 @@ Phase 1에서 커밋 선택은 아래 방식 중 하나(또는 조합)로 구현
 - 작성자(Author), 파일 경로(File path), 날짜 범위 기준 필터링 제공.
 
 ### 3.3 셔틀 패키지 관리 (Shuttle Package)
-- **압축:** 추출된 bundle 데이터를 압축하여 단일 패키지 파일로 생성.
+- **Git bundle:** 선택한 이력을 `.bundle` 파일로 생성한다.
 - **매니페스트 생성:** 패키지 내부에 포함된 커밋 로그 요약본(Summary)을 텍스트 파일로 자동 생성하여, 반출입 심사 시 검토용으로 활용.
 - **SHA-256 체크섬:** 패키지 생성 시 체크섬 파일을 함께 생성하여 전송 중 파일 변조·손상 검증.
 
@@ -79,19 +79,24 @@ Phase 1에서 커밋 선택은 아래 방식 중 하나(또는 조합)로 구현
 #### 3.6.1 작성자 매핑 (Author Mapping)
 
 - **문제:** 소스 repo의 커밋 작성자(이름·이메일)가 타겟 조직의 내부 계정과 다름.
-- **기능:** import 시 `--author-map <파일>` 플래그 또는 `gitshuttle.toml`의 `[import.author_map]` 섹션으로 작성자 일괄 대체.
+- **기능:** import 시 `--author-map <파일>` 플래그 또는 `gitshuttle.toml`의 `[import] author_map = "<파일>"` 설정으로 작성자 일괄 대체.
 - **매핑 형식 (JSON):**
   ```json
   {
-    "Jane Doe <jane@external.com>": "홍길동 <hong@internal.com>",
-    "Bob Smith <bob@external.com>": "이철수 <lee@internal.com>"
+    "jane@external.com": {
+      "name": "홍길동",
+      "email": "hong@internal.com"
+    },
+    "bob@external.com": {
+      "name": "이철수",
+      "email": "lee@internal.com"
+    }
   }
   ```
-- **toml 형식:**
+- **toml 설정 형식:**
   ```toml
-  [import.author_map]
-  "Jane Doe <jane@external.com>" = "홍길동 <hong@internal.com>"
-  "Bob Smith <bob@external.com>" = "이철수 <lee@internal.com>"
+  [import]
+  author_map = "C:\\transfer\\author_map.json"
   ```
 - **구현:** `git fast-export | (작성자 치환) | git fast-import` 파이프라인 사용.
 - **미매핑 처리:** 매핑 테이블에 없는 작성자는 원본 그대로 유지 (경고 메시지 출력).
@@ -200,7 +205,7 @@ gitshuttle import \
 | **지원 Git 버전** | 2.37 이상 (2022년 이후 릴리즈 기준) |
 | **Python 버전** | 3.10 이상 |
 | **TUI 라이브러리** | Textual |
-| **패키지 압축** | ZIP 또는 tar.gz |
+| **패키지 형식** | Git bundle + optional split parts |
 | **무결성 검증** | SHA-256 체크섬 |
 
 ## 6. 배포 및 실행 방식 (Distribution)
@@ -226,17 +231,10 @@ python -m gitshuttle config
 ```
 
 ## 7. 대용량 처리
-- 대규모 리포지토리의 경우 분할 압축(Split archive) 기능 지원.
+- 대규모 리포지토리의 경우 bundle 분할 전송(Split archive) 기능 지원.
 
-## 8. 개발 로드맵 (Phases)
+## 8. 현재 제공 범위
 
-### Phase 1 — CLI + TUI
-- `gitshuttle export`: TUI 커밋 선택 인터페이스 포함
-- `gitshuttle import`: 충돌 처리 옵션, 체크섬 검증 포함
-- 매니페스트 자동 생성
-- SHA-256 체크섬 생성/검증
-
-### Phase 2 — GUI
-- Phase 1의 모든 기능을 데스크탑 GUI로 전환
-- 마우스 기반 커밋 선택, 드래그 범위 선택
-- 시각적 히스토리 그래프 제공
+- `gitshuttle export`: TUI/CSV 커밋 선택, `--recent`, `--full-branch`, bundle/manifest/checksum 생성
+- `gitshuttle import`: SHA-256 검증, 작성자/타임스탬프 rewrite, 대상 브랜치 격리, 충돌 처리
+- 대용량 전송: bundle 분할/병합 지원

@@ -125,7 +125,7 @@ def run_config_wizard(config_path: Optional[Path] = None) -> None:
         print(f"  [{num}] {labels[mode]}{current_mark}")
 
     try:
-        choice = input("\n선택 (1~4): ").strip()
+        choice = input("\n선택 (1~2): ").strip()
     except EOFError:
         print("\n입력이 없어 변경하지 않습니다.")
         return

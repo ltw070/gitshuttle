@@ -36,7 +36,7 @@ PRD 전체 내용은 `PRD.md` 참고.
 | TUI | Textual |
 | CLI 프레임워크 | Typer 또는 Click |
 | 배포 | PyInstaller → `gitshuttle.exe` 단일 파일 |
-| 압축 | ZIP 또는 tar.gz |
+| 패키지 | Git bundle + 필요 시 분할 파일 |
 | 무결성 검증 | SHA-256 |
 
 ---
@@ -145,19 +145,18 @@ gitshuttle config   (대화형 마법사 — gitshuttle.toml 수정)            
 ## 생성 파일 구조
 
 ```
-shuttle_YYMMDD.bundle        # git bundle (압축)
-shuttle_YYMMDD.sha256        # SHA-256 체크섬
+shuttle_YYMMDD.bundle        # git bundle
+shuttle_YYMMDD.bundle.sha256 # SHA-256 체크섬
 shuttle_YYMMDD_manifest.txt  # 커밋 목록 요약 (반출입 심사용)
 ```
 
 ---
 
-## 개발 로드맵
+## 현재 범위
 
-- **Phase 1**: CLI + TUI (현재 범위)
-- **Phase 2**: 데스크탑 GUI (마우스 기반, 히스토리 그래프)
-
-Phase 1 완료 전까지 GUI 관련 코드는 작성하지 않는다.
+- CLI 기반 bundle export/import
+- 기본 TUI 선택기와 보조 CSV 선택기
+- 작성자/타임스탬프 rewrite, 대상 브랜치 격리, 대용량 분할 전송
 
 ---
 
@@ -180,7 +179,7 @@ Windows에서 한글 깨짐이 발생하는 지점과 대응:
 - `subprocess.run([...], encoding='utf-8', env={**os.environ, 'PYTHONIOENCODING': 'utf-8'})` 사용.
 - `git log`, `git bundle` 출력 파싱 시 항상 `encoding='utf-8'` 지정.
 
-**매니페스트·CSV·HTML 파일 출력**
+**매니페스트·CSV 파일 출력**
 - 생성 파일 모두 UTF-8 with BOM 없이(`utf-8`, not `utf-8-sig`) 저장.
 - CSV는 Excel 호환을 위해 예외적으로 `utf-8-sig` 사용 가능 (Excel이 BOM으로 인코딩 감지).
 
@@ -216,7 +215,7 @@ SubAgent 호출 방법 (Claude Code Agent 툴):
 - Windows 우선. 터미널 호환성(Windows Terminal, CMD, PowerShell) 모두 검증 필요.
 - 망분리 환경이므로 외부 네트워크 호출 코드는 절대 포함하지 않는다.
 - `gitshuttle.exe`는 Python 없는 환경에서도 동작해야 한다 — 런타임 의존성을 PyInstaller로 모두 번들.
-- 대용량 리포지토리 대응: 분할 압축(Split archive) 지원.
+- 대용량 리포지토리 대응: bundle 분할 전송(Split archive) 지원.
 
 ---
 

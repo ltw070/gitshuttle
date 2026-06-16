@@ -15,7 +15,7 @@
 7. [import — 커밋 꾸러미 반입하기](#7-import--커밋-꾸러미-반입하기)
    - [7-1. 다른 리포에서 반입할 때 — Rewrite 기능](#7-1-다른-리포에서-반입할-때--rewrite-기능)
 8. [config — 기본 설정 변경하기](#8-config--기본-설정-변경하기)
-9. [커밋 선택 UI 4가지 방식](#9-커밋-선택-ui-4가지-방식)
+9. [커밋 선택 UI 2가지 방식](#9-커밋-선택-ui-2가지-방식)
 10. [대용량 파일 분할 전송](#10-대용량-파일-분할-전송)
 11. [생성 파일 상세 설명](#11-생성-파일-상세-설명)
 12. [충돌 처리 옵션 상세](#12-충돌-처리-옵션-상세)
@@ -204,7 +204,7 @@ Commands:
                                                         --file shuttle_260508.bundle
    생성된 파일 3개를 USB에 복사:
    • shuttle_260508.bundle            →→→→
-   • shuttle_260508.sha256            →→→→
+   • shuttle_260508.bundle.sha256     →→→→
    • shuttle_260508_manifest.txt      →→→→
 ```
 
@@ -286,7 +286,7 @@ export가 완료되면 현재 디렉터리에 파일 3개가 생성됩니다:
 
 ```
 shuttle_260508.bundle        ← 이것이 핵심 파일
-shuttle_260508.sha256        ← 무결성 검증용
+shuttle_260508.bundle.sha256 ← 무결성 검증용
 shuttle_260508_manifest.txt  ← 커밋 목록 요약
 ```
 
@@ -684,7 +684,7 @@ Git bundle 형식의 핵심 파일입니다. 선택한 커밋의 히스토리가
 - `YYMMDD`는 실행 날짜입니다. (예: 260508 = 2026년 5월 8일)
 - `gitshuttle import --file` 명령어에 이 파일을 지정합니다.
 
-### shuttle_YYMMDD.sha256
+### shuttle_YYMMDD.bundle.sha256
 
 bundle 파일의 SHA-256 체크섬(해시값)이 저장된 텍스트 파일입니다.
 
