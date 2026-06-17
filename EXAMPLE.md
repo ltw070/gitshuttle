@@ -236,7 +236,7 @@ python -m gitshuttle import `
 `migration/feature-work` 브랜치를 미리 만들지 않았다면 import 시점의 현재 HEAD 위에 새 브랜치가 만들어집니다. 어떤 기준에 붙일지 명확히 하려면 import 전에 `git switch <기준브랜치>`를 실행하거나, import 때 `--onto-ref <기준브랜치|HEAD|SHA>`를 지정하세요.
 대상 repo가 원본 `main`의 기준 SHA를 갖고 있지 않아도 이 방식으로 import할 수 있습니다. 단, 예전 버전으로 만든 bundle은 기준점 metadata가 없으므로 같은 검증 오류가 나면 최신 버전으로 다시 export하세요.
 
-이미 `migration/feature-work`가 분리된 이력으로 만들어져 GitHub에서 PR이 안 된다면, PR 대상 브랜치나 원하는 기준 ref를 기준으로 다시 graft합니다. PR 대상이 `main`이 아니면 `develop`, `release/...`, 현재 checkout된 `HEAD`, 특정 SHA를 사용할 수 있습니다.
+이미 `migration/feature-work`가 분리된 이력으로 만들어져 GitHub에서 PR이 안 된다면, PR 대상 브랜치나 원하는 기준 ref를 기준으로 다시 graft합니다. PR 대상이 `main`이 아니면 `develop`, `release/...`, 현재 checkout된 `HEAD`, 특정 SHA를 사용할 수 있습니다. 이 방식은 `--base-branch` delta뿐 아니라 `--full-branch`로 만든 self-contained bundle에도 적용됩니다.
 
 ```powershell
 git -C C:\repos\target-repo switch develop

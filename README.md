@@ -141,7 +141,7 @@ Options:
   --on-conflict [skip|force|abort]           충돌 처리 방식 (기본값: skip)
   --author-map FILE                          작성자 매핑 JSON 파일 경로
   --target-branch TEXT                       import 커밋을 담을 브랜치명
-  --onto-ref TEXT                            부분 bundle/delta를 이어붙일 기준 branch/ref/SHA/HEAD
+  --onto-ref TEXT                            import 이력을 이어붙일 기준 branch/ref/SHA/HEAD
   --timestamp [now|original|from=DATETIME]  커밋 타임스탬프 모드 (기본값: now)
 ```
 
@@ -161,7 +161,7 @@ gitshuttle import --file C:\transfer\shuttle_260612.bundle --repo C:\repos\inter
 
 **브랜치 동작:** `--target-branch`, `--author-map`, `--timestamp original`, `--timestamp from=...`처럼 rewrite 경로를 쓰면 import 결과가 지정 브랜치로 들어갑니다. `--target-branch`를 생략한 rewrite import는 `imported/<소스브랜치>`를 사용합니다. 반대로 아무 rewrite 옵션 없이 `gitshuttle import --file ...`만 실행하면 현재 브랜치로 merge를 시도합니다.
 rewrite import 후에는 대상 브랜치로 checkout/reset 되어 작업 폴더의 실제 파일도 import 결과와 맞춰집니다.
-부분 bundle이나 `--base-branch` delta import에서 `--target-branch`는 결과가 들어갈 브랜치이고, `--onto-ref`는 delta의 원본 parent를 어느 기존 이력 위에 붙일지 정하는 기준점입니다.
+`--target-branch`는 결과가 들어갈 브랜치이고, `--onto-ref`는 import 이력을 어느 기존 이력 위에 붙일지 정하는 기준점입니다. 부분 bundle이나 `--base-branch` delta에서는 제외된 원본 parent를 기준 ref로 치환하고, self-contained/full bundle에서는 parent가 없는 root commit을 기준 ref 위에 graft합니다.
 `--onto-ref`에는 `main`, `develop`, `release/...`, 다른 feature 브랜치, `HEAD`, 전체/짧은 SHA처럼 Git이 해석할 수 있는 ref/SHA를 사용할 수 있습니다.
 `--onto-ref`를 생략하면 기존 target branch가 있을 때는 그 branch tip 위에 이어붙이고, target branch가 아직 없을 때는 현재 checkout된 HEAD 위에 새 target branch를 만들어 이어붙입니다.
 이미 분리된 target branch를 PR용으로 다시 만들려면 `--onto-ref <PR 대상 브랜치|HEAD|SHA> --on-conflict force`를 사용합니다. 이 옵션은 기존 target branch tip 대신 지정한 ref/SHA의 tip을 새 이력의 부모로 사용합니다.
@@ -210,7 +210,7 @@ import 시 SHA-256 체크섬이 자동 검증됩니다. 불일치 시 작업이 
 작성자/날짜 rewrite를 적용한 대상 repo는 커밋 SHA가 바뀌므로, 이런 증분 bundle이 `bundle 검증 실패`가 될 수 있습니다.
 최신 GitShuttle은 rewrite import 시 원본 bundle refs를 `refs/gitshuttle/original/...` 아래 숨겨 보관해 다음 부분 bundle의 기준점으로 사용합니다.
 따라서 이 버전으로 한 번 전체 또는 필요한 기준 범위를 import한 뒤에는 이후 최신 커밋 몇 개만 export/import하는 증분 흐름을 사용할 수 있습니다.
-부분 bundle rewrite import는 bundle의 prerequisite 조상을 다시 펼치지 않고, 기준 ref 위에 신규 커밋만 이어붙입니다. 기준 ref는 기본적으로 기존 target branch tip이며, target branch가 없으면 현재 HEAD, `--onto-ref`가 있으면 지정한 ref/SHA/HEAD입니다.
+부분 bundle rewrite import는 bundle의 prerequisite 조상을 다시 펼치지 않고, 기준 ref 위에 신규 커밋만 이어붙입니다. self-contained/full bundle도 `--onto-ref`를 지정하면 root commit을 기준 ref 위에 붙입니다. 기준 ref는 기본적으로 기존 target branch tip이며, target branch가 없으면 현재 HEAD, `--onto-ref`가 있으면 지정한 ref/SHA/HEAD입니다.
 구버전으로 이미 이전한 대상 repo는 한 번 전체 범위를 다시 import해 기준점을 만든 뒤 부분 증분을 이어가세요.
 
 feature 브랜치처럼 기준점 이후 변경만 가져오려면 최신 버전의 `--base-branch` + `--full-branch` 조합을 권장합니다. 이 조합은 bundle 안에 기준점 metadata를 같이 넣어 검증 실패를 피하고, import 시에는 기준점 이전 이력을 제외합니다. 예전 버전으로 이미 만든 `--base-branch` bundle은 이 metadata가 없으므로 같은 오류가 나면 다시 export해야 합니다.
@@ -219,7 +219,7 @@ feature 브랜치처럼 기준점 이후 변경만 가져오려면 최신 버전
 
 ```
 gitshuttle export --repo C:\repos\source --branch main --full-branch --output C:\transfer
-gitshuttle import --repo C:\repos\target --file C:\transfer\shuttle_YYMMDD.bundle --target-branch migration/source-main --on-conflict force
+gitshuttle import --repo C:\repos\target --file C:\transfer\shuttle_YYMMDD.bundle --target-branch migration/source-main --onto-ref HEAD --on-conflict force
 ```
 
 선택 커밋 기준으로 직접 제어해야 한다면 `--bundle-scope full`을 사용할 수 있습니다.

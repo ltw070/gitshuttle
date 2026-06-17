@@ -264,6 +264,97 @@ def rewrite_parent_refs(stream: str, parent_map: dict[str, str]) -> str:
     return _rewrite_control_lines(stream, _rewrite_line)
 
 
+def graft_root_commits(stream: str, parent: str) -> str:
+    """parent가 없는 fast-export commit을 지정 parent 위에 graft한다.
+
+    self-contained bundle처럼 제외 parent가 없는 stream에서도 `--onto-ref`로
+    기존 대상 repo 이력 위에 import branch를 붙일 때 사용한다. data payload
+    안의 문자열은 파일 내용이므로 변경하지 않는다.
+    """
+    if not parent:
+        return stream
+
+    raw = stream.encode('utf-8', errors='surrogateescape')
+    out = bytearray()
+    pos = 0
+    raw_len = len(raw)
+    in_commit = False
+    seen_commit_message = False
+    waiting_for_parent_or_files = False
+    has_parent = False
+    graft_line = f"from {parent}\n".encode('utf-8', errors='surrogateescape')
+
+    while pos < raw_len:
+        newline_at = raw.find(b"\n", pos)
+        if newline_at == -1:
+            line_bytes = raw[pos:]
+            pos = raw_len
+        else:
+            line_bytes = raw[pos:newline_at + 1]
+            pos = newline_at + 1
+
+        line = line_bytes.decode('utf-8', errors='surrogateescape')
+        body, _ = _line_body_and_ending(line)
+
+        starts_commit = body.startswith("commit ")
+        starts_top_level = _is_top_level_command(body)
+
+        if starts_top_level and in_commit and waiting_for_parent_or_files and not has_parent:
+            out.extend(graft_line)
+            waiting_for_parent_or_files = False
+            has_parent = True
+
+        if starts_commit:
+            in_commit = True
+            seen_commit_message = False
+            waiting_for_parent_or_files = False
+            has_parent = False
+        elif starts_top_level:
+            in_commit = False
+            waiting_for_parent_or_files = False
+
+        if in_commit and waiting_for_parent_or_files:
+            if _is_parent_line(body):
+                has_parent = True
+                waiting_for_parent_or_files = False
+            else:
+                out.extend(graft_line)
+                has_parent = True
+                waiting_for_parent_or_files = False
+
+        out.extend(line_bytes)
+
+        size = _data_size(line)
+        if size is not None:
+            out.extend(raw[pos:pos + size])
+            pos += size
+            if in_commit and not seen_commit_message:
+                seen_commit_message = True
+                waiting_for_parent_or_files = True
+
+    if in_commit and waiting_for_parent_or_files and not has_parent:
+        out.extend(graft_line)
+
+    return bytes(out).decode('utf-8', errors='surrogateescape')
+
+
+def _is_parent_line(body: str) -> bool:
+    return body.startswith("from ") or body.startswith("merge ")
+
+
+def _is_top_level_command(body: str) -> bool:
+    return (
+        body.startswith("commit ")
+        or body.startswith("reset ")
+        or body == "blob"
+        or body.startswith("tag ")
+        or body.startswith("progress ")
+        or body == "checkpoint"
+        or body.startswith("feature ")
+        or body == "done"
+    )
+
+
 def rewrite_timestamps(
     stream: str,
     mode: str,

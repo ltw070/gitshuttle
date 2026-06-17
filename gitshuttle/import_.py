@@ -757,7 +757,7 @@ def _rewrite_and_import(
     """
     import tempfile
     import shutil
-    from .rewrite import apply_rewrites, rewrite_parent_refs
+    from .rewrite import apply_rewrites, graft_root_commits, rewrite_parent_refs
 
     tmp_dir = Path(tempfile.mkdtemp(prefix="gs_rewrite_"))
     try:
@@ -811,15 +811,16 @@ def _rewrite_and_import(
             timestamp_mode=timestamp_mode,
             from_dt=from_dt,
         )
+        if onto_ref and attach_tip is None:
+            raise ValueError(
+                "부분 bundle을 이어붙일 기준 ref를 찾을 수 없습니다.\n"
+                f"지정한 --onto-ref 값: {onto_ref}\n"
+                "해결 방법: 대상 repo에 해당 브랜치/ref/SHA가 있는지 확인하거나 "
+                "다른 --onto-ref 값을 지정하세요."
+            )
+
         if export_spec.excluded_parents:
             if attach_tip is None:
-                if onto_ref:
-                    raise ValueError(
-                        "부분 bundle을 이어붙일 기준 ref를 찾을 수 없습니다.\n"
-                        f"지정한 --onto-ref 값: {onto_ref}\n"
-                        "해결 방법: 대상 repo에 해당 브랜치/ref/SHA가 있는지 확인하거나 "
-                        "다른 --onto-ref 값을 지정하세요."
-                    )
                 raise ValueError(
                     "부분 bundle을 이어붙일 대상 커밋을 찾을 수 없습니다.\n"
                     f"대상 브랜치 '{target_branch}'가 없고 현재 HEAD도 없습니다.\n"
@@ -830,6 +831,8 @@ def _rewrite_and_import(
                 rewritten_stream,
                 {commit_hash: attach_tip for commit_hash in export_spec.excluded_parents},
             )
+        elif onto_ref:
+            rewritten_stream = graft_root_commits(rewritten_stream, attach_tip)
 
         _ensure_clean_worktree(repo_path)
 

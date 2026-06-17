@@ -130,7 +130,7 @@ gitshuttle config   (대화형 마법사 — gitshuttle.toml 수정)
 
 `--full-branch`와 `--recent`는 동시에 사용할 수 없다. `--full-branch` 단독은 브랜치 tip 1개를 `bundle_scope=full`로 묶고, `--base-branch`와 함께 쓰면 `base..branch` 범위 전체를 `bundle_scope=range`로 묶는다.
 
-부분 bundle/base-branch delta import에서 `--onto-ref`는 제외된 원본 parent를 붙일 기준점이다. `main` 전용이 아니며 `develop`, `release/...`, feature 브랜치, `HEAD`, SHA처럼 Git이 해석 가능한 값을 사용할 수 있다. 생략하면 기존 target branch tip, target branch가 없으면 현재 HEAD를 기준으로 한다.
+rewrite import에서 `--onto-ref`는 import 이력을 붙일 기준점이다. 부분 bundle/base-branch delta는 제외된 원본 parent를 치환하고, self-contained/full bundle은 parent가 없는 root commit을 기준 ref 위에 graft한다. `main` 전용이 아니며 `develop`, `release/...`, feature 브랜치, `HEAD`, SHA처럼 Git이 해석 가능한 값을 사용할 수 있다. 생략하면 기존 target branch tip, target branch가 없으면 현재 HEAD를 기준으로 한다.
 
 ---
 
