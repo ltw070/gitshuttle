@@ -212,7 +212,7 @@ python -m gitshuttle export `
 
 `--bundle-scope full`은 선택한 tip까지 필요한 이력을 함께 담아 부분 bundle prerequisite 실패를 줄입니다.
 
-`main`에서 딴 feature 브랜치의 신규 커밋만 옮기려면 기준 브랜치를 명시합니다.
+기준 브랜치에서 딴 feature 브랜치의 신규 커밋만 옮기려면 기준 브랜치를 명시합니다. 기준 브랜치는 `main`뿐 아니라 `develop`, `release/...`, 분기점 SHA처럼 Git이 해석할 수 있는 ref/SHA를 사용할 수 있습니다.
 
 ```powershell
 python -m gitshuttle export `
@@ -233,25 +233,25 @@ python -m gitshuttle import `
 ```
 
 이 흐름에서는 `main..feature/work` 커밋을 선택합니다. bundle은 대상 repo 검증을 위해 기준점 metadata도 함께 담지만, import는 기준점 이전 이력을 반영하지 않고 이미 존재하는 `migration/feature-work` tip 위에 신규 커밋만 이어붙입니다.
-`migration/feature-work` 브랜치를 미리 만들지 않았다면 import 시점의 현재 HEAD 위에 새 브랜치가 만들어집니다. 어떤 기준에 붙일지 명확히 하려면 import 전에 `git switch main` 또는 `git switch -c migration/feature-work main`을 먼저 실행하세요.
+`migration/feature-work` 브랜치를 미리 만들지 않았다면 import 시점의 현재 HEAD 위에 새 브랜치가 만들어집니다. 어떤 기준에 붙일지 명확히 하려면 import 전에 `git switch <기준브랜치>`를 실행하거나, import 때 `--onto-ref <기준브랜치|HEAD|SHA>`를 지정하세요.
 대상 repo가 원본 `main`의 기준 SHA를 갖고 있지 않아도 이 방식으로 import할 수 있습니다. 단, 예전 버전으로 만든 bundle은 기준점 metadata가 없으므로 같은 검증 오류가 나면 최신 버전으로 다시 export하세요.
 
-이미 `migration/feature-work`가 분리된 이력으로 만들어져 GitHub에서 `main`으로 PR이 안 된다면, `main`을 기준으로 다시 graft합니다.
+이미 `migration/feature-work`가 분리된 이력으로 만들어져 GitHub에서 PR이 안 된다면, PR 대상 브랜치나 원하는 기준 ref를 기준으로 다시 graft합니다. PR 대상이 `main`이 아니면 `develop`, `release/...`, 현재 checkout된 `HEAD`, 특정 SHA를 사용할 수 있습니다.
 
 ```powershell
-git -C C:\repos\target-repo switch main
+git -C C:\repos\target-repo switch develop
 
 python -m gitshuttle import `
   --repo C:\repos\target-repo `
   --file C:\transfer\shuttle_YYMMDD.bundle `
   --author-map C:\transfer\author_map.json `
   --target-branch migration/feature-work `
-  --onto-ref main `
+  --onto-ref HEAD `
   --timestamp original `
   --on-conflict force
 ```
 
-이 명령은 기존 `migration/feature-work` ref를 덮어쓰지만, 새 이력의 부모를 `main` tip으로 만들어 PR 비교가 가능하게 합니다.
+이 명령은 기존 `migration/feature-work` ref를 덮어쓰지만, 새 이력의 부모를 현재 `develop` tip으로 만들어 PR 비교가 가능하게 합니다. checkout을 바꾸고 싶지 않다면 `--onto-ref develop`처럼 브랜치명을 직접 지정해도 됩니다.
 
 ---
 
