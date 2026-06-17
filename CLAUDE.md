@@ -8,6 +8,7 @@
 |------|-------------|
 | `README.md` | 사용자 대상 명령어·설정·워크플로우 변경 반영 |
 | `EXAMPLE.md` | 실제 명령 예제와 주요 사용 시나리오 변경 반영 |
+| `GIT_COMMANDS.md` | 내부 Git 명령어·fast-export/import·bundle 원리 변경 반영 |
 | `PRD.md` | 기능 스펙·사용자 시나리오 변경 반영 |
 | `CLAUDE.md` | 기술 스택·패키지 구조·제약 사항 변경 반영 |
 
