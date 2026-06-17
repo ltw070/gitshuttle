@@ -139,6 +139,7 @@ Options:
   --on-conflict [skip|force|abort]           충돌 처리 방식 (기본값: skip)
   --author-map FILE                          작성자 매핑 JSON 파일 경로
   --target-branch TEXT                       import 커밋을 담을 브랜치명
+  --onto-ref TEXT                            부분 bundle/delta를 이어붙일 기준 ref 또는 SHA
   --timestamp [now|original|from=DATETIME]  커밋 타임스탬프 모드 (기본값: now)
 ```
 
@@ -159,6 +160,7 @@ gitshuttle import --file C:\transfer\shuttle_260612.bundle --repo C:\repos\inter
 **브랜치 동작:** `--target-branch`, `--author-map`, `--timestamp original`, `--timestamp from=...`처럼 rewrite 경로를 쓰면 import 결과가 지정 브랜치로 들어갑니다. `--target-branch`를 생략한 rewrite import는 `imported/<소스브랜치>`를 사용합니다. 반대로 아무 rewrite 옵션 없이 `gitshuttle import --file ...`만 실행하면 현재 브랜치로 merge를 시도합니다.
 rewrite import 후에는 대상 브랜치로 checkout/reset 되어 작업 폴더의 실제 파일도 import 결과와 맞춰집니다.
 부분 bundle이나 `--base-branch` delta import에서 지정한 target branch가 아직 없으면, 현재 checkout된 HEAD 위에 새 target branch를 만들어 이어붙입니다.
+이미 분리된 target branch를 PR용으로 다시 만들려면 `--onto-ref main --on-conflict force`를 사용합니다. 이 옵션은 부분 bundle/delta의 원본 parent를 기존 target branch tip이 아니라 지정한 ref/SHA의 tip으로 치환합니다.
 
 기존 코드가 있는 대상 repo에 bundle을 가져올 때는 바로 `main`에 반영하지 말고, 먼저 `migration/...` 같은 별도 브랜치에 import하는 흐름을 권장합니다. 이 경우 기존 `main` 이력은 그대로 두고, bundle 이력은 별도 브랜치에 들어갑니다. 이후 검토가 끝나면 Git merge로 두 이력을 합칩니다. 같은 파일을 양쪽에서 다르게 수정했다면 merge conflict가 발생할 수 있으며, 이때 사람이 최종 내용을 결정합니다.
 
@@ -178,6 +180,12 @@ git -C C:\repos\target merge migration/source-main --allow-unrelated-histories
 ```
 
 반대로 `--target-branch main --on-conflict force`처럼 기존 기본 브랜치를 직접 대상으로 지정하면, `main` ref가 import 결과 쪽으로 이동할 수 있습니다. 기존 커밋 object가 즉시 삭제되는 것은 아니지만 일반 `git log main`에서는 보이지 않을 수 있으므로, 기존 코드를 보존하며 합치려면 별도 브랜치 import 후 merge 방식을 사용하세요.
+
+기존 feature 브랜치가 잘못된 이력으로 분리되어 GitHub PR이 안 뜨는 경우에는 main 위에 다시 graft합니다.
+
+```
+gitshuttle import --repo C:\repos\target --file C:\transfer\shuttle_YYMMDD.bundle --target-branch feat/work --onto-ref main --on-conflict force --timestamp original
+```
 
 **커밋 타임스탬프 옵션:**
 

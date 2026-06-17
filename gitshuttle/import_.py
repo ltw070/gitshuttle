@@ -101,6 +101,7 @@ def run_import(
     author_map_path: Optional[str] = None, # 작성자 매핑 JSON 경로
     target_branch: Optional[str] = None,   # rewrite 대상 브랜치. None이면 rewrite 시 "imported/<소스브랜치>"
     timestamp_mode: str = "now",           # "now" | "original" | "from=DATETIME"
+    onto_ref: Optional[str] = None,         # 부분 bundle excluded parent를 이어붙일 기준 ref/SHA
 ) -> ImportResult:
     """bundle 파일을 target repo에 반입한다.
 
@@ -116,6 +117,8 @@ def run_import(
                           rewrite가 필요 없는 일반 import는 현재 브랜치로 merge한다.
         timestamp_mode:   타임스탬프 재작성 모드.
                           "now"(기본) | "original" | "from=YYYY-MM-DDTHH:MM:SS"
+        onto_ref:         부분 bundle/base-branch delta를 이어붙일 기준 ref/SHA.
+                          None이면 target_branch tip, 없으면 현재 HEAD를 사용한다.
 
     Returns:
         ImportResult (imported, skipped, total, warnings 포함).
@@ -159,6 +162,7 @@ def run_import(
             target_branch=rewrite_options.target_branch,
             timestamp_mode=rewrite_options.timestamp_mode,
             from_dt=rewrite_options.from_dt,
+            onto_ref=onto_ref,
             force_ref_update=on_conflict == "force",
         )
     else:
@@ -658,6 +662,21 @@ def _get_branch_tip(repo_path: Path, branch: str) -> str | None:
     return tip if _looks_like_sha(tip) else None
 
 
+def _get_revision_tip(repo_path: Path, revision: str) -> str | None:
+    """임의 revision/ref/SHA의 commit tip SHA를 반환한다. 없으면 None."""
+    result = subprocess.run(
+        ["git", "rev-parse", "--verify", f"{revision}^{{commit}}"],
+        cwd=repo_path,
+        capture_output=True,
+        encoding='utf-8',
+        env=_git_env(),
+    )
+    if result.returncode != 0:
+        return None
+    tip = result.stdout.strip()
+    return tip if _looks_like_sha(tip) else None
+
+
 def _get_head_tip(repo_path: Path) -> str | None:
     """현재 HEAD tip SHA를 반환한다. 빈 repo이면 None."""
     result = subprocess.run(
@@ -673,12 +692,19 @@ def _get_head_tip(repo_path: Path) -> str | None:
     return tip if _looks_like_sha(tip) else None
 
 
-def _get_import_attach_tip(repo_path: Path, target_branch: str) -> str | None:
+def _get_import_attach_tip(
+    repo_path: Path,
+    target_branch: str,
+    onto_ref: str | None = None,
+) -> str | None:
     """excluded parent를 이어붙일 기준 tip을 반환한다.
 
+    onto_ref가 있으면 해당 ref/SHA를 최우선으로 사용한다.
     target branch가 이미 있으면 그 tip에 이어붙이고, 없으면 현재 HEAD 위에
     target branch를 새로 만들 수 있도록 HEAD tip을 사용한다.
     """
+    if onto_ref:
+        return _get_revision_tip(repo_path, onto_ref)
     return _get_branch_tip(repo_path, target_branch) or _get_head_tip(repo_path)
 
 
@@ -715,6 +741,7 @@ def _rewrite_and_import(
     target_branch: str,
     timestamp_mode: str,
     from_dt,
+    onto_ref: str | None = None,
     force_ref_update: bool = False,
 ) -> tuple[list[str], list[str]]:
     """fast-export → apply_rewrites → fast-import 파이프라인.
@@ -734,7 +761,7 @@ def _rewrite_and_import(
 
     tmp_dir = Path(tempfile.mkdtemp(prefix="gs_rewrite_"))
     try:
-        attach_tip = _get_import_attach_tip(repo_path, target_branch)
+        attach_tip = _get_import_attach_tip(repo_path, target_branch, onto_ref=onto_ref)
 
         # 임시 bare repo 초기화
         subprocess.run(
@@ -786,6 +813,13 @@ def _rewrite_and_import(
         )
         if export_spec.excluded_parents:
             if attach_tip is None:
+                if onto_ref:
+                    raise ValueError(
+                        "부분 bundle을 이어붙일 기준 ref를 찾을 수 없습니다.\n"
+                        f"지정한 --onto-ref 값: {onto_ref}\n"
+                        "해결 방법: 대상 repo에 해당 브랜치/ref/SHA가 있는지 확인하거나 "
+                        "다른 --onto-ref 값을 지정하세요."
+                    )
                 raise ValueError(
                     "부분 bundle을 이어붙일 대상 커밋을 찾을 수 없습니다.\n"
                     f"대상 브랜치 '{target_branch}'가 없고 현재 HEAD도 없습니다.\n"

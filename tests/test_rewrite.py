@@ -497,6 +497,12 @@ class TestImportCLIOptions:
         assert "target_branch" in source
         assert "--target-branch" in source
 
+    def test_import_has_onto_ref_option(self):
+        """import 커맨드에 --onto-ref 옵션 선언이 존재해야 한다."""
+        source = self._read_cli_source()
+        assert "onto_ref" in source
+        assert "--onto-ref" in source
+
     def test_import_has_timestamp_option(self):
         """import 커맨드에 --timestamp 옵션 선언이 존재해야 한다."""
         source = self._read_cli_source()

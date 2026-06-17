@@ -529,11 +529,13 @@ def test_import_accepts_repo_option(tmp_path, monkeypatch):
         author_map_path=None,
         target_branch=None,
         timestamp_mode="now",
+        onto_ref=None,
     ):
         captured["bundle_path"] = bundle_path
         captured["repo_path"] = repo_path
         captured["on_conflict"] = on_conflict
         captured["timestamp_mode"] = timestamp_mode
+        captured["onto_ref"] = onto_ref
         return import_module.ImportResult(imported=1, skipped=0, total=1)
 
     monkeypatch.setattr(import_module, "run_import", fake_run_import)
@@ -556,6 +558,60 @@ def test_import_accepts_repo_option(tmp_path, monkeypatch):
     assert captured["bundle_path"] == bundle_path
     assert captured["repo_path"] == repo_dir.resolve()
     assert captured["timestamp_mode"] == "original"
+    assert captured["onto_ref"] is None
+
+
+def test_import_accepts_onto_ref_option(tmp_path, monkeypatch):
+    """import --onto-ref 는 delta parent graft 기준 ref를 run_import로 전달한다."""
+    from gitshuttle.cli import app
+    import gitshuttle.import_ as import_module
+
+    bundle_path = tmp_path / "test.bundle"
+    bundle_path.write_bytes(b"fake bundle")
+    repo_dir = tmp_path / "target_repo"
+    repo_dir.mkdir()
+    captured = {}
+
+    def fake_run_import(
+        bundle_path,
+        repo_path,
+        on_conflict="skip",
+        sha256_path=None,
+        author_map_path=None,
+        target_branch=None,
+        timestamp_mode="now",
+        onto_ref=None,
+    ):
+        captured["target_branch"] = target_branch
+        captured["onto_ref"] = onto_ref
+        captured["on_conflict"] = on_conflict
+        return import_module.ImportResult(imported=1, skipped=0, total=1)
+
+    monkeypatch.setattr(import_module, "run_import", fake_run_import)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        app,
+        [
+            "import",
+            "--file",
+            str(bundle_path),
+            "--repo",
+            str(repo_dir),
+            "--target-branch",
+            "feat/gitshuttle",
+            "--onto-ref",
+            "main",
+            "--on-conflict",
+            "force",
+        ],
+    )
+
+    assert result.exit_code == 0, f"exit code {result.exit_code}: {result.output}"
+    assert captured["target_branch"] == "feat/gitshuttle"
+    assert captured["onto_ref"] == "main"
+    assert captured["on_conflict"] == "force"
+    assert "onto-ref" in result.output
 
 
 def test_import_rejects_removed_mode_option(tmp_path):

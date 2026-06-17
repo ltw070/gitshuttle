@@ -236,6 +236,23 @@ python -m gitshuttle import `
 `migration/feature-work` 브랜치를 미리 만들지 않았다면 import 시점의 현재 HEAD 위에 새 브랜치가 만들어집니다. 어떤 기준에 붙일지 명확히 하려면 import 전에 `git switch main` 또는 `git switch -c migration/feature-work main`을 먼저 실행하세요.
 대상 repo가 원본 `main`의 기준 SHA를 갖고 있지 않아도 이 방식으로 import할 수 있습니다. 단, 예전 버전으로 만든 bundle은 기준점 metadata가 없으므로 같은 검증 오류가 나면 최신 버전으로 다시 export하세요.
 
+이미 `migration/feature-work`가 분리된 이력으로 만들어져 GitHub에서 `main`으로 PR이 안 된다면, `main`을 기준으로 다시 graft합니다.
+
+```powershell
+git -C C:\repos\target-repo switch main
+
+python -m gitshuttle import `
+  --repo C:\repos\target-repo `
+  --file C:\transfer\shuttle_YYMMDD.bundle `
+  --author-map C:\transfer\author_map.json `
+  --target-branch migration/feature-work `
+  --onto-ref main `
+  --timestamp original `
+  --on-conflict force
+```
+
+이 명령은 기존 `migration/feature-work` ref를 덮어쓰지만, 새 이력의 부모를 `main` tip으로 만들어 PR 비교가 가능하게 합니다.
+
 ---
 
 ## 참고 2 — CSV로 커밋 선택

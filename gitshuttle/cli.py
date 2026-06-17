@@ -176,12 +176,15 @@ def _print_import_start(
     inputs: ImportCliInputs,
     on_conflict: str,
     target_branch: Optional[str],
+    onto_ref: Optional[str] = None,
 ) -> None:
     typer.echo(f"bundle        : {inputs.bundle_path}")
     typer.echo(f"target        : {inputs.repo_path}")
     typer.echo(f"conflict      : {on_conflict}")
     if target_branch:
         typer.echo(f"target-branch : {target_branch}")
+    if onto_ref:
+        typer.echo(f"onto-ref      : {onto_ref}")
     if inputs.author_map:
         typer.echo(f"author-map    : {inputs.author_map}")
     typer.echo(f"timestamp     : {inputs.timestamp}")
@@ -346,6 +349,14 @@ def import_(
             "'imported/<소스브랜치>', 일반 import는 현재 브랜치에 merge."
         ),
     ),
+    onto_ref: Optional[str] = typer.Option(
+        None,
+        "--onto-ref",
+        help=(
+            "부분 bundle/base-branch delta를 이어붙일 기준 ref/SHA. "
+            "예: --onto-ref main"
+        ),
+    ),
     timestamp: Optional[str] = typer.Option(
         None,
         "--timestamp",
@@ -365,6 +376,7 @@ def import_(
         inputs=inputs,
         on_conflict=on_conflict,
         target_branch=target_branch,
+        onto_ref=onto_ref,
     )
 
     try:
@@ -375,6 +387,7 @@ def import_(
             author_map_path=inputs.author_map,
             target_branch=target_branch,
             timestamp_mode=inputs.timestamp,
+            onto_ref=onto_ref,
         )
     except ChecksumError as e:
         typer.echo(f"\n[오류] {e}", err=True)
