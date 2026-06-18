@@ -93,6 +93,29 @@ class TestLoadAuthorMap:
         result = load_author_map(map_file)
         assert result["x@a.com"]["name"] == "X"
 
+    def test_invalid_json_has_file_and_line_hint(self, tmp_path):
+        """JSON 문법 오류는 파일/라인/검증 명령을 포함해 안내한다."""
+        import pytest
+        from gitshuttle.rewrite import load_author_map
+
+        map_file = tmp_path / "author_map.json"
+        map_file.write_text(
+            '{\n'
+            '  "old@example.com": {"name": "New", "email": "new@example.com"}\n'
+            '  "other@example.com": {"name": "New", "email": "new@example.com"}\n'
+            '}\n',
+            encoding="utf-8",
+        )
+
+        with pytest.raises(ValueError) as exc_info:
+            load_author_map(map_file)
+
+        message = str(exc_info.value)
+        assert "author-map JSON 문법 오류" in message
+        assert str(map_file) in message
+        assert "line 3" in message
+        assert "python -m json.tool" in message
+
 
 # ---------------------------------------------------------------------------
 # rewrite_authors 테스트
@@ -416,6 +439,98 @@ class TestRewritePreservesDataBlocks:
         assert rewritten.count("Alice <alice@example.com>") == 1
         assert "re.findall(pattern, stream, re.MULTILINE)" in rewritten
 
+    def test_rewrite_parent_refs_does_not_modify_blob_payload(self):
+        from gitshuttle.rewrite import rewrite_parent_refs
+
+        original_parent = "a" * 40
+        target_parent = "b" * 40
+        payload = f"from {original_parent}\n"
+        payload_size = len(payload.encode("utf-8"))
+        stream = (
+            "blob\n"
+            "mark :1\n"
+            f"data {payload_size}\n"
+            f"{payload}"
+            "commit refs/heads/main\n"
+            "mark :2\n"
+            "author A <a@example.com> 1 +0000\n"
+            "committer A <a@example.com> 1 +0000\n"
+            "data 4\n"
+            "msg\n"
+            f"from {original_parent}\n"
+            "M 100644 :1 note.txt\n"
+            "\n"
+        )
+
+        rewritten = rewrite_parent_refs(stream, {original_parent: target_parent})
+
+        assert f"data {payload_size}\n{payload}" in rewritten
+        assert f"from {target_parent}\n" in rewritten
+        assert rewritten.count(f"from {original_parent}") == 1
+
+    def test_graft_root_commits_adds_parent_without_modifying_payload(self):
+        from gitshuttle.rewrite import graft_root_commits
+
+        target_parent = "c" * 40
+        payload = f"from {target_parent}\n"
+        payload_size = len(payload.encode("utf-8"))
+        stream = (
+            "blob\n"
+            "mark :1\n"
+            f"data {payload_size}\n"
+            f"{payload}"
+            "commit refs/heads/main\n"
+            "mark :2\n"
+            "author A <a@example.com> 1 +0000\n"
+            "committer A <a@example.com> 1 +0000\n"
+            "data 5\n"
+            "root\n"
+            "M 100644 :1 note.txt\n"
+            "\n"
+            "commit refs/heads/main\n"
+            "mark :3\n"
+            "author A <a@example.com> 2 +0000\n"
+            "committer A <a@example.com> 2 +0000\n"
+            "data 6\n"
+            "child\n"
+            "from :2\n"
+            "M 100644 :1 note.txt\n"
+            "\n"
+        )
+
+        rewritten = graft_root_commits(stream, target_parent)
+
+        assert f"data {payload_size}\n{payload}" in rewritten
+        assert f"data 5\nroot\nfrom {target_parent}\nM 100644 :1 note.txt" in rewritten
+        assert "data 6\nchild\nfrom :2\nM 100644 :1 note.txt" in rewritten
+        assert rewritten.count(f"from {target_parent}") == 2
+
+    def test_graft_root_commits_handles_empty_root_commit(self):
+        from gitshuttle.rewrite import graft_root_commits
+
+        target_parent = "d" * 40
+        stream = (
+            "commit refs/heads/main\n"
+            "mark :1\n"
+            "author A <a@example.com> 1 +0000\n"
+            "committer A <a@example.com> 1 +0000\n"
+            "data 6\n"
+            "empty\n"
+            "commit refs/heads/main\n"
+            "mark :2\n"
+            "author A <a@example.com> 2 +0000\n"
+            "committer A <a@example.com> 2 +0000\n"
+            "data 6\n"
+            "child\n"
+            "from :1\n"
+            "\n"
+        )
+
+        rewritten = graft_root_commits(stream, target_parent)
+
+        assert f"data 6\nempty\nfrom {target_parent}\ncommit refs/heads/main" in rewritten
+        assert "data 6\nchild\nfrom :1\n" in rewritten
+
 
 # ---------------------------------------------------------------------------
 # CLI 옵션 존재 확인 (소스 코드 파싱 방식 — typer 미설치 환경 호환)
@@ -444,6 +559,12 @@ class TestImportCLIOptions:
         source = self._read_cli_source()
         assert "target_branch" in source
         assert "--target-branch" in source
+
+    def test_import_has_onto_ref_option(self):
+        """import 커맨드에 --onto-ref 옵션 선언이 존재해야 한다."""
+        source = self._read_cli_source()
+        assert "onto_ref" in source
+        assert "--onto-ref" in source
 
     def test_import_has_timestamp_option(self):
         """import 커맨드에 --timestamp 옵션 선언이 존재해야 한다."""

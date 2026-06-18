@@ -102,6 +102,99 @@ def test_create_bundle_full_scope_is_self_contained(tmp_git_repo, tmp_path):
     assert verify_bundle_detailed(full_bundle, repo_path=empty_repo).valid is True
 
 
+def test_create_bundle_with_base_ref_is_self_contained_and_marks_base(tmp_git_repo, tmp_path):
+    """base_refs bundle은 빈 target에서도 검증되고 base metadata ref를 담는다."""
+    from gitshuttle.git_ops import get_commits
+    from gitshuttle.bundle import create_bundle, verify_bundle_detailed
+
+    env = {**os.environ, "PYTHONIOENCODING": "utf-8", "GIT_TERMINAL_PROMPT": "0"}
+    base_sha = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=tmp_git_repo,
+        check=True,
+        capture_output=True,
+        encoding="utf-8",
+        env=env,
+    ).stdout.strip()
+    (tmp_git_repo / "feature.txt").write_text("feature", encoding="utf-8")
+    subprocess.run(["git", "add", "."], cwd=tmp_git_repo, check=True, env=env)
+    subprocess.run(
+        ["git", "commit", "-m", "feat: feature"],
+        cwd=tmp_git_repo,
+        check=True,
+        env=env,
+    )
+    empty_repo = tmp_path / "empty"
+    subprocess.run(["git", "init", str(empty_repo)], check=True, env=env)
+
+    commits = get_commits(tmp_git_repo, branch=f"{base_sha}..HEAD")
+    bundle_path = create_bundle(
+        tmp_git_repo,
+        commits,
+        tmp_path,
+        filename="base_delta.bundle",
+        base_refs=[base_sha],
+    )
+    list_heads = subprocess.run(
+        ["git", "bundle", "list-heads", str(bundle_path)],
+        check=True,
+        capture_output=True,
+        encoding="utf-8",
+        env=env,
+    ).stdout
+    leaked_refs = subprocess.run(
+        ["git", "for-each-ref", "--format=%(refname)", "refs/gitshuttle/base"],
+        cwd=tmp_git_repo,
+        check=True,
+        capture_output=True,
+        encoding="utf-8",
+        env=env,
+    ).stdout
+
+    assert verify_bundle_detailed(bundle_path, repo_path=empty_repo).valid is True
+    assert "refs/gitshuttle/base/" in list_heads
+    assert leaked_refs == ""
+
+
+def test_create_bundle_cleans_base_metadata_refs_on_invalid_base(tmp_git_repo, tmp_path):
+    """base ref 해석이 실패해도 앞서 만든 metadata ref는 남기지 않는다."""
+    from gitshuttle.git_ops import get_commits
+    from gitshuttle.bundle import create_bundle
+
+    env = {**os.environ, "PYTHONIOENCODING": "utf-8", "GIT_TERMINAL_PROMPT": "0"}
+    base_sha = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=tmp_git_repo,
+        check=True,
+        capture_output=True,
+        encoding="utf-8",
+        env=env,
+    ).stdout.strip()
+    (tmp_git_repo / "feature.txt").write_text("feature", encoding="utf-8")
+    subprocess.run(["git", "add", "."], cwd=tmp_git_repo, check=True, env=env)
+    subprocess.run(["git", "commit", "-m", "feat: feature"], cwd=tmp_git_repo, check=True, env=env)
+
+    commits = get_commits(tmp_git_repo, branch=f"{base_sha}..HEAD")
+    with pytest.raises(RuntimeError):
+        create_bundle(
+            tmp_git_repo,
+            commits,
+            tmp_path,
+            filename="invalid_base.bundle",
+            base_refs=[base_sha, "missing-base-ref"],
+        )
+
+    leaked_refs = subprocess.run(
+        ["git", "for-each-ref", "--format=%(refname)", "refs/gitshuttle/base"],
+        cwd=tmp_git_repo,
+        check=True,
+        capture_output=True,
+        encoding="utf-8",
+        env=env,
+    ).stdout
+    assert leaked_refs == ""
+
+
 def test_verify_bundle_valid(tmp_git_repo, tmp_path):
     """올바른 bundle은 verify_bundle → True를 반환해야 한다."""
     from gitshuttle.git_ops import get_commits

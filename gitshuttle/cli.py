@@ -32,6 +32,7 @@ class ExportPaths:
     repo_path: Path
     output_dir: Path
     branch_name: str
+    commit_range: str
     config_path: Optional[Path]
 
 
@@ -50,6 +51,7 @@ def _resolve_export_cli_options(
     full_branch: bool,
     recent: Optional[int],
     bundle_scope: str,
+    base_branch: Optional[str],
 ) -> ExportCliOptions:
     if not full_branch:
         message = f"최근 {recent}개 커밋을 UI 없이 선택했습니다." if recent is not None else None
@@ -61,6 +63,13 @@ def _resolve_export_cli_options(
 
     if recent is not None:
         raise ValueError("--full-branch 옵션은 --recent와 함께 사용할 수 없습니다.")
+
+    if base_branch is not None:
+        return ExportCliOptions(
+            commit_limit=None,
+            bundle_scope="range",
+            auto_select_message="기준 브랜치 이후 커밋 전체를 UI 없이 선택했습니다.",
+        )
 
     return ExportCliOptions(
         commit_limit=1,
@@ -74,12 +83,16 @@ def _resolve_export_paths(
     repo: Optional[Path],
     output: Optional[str],
     branch: Optional[str],
+    base_branch: Optional[str] = None,
 ) -> ExportPaths:
     repo_path = repo if repo is not None else Path.cwd()
+    branch_name = branch or "HEAD"
+    commit_range = f"{base_branch}..{branch_name}" if base_branch else branch_name
     return ExportPaths(
         repo_path=repo_path,
         output_dir=Path(output) if output else repo_path,
-        branch_name=branch or "HEAD",
+        branch_name=branch_name,
+        commit_range=commit_range,
         config_path=repo_path / "gitshuttle.toml" if repo is not None else None,
     )
 
@@ -163,12 +176,15 @@ def _print_import_start(
     inputs: ImportCliInputs,
     on_conflict: str,
     target_branch: Optional[str],
+    onto_ref: Optional[str] = None,
 ) -> None:
     typer.echo(f"bundle        : {inputs.bundle_path}")
     typer.echo(f"target        : {inputs.repo_path}")
     typer.echo(f"conflict      : {on_conflict}")
     if target_branch:
         typer.echo(f"target-branch : {target_branch}")
+    if onto_ref:
+        typer.echo(f"onto-ref      : {onto_ref}")
     if inputs.author_map:
         typer.echo(f"author-map    : {inputs.author_map}")
     typer.echo(f"timestamp     : {inputs.timestamp}")
@@ -210,6 +226,11 @@ def main(
 @app.command()
 def export(
     branch: Optional[str] = typer.Option(None, "--branch", "-b", help="추출할 브랜치"),
+    base_branch: Optional[str] = typer.Option(
+        None,
+        "--base-branch",
+        help="기준 브랜치. 지정하면 base..branch 범위의 커밋만 추출합니다.",
+    ),
     repo: Optional[Path] = typer.Option(
         None,
         "--repo",
@@ -230,7 +251,10 @@ def export(
     full_branch: bool = typer.Option(
         False,
         "--full-branch",
-        help="현재/지정 브랜치 tip 기준 전체 이력을 TUI 없이 bundle로 추출합니다.",
+        help=(
+            "TUI 없이 전체 선택합니다. 단독 사용 시 브랜치 전체 이력, "
+            "--base-branch와 함께 사용 시 base..branch 범위 전체."
+        ),
     ),
     recent: Optional[int] = typer.Option(
         None,
@@ -243,22 +267,28 @@ def export(
     from gitshuttle.git_ops import get_commits
     from gitshuttle.export_ import run_export
 
-    paths = _resolve_export_paths(repo=repo, output=output, branch=branch)
+    paths = _resolve_export_paths(
+        repo=repo,
+        output=output,
+        branch=branch,
+        base_branch=base_branch,
+    )
     try:
         export_options = _resolve_export_cli_options(
             full_branch=full_branch,
             recent=recent,
             bundle_scope=bundle_scope,
+            base_branch=base_branch,
         )
     except ValueError as e:
         typer.echo(f"[오류] {e}", err=True)
         raise typer.Exit(1)
 
     typer.echo(f"source        : {paths.repo_path}")
-    typer.echo(f"커밋 목록을 읽는 중... (브랜치: {paths.branch_name})")
+    typer.echo(f"커밋 목록을 읽는 중... (범위: {paths.commit_range})")
     commits = get_commits(
         paths.repo_path,
-        branch=paths.branch_name,
+        branch=paths.commit_range,
         limit=export_options.commit_limit,
     )
 
@@ -284,8 +314,9 @@ def export(
         repo_path=paths.repo_path,
         commits=selected,
         output_dir=paths.output_dir,
-        branch=paths.branch_name,
+        branch=paths.commit_range,
         bundle_scope=export_options.bundle_scope,
+        base_refs=[base_branch] if base_branch else None,
     )
 
     _print_export_result(result)
@@ -318,6 +349,14 @@ def import_(
             "'imported/<소스브랜치>', 일반 import는 현재 브랜치에 merge."
         ),
     ),
+    onto_ref: Optional[str] = typer.Option(
+        None,
+        "--onto-ref",
+        help=(
+            "부분 bundle/base-branch delta를 이어붙일 기준 ref/SHA. "
+            "예: --onto-ref main"
+        ),
+    ),
     timestamp: Optional[str] = typer.Option(
         None,
         "--timestamp",
@@ -337,6 +376,7 @@ def import_(
         inputs=inputs,
         on_conflict=on_conflict,
         target_branch=target_branch,
+        onto_ref=onto_ref,
     )
 
     try:
@@ -347,6 +387,7 @@ def import_(
             author_map_path=inputs.author_map,
             target_branch=target_branch,
             timestamp_mode=inputs.timestamp,
+            onto_ref=onto_ref,
         )
     except ChecksumError as e:
         typer.echo(f"\n[오류] {e}", err=True)

@@ -113,6 +113,7 @@ def test_export_accepts_repo_option(tmp_path, monkeypatch):
         output_dir,
         branch,
         bundle_scope="range",
+        base_refs=None,
     ):
         captured["run_export_repo"] = repo_path
         captured["output_dir"] = output_dir
@@ -212,6 +213,7 @@ def test_export_recent_selects_latest_without_ui(tmp_path, monkeypatch):
         output_dir,
         branch,
         bundle_scope="range",
+        base_refs=None,
     ):
         captured["selected"] = commits
         captured["bundle_scope"] = bundle_scope
@@ -281,6 +283,7 @@ def test_export_accepts_bundle_scope_full(tmp_path, monkeypatch):
         output_dir,
         branch,
         bundle_scope="range",
+        base_refs=None,
     ):
         captured["bundle_scope"] = bundle_scope
         return ExportResult(
@@ -345,6 +348,7 @@ def test_export_full_branch_selects_tip_as_full_bundle_without_ui(tmp_path, monk
         output_dir,
         branch,
         bundle_scope="range",
+        base_refs=None,
     ):
         captured["selected"] = commits
         captured["bundle_scope"] = bundle_scope
@@ -379,6 +383,95 @@ def test_export_full_branch_selects_tip_as_full_bundle_without_ui(tmp_path, monk
     assert captured["selected"] == [tip_commit]
     assert captured["bundle_scope"] == "full"
     assert "전체 이력" in result.output
+
+
+def test_export_base_branch_full_branch_selects_branch_delta_without_ui(tmp_path, monkeypatch):
+    """--base-branch 와 --full-branch 조합은 base..branch 전체를 UI 없이 선택한다."""
+    from gitshuttle.cli import app
+    from gitshuttle.export_ import ExportResult
+    from gitshuttle.git_ops import Commit
+    import gitshuttle.export_ as export_module
+    import gitshuttle.git_ops as git_ops_module
+    import gitshuttle.ui.tui as tui_module
+
+    repo_dir = tmp_path / "source_repo"
+    repo_dir.mkdir()
+    output_dir = tmp_path / "out"
+    captured = {}
+    selected_commits = [
+        Commit(
+            hash="c" * 40,
+            short_hash="ccccccc",
+            date="2026-06-10 09:30:00 +0900",
+            author="New Author",
+            message="feature 2",
+            files_changed=1,
+        ),
+        Commit(
+            hash="b" * 40,
+            short_hash="bbbbbbb",
+            date="2026-06-10 09:00:00 +0900",
+            author="New Author",
+            message="feature 1",
+            files_changed=1,
+        ),
+    ]
+
+    def fake_get_commits(repo_path, branch="HEAD", limit=None):
+        captured["branch"] = branch
+        captured["limit"] = limit
+        return selected_commits
+
+    def fail_select_commits(commits):
+        raise AssertionError("base branch full export should not open TUI")
+
+    def fake_run_export(
+        repo_path,
+        commits,
+        output_dir,
+        branch,
+        bundle_scope="range",
+        base_refs=None,
+    ):
+        captured["selected"] = commits
+        captured["export_branch"] = branch
+        captured["bundle_scope"] = bundle_scope
+        captured["base_refs"] = base_refs
+        return ExportResult(
+            bundle=output_dir / "test.bundle",
+            sha256=output_dir / "test.bundle.sha256",
+            manifest=output_dir / "test_manifest.txt",
+        )
+
+    monkeypatch.setattr(git_ops_module, "get_commits", fake_get_commits)
+    monkeypatch.setattr(tui_module, "select_commits_tui", fail_select_commits)
+    monkeypatch.setattr(export_module, "run_export", fake_run_export)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        app,
+        [
+            "export",
+            "--repo",
+            str(repo_dir),
+            "--branch",
+            "feature/work",
+            "--base-branch",
+            "main",
+            "--output",
+            str(output_dir),
+            "--full-branch",
+        ],
+    )
+
+    assert result.exit_code == 0, f"exit code {result.exit_code}: {result.output}"
+    assert captured["branch"] == "main..feature/work"
+    assert captured["limit"] is None
+    assert captured["selected"] == selected_commits
+    assert captured["export_branch"] == "main..feature/work"
+    assert captured["bundle_scope"] == "range"
+    assert captured["base_refs"] == ["main"]
+    assert "기준 브랜치 이후" in result.output
 
 
 def test_export_full_branch_rejects_recent(tmp_path):
@@ -436,11 +529,13 @@ def test_import_accepts_repo_option(tmp_path, monkeypatch):
         author_map_path=None,
         target_branch=None,
         timestamp_mode="now",
+        onto_ref=None,
     ):
         captured["bundle_path"] = bundle_path
         captured["repo_path"] = repo_path
         captured["on_conflict"] = on_conflict
         captured["timestamp_mode"] = timestamp_mode
+        captured["onto_ref"] = onto_ref
         return import_module.ImportResult(imported=1, skipped=0, total=1)
 
     monkeypatch.setattr(import_module, "run_import", fake_run_import)
@@ -463,6 +558,60 @@ def test_import_accepts_repo_option(tmp_path, monkeypatch):
     assert captured["bundle_path"] == bundle_path
     assert captured["repo_path"] == repo_dir.resolve()
     assert captured["timestamp_mode"] == "original"
+    assert captured["onto_ref"] is None
+
+
+def test_import_accepts_onto_ref_option(tmp_path, monkeypatch):
+    """import --onto-ref 는 delta parent graft 기준 ref를 run_import로 전달한다."""
+    from gitshuttle.cli import app
+    import gitshuttle.import_ as import_module
+
+    bundle_path = tmp_path / "test.bundle"
+    bundle_path.write_bytes(b"fake bundle")
+    repo_dir = tmp_path / "target_repo"
+    repo_dir.mkdir()
+    captured = {}
+
+    def fake_run_import(
+        bundle_path,
+        repo_path,
+        on_conflict="skip",
+        sha256_path=None,
+        author_map_path=None,
+        target_branch=None,
+        timestamp_mode="now",
+        onto_ref=None,
+    ):
+        captured["target_branch"] = target_branch
+        captured["onto_ref"] = onto_ref
+        captured["on_conflict"] = on_conflict
+        return import_module.ImportResult(imported=1, skipped=0, total=1)
+
+    monkeypatch.setattr(import_module, "run_import", fake_run_import)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        app,
+        [
+            "import",
+            "--file",
+            str(bundle_path),
+            "--repo",
+            str(repo_dir),
+            "--target-branch",
+            "feat/gitshuttle",
+            "--onto-ref",
+            "main",
+            "--on-conflict",
+            "force",
+        ],
+    )
+
+    assert result.exit_code == 0, f"exit code {result.exit_code}: {result.output}"
+    assert captured["target_branch"] == "feat/gitshuttle"
+    assert captured["onto_ref"] == "main"
+    assert captured["on_conflict"] == "force"
+    assert "onto-ref" in result.output
 
 
 def test_import_rejects_removed_mode_option(tmp_path):

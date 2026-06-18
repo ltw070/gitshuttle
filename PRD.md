@@ -108,6 +108,7 @@ GitShuttle은 서로 연결되지 않은 두 네트워크(내부망/외부망) �
   타겟 repo에 **별도 브랜치**를 새로 만들어 커밋을 반영하여, 타겟의 기본 브랜치를 보호한다.
 - **기능:**
   - `--target-branch <이름>`: import된 커밋을 담을 신규 브랜치명 지정.
+  - `--onto-ref <ref|SHA>`: rewrite import 이력을 붙일 기준점 지정. 부분 bundle/base-branch delta는 제외된 원본 parent를 치환하고, self-contained/full bundle은 parent가 없는 root commit을 graft한다. `main`, `develop`, `release/...`, feature 브랜치, `HEAD`, 전체/짧은 SHA처럼 Git이 해석 가능한 값을 허용.
   - rewrite import에서 미지정 시 기본값: `imported/<소스브랜치명>` (예: `imported/main`, `imported/master`).
   - rewrite 옵션 없이 `gitshuttle import --file ...`만 실행하면 현재 브랜치로 merge를 시도한다.
   - 해당 브랜치가 타겟에 이미 존재하면 `--on-conflict` 옵션 정책을 따름.
@@ -132,6 +133,9 @@ GitShuttle은 서로 연결되지 않은 두 네트워크(내부망/외부망) �
   git switch main
   git merge migration/source-main --allow-unrelated-histories
   # → 기존 main을 보존한 채 검토 후 병합
+
+  gitshuttle import --file feature.bundle --target-branch feat/work --onto-ref develop --on-conflict force
+  # → 분리된 feat/work 이력을 develop tip 위에 다시 생성
   ```
 - **구현:** fast-import 시 ref를 `refs/heads/<target-branch>`로 지정.
 
@@ -185,9 +189,30 @@ gitshuttle import \
 |------|------|--------|
 | `--author-map <파일>` | 작성자 매핑 JSON 파일 경로 | 없음 (원본 유지) |
 | `--target-branch <이름>` | rewrite import 커밋을 담을 브랜치명 | rewrite 시 `imported/<소스브랜치명>` |
+| `--onto-ref <ref|SHA>` | rewrite import 이력을 이어붙일 기준 ref/SHA/HEAD | target branch tip, target branch가 없으면 현재 HEAD |
 | `--timestamp now\|original\|from=<dt>` | 커밋 타임스탬프 모드 | `now` |
 
 ---
+
+#### 3.6.6 기준 브랜치 이후 변경분 이전 (Base Branch Delta)
+
+- **목표:** 이미 존재하는 기본 브랜치에서 파생된 feature 브랜치의 신규 커밋만 대상 repo 브랜치 위에 이어붙인다.
+- **CLI:** `gitshuttle export --branch <feature> --base-branch <base> --full-branch`
+- **선택 범위:** `<base>..<feature>` 커밋 전체를 UI 없이 선택한다.
+- **bundle 구조:**
+  - 대상 repo가 원본 `<base>` SHA를 갖고 있지 않아도 `git bundle verify`가 통과해야 한다.
+  - 이를 위해 export는 기준점 metadata ref(`refs/gitshuttle/base/...`)를 bundle에 함께 담은 self-contained bundle을 만든다.
+  - import는 metadata ref를 fast-export 대상에서 제외하고, 제외된 parent SHA를 기준 ref의 tip SHA로 치환한다.
+  - 기준 ref는 `--onto-ref`가 있으면 그 값, 없으면 기존 target branch tip, target branch가 없으면 현재 HEAD다.
+- **결과:** bundle 파일은 일반 range bundle보다 커질 수 있지만, 대상 브랜치에는 `<base>..<feature>` 신규 커밋만 반영된다.
+- **호환성:** metadata가 없는 구버전 `--base-branch` bundle은 대상 repo가 원본 base SHA를 갖고 있지 않으면 검증 실패할 수 있으며, 최신 버전으로 다시 export해야 한다.
+
+#### 3.6.7 self-contained/full bundle graft
+
+- **목표:** 전체 이력을 담은 self-contained/full bundle도 필요하면 기존 대상 repo의 특정 ref 위에 붙일 수 있어야 한다.
+- **CLI:** `gitshuttle import --file <bundle> --target-branch <branch> --onto-ref <ref|SHA> --on-conflict force`
+- **동작:** fast-export stream에서 parent가 없는 root commit에 `--onto-ref` tip을 parent로 주입한다. 기존 parent가 있는 commit은 그대로 둔다.
+- **결과:** import 브랜치가 완전히 분리된 이력이 아니라 지정한 기준 ref의 후속 이력으로 보이므로 GitHub PR 비교가 가능해진다.
 
 ## 4. 사용자 시나리오 (User Scenario)
 
@@ -236,6 +261,6 @@ python -m gitshuttle config
 
 ## 8. 현재 제공 범위
 
-- `gitshuttle export`: TUI/CSV 커밋 선택, `--recent`, `--full-branch`, bundle/manifest/checksum 생성
-- `gitshuttle import`: SHA-256 검증, 일반 merge import, 작성자/타임스탬프 rewrite, rewrite 기반 대상 브랜치 반입, 충돌 처리
+- `gitshuttle export`: TUI/CSV 커밋 선택, `--recent`, `--full-branch`, `--base-branch` 기반 self-contained branch delta, bundle/manifest/checksum 생성
+- `gitshuttle import`: SHA-256 검증, 일반 merge import, 작성자/타임스탬프 rewrite, 부분 bundle prerequisite/base metadata 제외 반입, rewrite 기반 대상 브랜치 반입, 충돌 처리
 - 대용량 전송: bundle 분할/병합 지원

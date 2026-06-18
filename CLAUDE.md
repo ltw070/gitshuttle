@@ -105,12 +105,14 @@ build.ps1             # Windows PowerShell 빌드 자동화
 ## 명령어 구조
 
 ```
-gitshuttle export   [--repo <path>] [--branch <name>] [--ui tui|csv]
+gitshuttle export   [--repo <path>] [--branch <name>] [--base-branch <name>]
+                    [--ui tui|csv]
                     [--output <path>] [--bundle-scope range|full]
                     [--full-branch] [--recent N]
 gitshuttle import   --file <path> [--repo <path>]
                     [--on-conflict skip|force|abort]
                     [--author-map <json>] [--target-branch <name>]
+                    [--onto-ref <ref|sha>]
                     [--timestamp now|original|from=<datetime>]
 gitshuttle config   (대화형 마법사 — gitshuttle.toml 수정)
 ```
@@ -126,7 +128,9 @@ gitshuttle config   (대화형 마법사 — gitshuttle.toml 수정)
 | `tui` | Textual 체크박스 + 테이블. 방향키, Space, A, E/Enter, Q. |
 | `csv` | `commits.csv` 생성 → 사용자가 `include` 컬럼 Y/N 편집 → 재입력 |
 
-`--full-branch`와 `--recent`는 동시에 사용할 수 없다. `--full-branch`는 브랜치 tip 1개만 조회하고 `bundle_scope=full`로 self-contained bundle을 만든다.
+`--full-branch`와 `--recent`는 동시에 사용할 수 없다. `--full-branch` 단독은 브랜치 tip 1개를 `bundle_scope=full`로 묶고, `--base-branch`와 함께 쓰면 `base..branch` 범위 전체를 `bundle_scope=range`로 묶는다.
+
+rewrite import에서 `--onto-ref`는 import 이력을 붙일 기준점이다. 부분 bundle/base-branch delta는 제외된 원본 parent를 치환하고, self-contained/full bundle은 parent가 없는 root commit을 기준 ref 위에 graft한다. `main` 전용이 아니며 `develop`, `release/...`, feature 브랜치, `HEAD`, SHA처럼 Git이 해석 가능한 값을 사용할 수 있다. 생략하면 기존 target branch tip, target branch가 없으면 현재 HEAD를 기준으로 한다.
 
 ---
 

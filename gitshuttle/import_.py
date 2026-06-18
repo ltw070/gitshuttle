@@ -23,6 +23,8 @@ from .checksum import _compute_sha256
 from .bundle import verify_bundle_detailed
 from .git_ops import run_git, _git_env
 
+_BASE_METADATA_REF_PREFIX = "refs/gitshuttle/base/"
+
 
 # ---------------------------------------------------------------------------
 # Exceptions
@@ -58,6 +60,22 @@ class RewriteOptions:
     from_dt: object | None
 
 
+@dataclass(frozen=True)
+class BundleExportSpec:
+    """rewrite import에서 fast-export에 전달할 bundle 범위."""
+
+    args: list[str]
+    excluded_parents: list[str]
+
+
+@dataclass(frozen=True)
+class BundleHead:
+    """bundle list-heads의 commit/ref 한 줄."""
+
+    commit_hash: str
+    ref: str
+
+
 def _decode_process_output(output: bytes | str | None) -> str:
     """subprocess 출력값을 UTF-8 텍스트로 변환한다."""
     if output is None:
@@ -65,6 +83,10 @@ def _decode_process_output(output: bytes | str | None) -> str:
     if isinstance(output, bytes):
         return output.decode('utf-8', errors='surrogateescape')
     return output
+
+
+def _looks_like_sha(value: str) -> bool:
+    return len(value) == 40 and all(ch in "0123456789abcdefABCDEF" for ch in value)
 
 
 # ---------------------------------------------------------------------------
@@ -79,6 +101,7 @@ def run_import(
     author_map_path: Optional[str] = None, # 작성자 매핑 JSON 경로
     target_branch: Optional[str] = None,   # rewrite 대상 브랜치. None이면 rewrite 시 "imported/<소스브랜치>"
     timestamp_mode: str = "now",           # "now" | "original" | "from=DATETIME"
+    onto_ref: Optional[str] = None,         # 부분 bundle excluded parent를 이어붙일 기준 ref/SHA
 ) -> ImportResult:
     """bundle 파일을 target repo에 반입한다.
 
@@ -94,6 +117,8 @@ def run_import(
                           rewrite가 필요 없는 일반 import는 현재 브랜치로 merge한다.
         timestamp_mode:   타임스탬프 재작성 모드.
                           "now"(기본) | "original" | "from=YYYY-MM-DDTHH:MM:SS"
+        onto_ref:         부분 bundle/base-branch delta를 이어붙일 기준 ref/SHA.
+                          None이면 target_branch tip, 없으면 현재 HEAD를 사용한다.
 
     Returns:
         ImportResult (imported, skipped, total, warnings 포함).
@@ -137,6 +162,7 @@ def run_import(
             target_branch=rewrite_options.target_branch,
             timestamp_mode=rewrite_options.timestamp_mode,
             from_dt=rewrite_options.from_dt,
+            onto_ref=onto_ref,
             force_ref_update=on_conflict == "force",
         )
     else:
@@ -301,10 +327,12 @@ def _format_bundle_verify_failure(bundle_path: Path, detail: str) -> str:
         "가능한 원인:",
         "- 최근 1~2개처럼 일부 커밋만 export한 bundle은 대상 repo에 그 직전 원본 부모 커밋 SHA가 있어야 합니다.",
         "- 대상 repo에 이전 이력이 없거나, 작성자/날짜 rewrite로 기존 커밋 SHA가 바뀐 경우 prerequisite 검증에 실패합니다.",
+        "- 구버전 또는 이전 실행으로 만든 --base-branch bundle은 기준 SHA를 bundle 안에 담지 않아 대상 repo에서 검증되지 않을 수 있습니다.",
         "- 최신 GitShuttle은 rewrite import 시 원본 SHA를 refs/gitshuttle/original 아래 보관해 이후 증분 import를 지원합니다.",
         "",
         "해결 방법:",
-        "- 대상 repo에 원본 부모 커밋이 있는지 확인하세요.",
+        "- base..branch 범위를 옮기는 경우 최신 GitShuttle로 --base-branch와 --full-branch를 함께 사용해 다시 export하세요.",
+        "- 기존 부분 bundle을 그대로 써야 한다면 대상 repo에 원본 부모 커밋이 있는지 확인하세요.",
         "- 기존 버전으로 이미 rewrite import한 repo라면, 한 번은 필요한 전체 범위를 다시 export/import해 증분 기준점을 만드세요.",
         "- 안전하게는 새 --target-branch 이름으로 전체 이력을 다시 import한 뒤 검토하세요.",
     ])
@@ -514,6 +542,172 @@ def _detect_source_branch(bundle_path: Path) -> str:
     return "main"
 
 
+def _list_bundle_heads(bundle_path: Path) -> list[BundleHead]:
+    """bundle에 포함된 head commit/ref 목록을 반환한다."""
+    result = subprocess.run(
+        ["git", "bundle", "list-heads", str(bundle_path)],
+        capture_output=True,
+        encoding='utf-8',
+        env=_git_env(),
+    )
+    if result.returncode != 0:
+        return []
+
+    heads: list[BundleHead] = []
+    for line in result.stdout.splitlines():
+        parts = line.strip().split(None, 1)
+        if not parts:
+            continue
+        commit_hash = parts[0]
+        if not _looks_like_sha(commit_hash):
+            continue
+        ref = parts[1].strip() if len(parts) > 1 and parts[1] else commit_hash
+        heads.append(BundleHead(commit_hash=commit_hash, ref=ref))
+    return heads
+
+
+def _list_bundle_head_refs(bundle_path: Path) -> list[str]:
+    """bundle에 포함된 head ref 이름을 반환한다."""
+    return [head.ref for head in _list_bundle_heads(bundle_path)]
+
+
+def _list_bundle_prerequisites(bundle_path: Path, repo_path: Path) -> list[str]:
+    """git bundle verify 출력에서 prerequisite SHA 목록을 추출한다."""
+    result = subprocess.run(
+        ["git", "bundle", "verify", str(bundle_path)],
+        cwd=repo_path,
+        capture_output=True,
+        encoding='utf-8',
+        env=_git_env(),
+    )
+    output = "\n".join(
+        part for part in (result.stdout, result.stderr) if part
+    )
+
+    prerequisites: list[str] = []
+    in_requires_section = False
+    for raw_line in output.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        if line.startswith("The bundle requires"):
+            in_requires_section = True
+            continue
+        if line.startswith("The bundle contains") or line.startswith("The bundle uses"):
+            in_requires_section = False
+            continue
+        if line.endswith(" is okay") or line.endswith(" is okay."):
+            in_requires_section = False
+            continue
+        if not in_requires_section:
+            continue
+
+        candidate = line.split()[0]
+        if _looks_like_sha(candidate):
+            prerequisites.append(candidate)
+
+    return prerequisites
+
+
+def _build_bundle_export_spec(bundle_path: Path, repo_path: Path) -> BundleExportSpec:
+    """bundle 자체에 포함된 커밋만 fast-export하도록 revision 범위를 만든다."""
+    heads = _list_bundle_heads(bundle_path)
+    data_heads = [
+        head.ref
+        for head in heads
+        if not head.ref.startswith(_BASE_METADATA_REF_PREFIX)
+    ]
+    base_exclusions = [
+        head.commit_hash
+        for head in heads
+        if head.ref.startswith(_BASE_METADATA_REF_PREFIX)
+    ]
+    prerequisites = _list_bundle_prerequisites(bundle_path, repo_path)
+    exclusions = _dedupe_preserving_order([*base_exclusions, *prerequisites])
+
+    if not data_heads:
+        return BundleExportSpec(args=["--all"], excluded_parents=exclusions)
+
+    args: list[str] = []
+    if exclusions:
+        args.append("--reference-excluded-parents")
+    args.extend(data_heads)
+    args.extend(f"^{commit_hash}" for commit_hash in exclusions)
+    return BundleExportSpec(args=args, excluded_parents=exclusions)
+
+
+def _dedupe_preserving_order(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for value in values:
+        if value in seen:
+            continue
+        seen.add(value)
+        result.append(value)
+    return result
+
+
+def _get_branch_tip(repo_path: Path, branch: str) -> str | None:
+    """로컬 브랜치 tip SHA를 반환한다. 없으면 None."""
+    result = subprocess.run(
+        ["git", "rev-parse", "--verify", f"refs/heads/{branch}"],
+        cwd=repo_path,
+        capture_output=True,
+        encoding='utf-8',
+        env=_git_env(),
+    )
+    if result.returncode != 0:
+        return None
+    tip = result.stdout.strip()
+    return tip if _looks_like_sha(tip) else None
+
+
+def _get_revision_tip(repo_path: Path, revision: str) -> str | None:
+    """임의 revision/ref/SHA의 commit tip SHA를 반환한다. 없으면 None."""
+    result = subprocess.run(
+        ["git", "rev-parse", "--verify", f"{revision}^{{commit}}"],
+        cwd=repo_path,
+        capture_output=True,
+        encoding='utf-8',
+        env=_git_env(),
+    )
+    if result.returncode != 0:
+        return None
+    tip = result.stdout.strip()
+    return tip if _looks_like_sha(tip) else None
+
+
+def _get_head_tip(repo_path: Path) -> str | None:
+    """현재 HEAD tip SHA를 반환한다. 빈 repo이면 None."""
+    result = subprocess.run(
+        ["git", "rev-parse", "--verify", "HEAD"],
+        cwd=repo_path,
+        capture_output=True,
+        encoding='utf-8',
+        env=_git_env(),
+    )
+    if result.returncode != 0:
+        return None
+    tip = result.stdout.strip()
+    return tip if _looks_like_sha(tip) else None
+
+
+def _get_import_attach_tip(
+    repo_path: Path,
+    target_branch: str,
+    onto_ref: str | None = None,
+) -> str | None:
+    """excluded parent를 이어붙일 기준 tip을 반환한다.
+
+    onto_ref가 있으면 해당 ref/SHA를 최우선으로 사용한다.
+    target branch가 이미 있으면 그 tip에 이어붙이고, 없으면 현재 HEAD 위에
+    target branch를 새로 만들 수 있도록 HEAD tip을 사용한다.
+    """
+    if onto_ref:
+        return _get_revision_tip(repo_path, onto_ref)
+    return _get_branch_tip(repo_path, target_branch) or _get_head_tip(repo_path)
+
+
 def _parse_from_datetime(dt_str: str):
     """'from=YYYY-MM-DDTHH:MM:SS' 형식의 문자열을 datetime으로 파싱한다.
 
@@ -547,6 +741,7 @@ def _rewrite_and_import(
     target_branch: str,
     timestamp_mode: str,
     from_dt,
+    onto_ref: str | None = None,
     force_ref_update: bool = False,
 ) -> tuple[list[str], list[str]]:
     """fast-export → apply_rewrites → fast-import 파이프라인.
@@ -562,10 +757,12 @@ def _rewrite_and_import(
     """
     import tempfile
     import shutil
-    from .rewrite import apply_rewrites
+    from .rewrite import apply_rewrites, graft_root_commits, rewrite_parent_refs
 
     tmp_dir = Path(tempfile.mkdtemp(prefix="gs_rewrite_"))
     try:
+        attach_tip = _get_import_attach_tip(repo_path, target_branch, onto_ref=onto_ref)
+
         # 임시 bare repo 초기화
         subprocess.run(
             ["git", "init", "--bare", str(tmp_dir)],
@@ -588,13 +785,14 @@ def _rewrite_and_import(
         if fetch_result.returncode != 0:
             raise ValueError(f"bundle fetch 실패:\n{fetch_result.stderr}")
 
+        export_spec = _build_bundle_export_spec(bundle_path, tmp_dir)
         _delete_original_shadow_refs(tmp_dir)
 
         # 임시 bare repo에서 fast-export 스트림 추출
         # fast-export stream은 blob payload를 포함하므로 text mode로 받으면
         # Windows에서 CRLF가 LF로 변환되어 data N 길이가 깨질 수 있다.
         export_result = subprocess.run(
-            ["git", "fast-export", "--all"],
+            ["git", "fast-export", *export_spec.args],
             cwd=tmp_dir,
             capture_output=True,
             env=_git_env(),
@@ -613,6 +811,28 @@ def _rewrite_and_import(
             timestamp_mode=timestamp_mode,
             from_dt=from_dt,
         )
+        if onto_ref and attach_tip is None:
+            raise ValueError(
+                "부분 bundle을 이어붙일 기준 ref를 찾을 수 없습니다.\n"
+                f"지정한 --onto-ref 값: {onto_ref}\n"
+                "해결 방법: 대상 repo에 해당 브랜치/ref/SHA가 있는지 확인하거나 "
+                "다른 --onto-ref 값을 지정하세요."
+            )
+
+        if export_spec.excluded_parents:
+            if attach_tip is None:
+                raise ValueError(
+                    "부분 bundle을 이어붙일 대상 커밋을 찾을 수 없습니다.\n"
+                    f"대상 브랜치 '{target_branch}'가 없고 현재 HEAD도 없습니다.\n"
+                    "해결 방법: 대상 repo에 기준 브랜치(main 등)를 먼저 checkout 하거나 "
+                    "초기 커밋을 만든 뒤 다시 import하세요."
+                )
+            rewritten_stream = rewrite_parent_refs(
+                rewritten_stream,
+                {commit_hash: attach_tip for commit_hash in export_spec.excluded_parents},
+            )
+        elif onto_ref:
+            rewritten_stream = graft_root_commits(rewritten_stream, attach_tip)
 
         _ensure_clean_worktree(repo_path)
 
