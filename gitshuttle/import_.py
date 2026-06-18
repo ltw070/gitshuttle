@@ -9,7 +9,8 @@ run_import:
   6. rewrite 파이프라인 (author, branch, timestamp)
   7. tip을 현재 브랜치에 merge → ImportResult 반환
 
-모든 subprocess 호출: encoding='utf-8', env에 PYTHONIOENCODING='utf-8' 포함.
+대부분의 subprocess 호출: encoding='utf-8', env에 PYTHONIOENCODING='utf-8' 포함.
+단, git fast-export 출력은 blob payload의 CRLF/바이트 길이 보존을 위해 binary로 캡처한다.
 """
 from __future__ import annotations
 
@@ -55,6 +56,15 @@ class RewriteOptions:
     target_branch: str
     timestamp_mode: str
     from_dt: object | None
+
+
+def _decode_process_output(output: bytes | str | None) -> str:
+    """subprocess 출력값을 UTF-8 텍스트로 변환한다."""
+    if output is None:
+        return ""
+    if isinstance(output, bytes):
+        return output.decode('utf-8', errors='surrogateescape')
+    return output
 
 
 # ---------------------------------------------------------------------------
@@ -581,18 +591,19 @@ def _rewrite_and_import(
         _delete_original_shadow_refs(tmp_dir)
 
         # 임시 bare repo에서 fast-export 스트림 추출
+        # fast-export stream은 blob payload를 포함하므로 text mode로 받으면
+        # Windows에서 CRLF가 LF로 변환되어 data N 길이가 깨질 수 있다.
         export_result = subprocess.run(
             ["git", "fast-export", "--all"],
             cwd=tmp_dir,
             capture_output=True,
-            encoding='utf-8',
-            errors='surrogateescape',
             env=_git_env(),
         )
         if export_result.returncode != 0:
-            raise ValueError(f"fast-export 실패:\n{export_result.stderr}")
+            stderr_text = _decode_process_output(export_result.stderr)
+            raise ValueError(f"fast-export 실패:\n{stderr_text}")
 
-        stream = export_result.stdout
+        stream = _decode_process_output(export_result.stdout)
 
         # rewrite 파이프라인 적용
         rewritten_stream, warnings = apply_rewrites(
